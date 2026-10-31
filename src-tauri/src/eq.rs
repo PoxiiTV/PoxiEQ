@@ -49,6 +49,9 @@ pub struct Preset {
     pub id: String,
     pub name: String,
     pub curve: Curve,
+    /// Corrección de sala: la salida en la que se midió (la página «Sala» enseña su último resultado)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<String>,
 }
 
 pub const MAX_BANDS: usize = 32;
@@ -144,6 +147,9 @@ pub fn sanitize_presets(presets: &mut Vec<Preset>) {
         p.name = p.name.trim().chars().filter(|c| !c.is_control()).take(48).collect();
         p.id.truncate(64);
         p.curve.sanitize();
+        if p.room.as_deref().is_some_and(|r| r.len() != 38 || !is_guid(r)) {
+            p.room = None;
+        }
     }
     presets.retain(|p| !p.name.is_empty() && !p.id.is_empty());
 }

@@ -186,7 +186,8 @@ pub fn active_device(preferred: Option<&str>) -> Option<String> {
     preferred.filter(|id| is_device_id(id) && plugged(id)).map(String::from).or_else(|| default_device(false))
 }
 
-fn default_device(input: bool) -> Option<String> {
+/// Salida (`input` = false) o entrada predeterminada de Windows (rol consola)
+pub fn default_device(input: bool) -> Option<String> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
@@ -196,6 +197,55 @@ fn default_device(input: bool) -> Option<String> {
         CoTaskMemFree(Some(id.0 as _));
         // «{0.0.0.00000000}.{guid}» -> «{guid}»
         s.and_then(|s| s.rsplit_once("}.").map(|(_, g)| g.to_string()))
+    }
+}
+
+/// Llama a `changed` cuando Windows cambia la salida o la entrada predeterminada o se conecta, desconecta o
+/// activa un dispositivo. Sin sondeo: Windows avisa por `IMMNotificationClient` y este hilo, dormido el resto
+/// del tiempo, agrupa la ráfaga de avisos de un mismo cambio (llegan varios: uno por rol, otro por estado…).
+/// En el aviso no se hace nada más que mandarlo al hilo: Windows pide no bloquear ahí.
+pub fn watch_devices(changed: impl Fn() + Send + 'static) {
+    std::thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return };
+        let (tx, rx) = mpsc::channel();
+        let client: IMMNotificationClient = Notify(tx).into();
+        if en.RegisterEndpointNotificationCallback(&client).is_err() {
+            return;
+        }
+        // `en` y `client` viven lo que el hilo (toda la vida de la app): el registro no se quita
+        while rx.recv().is_ok() {
+            while rx.recv_timeout(Duration::from_millis(300)).is_ok() {}
+            changed();
+        }
+    });
+}
+
+#[windows::core::implement(IMMNotificationClient)]
+struct Notify(mpsc::Sender<()>);
+
+impl IMMNotificationClient_Impl for Notify_Impl {
+    fn OnDeviceStateChanged(&self, _: &PCWSTR, _: DEVICE_STATE) -> windows::core::Result<()> {
+        let _ = self.0.send(());
+        Ok(())
+    }
+    fn OnDeviceAdded(&self, _: &PCWSTR) -> windows::core::Result<()> {
+        let _ = self.0.send(());
+        Ok(())
+    }
+    fn OnDeviceRemoved(&self, _: &PCWSTR) -> windows::core::Result<()> {
+        let _ = self.0.send(());
+        Ok(())
+    }
+    fn OnDefaultDeviceChanged(&self, _: EDataFlow, role: ERole, _: &PCWSTR) -> windows::core::Result<()> {
+        // Cada cambio llega una vez por rol; con el de consola basta (es el que lee `default_device`)
+        if role == eConsole {
+            let _ = self.0.send(());
+        }
+        Ok(())
+    }
+    fn OnPropertyValueChanged(&self, _: &PCWSTR, _: &PROPERTYKEY) -> windows::core::Result<()> {
+        Ok(())
     }
 }
 
@@ -677,7 +727,13 @@ pub fn write_config(text: &str) -> Result<()> {
         }
         std::fs::write(&main, INCLUDE).map_err(err("config.txt"))?;
     }
-    std::fs::write(dir.join("poxieq.txt"), text).map_err(err("poxieq.txt"))
+    // Si no cambia nada no se escribe: el motor relee el archivo en cuanto se toca y PoxiDSP se recarga
+    // (p. ej. al elegir otra salida, que no cambia lo que suena)
+    let file = dir.join("poxieq.txt");
+    if std::fs::read_to_string(&file).ok().as_deref() == Some(text) {
+        return Ok(());
+    }
+    std::fs::write(file, text).map_err(err("poxieq.txt"))
 }
 
 // ----------------------------------------------------------------- elevación

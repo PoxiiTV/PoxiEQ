@@ -38,8 +38,12 @@ pub struct Config {
     /// `spectrum` (espectro con retención de picos) o `spectrogram`
     pub analyzer_mode: String,
     pub seen_version: String,
-    /// Dispositivo que se está editando
+    /// Salida que se está editando
     pub device: Option<String>,
+    /// Micrófono que se edita en su página (`None`: el predeterminado)
+    pub mic_device: Option<String>,
+    /// Al cambiar Windows la salida predeterminada (cascos enchufados, Bluetooth…), editar esa
+    pub follow_default: bool,
     /// Curva de cada dispositivo (por GUID)
     pub curves: HashMap<String, Curve>,
     pub presets: Vec<Preset>,
@@ -72,6 +76,8 @@ impl Default for Config {
             analyzer_mode: "spectrum".into(),
             seen_version: String::new(),
             device: None,
+            mic_device: None,
+            follow_default: true,
             curves: HashMap::new(),
             presets: vec![],
             loudness: Loudness::default(),
@@ -113,6 +119,9 @@ impl Config {
         if self.device.as_deref().is_some_and(|d| !engine::is_device_id(d)) {
             self.device = None;
         }
+        if self.mic_device.as_deref().is_some_and(|d| !engine::is_device_id(d)) {
+            self.mic_device = None;
+        }
         apps::sanitize_rules(&mut self.app_rules);
         if self.bypass_hotkey.is_some() || self.preset_keys.is_some() {
             self.hotkeys = hotkeys::Hotkeys::migrate(self.bypass_hotkey.take(), self.preset_keys.take());
@@ -151,6 +160,8 @@ pub struct AppState {
     hotkeys_failed: Mutex<Vec<String>>,
     /// Corrección de sala: respuesta de cada posición medida (potencia en la rejilla de `room`)
     room: Mutex<Vec<Vec<f64>>>,
+    /// Última salida predeterminada de Windows vista (para notar cuándo cambia)
+    default_output: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -176,6 +187,10 @@ impl AppState {
 
     fn failed(&self) -> MutexGuard<'_, Vec<String>> {
         self.hotkeys_failed.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn default_output(&self) -> MutexGuard<'_, Option<String>> {
+        self.default_output.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -821,6 +836,30 @@ fn run_step(app: &AppHandle, step: apps::Step) {
     }
 }
 
+// ------------------------------------------------- salida predeterminada
+
+/// Salida a la que hay que pasar porque Windows ha cambiado la predeterminada de `before` a `now`: solo si se
+/// sigue y no es ya la que se edita. Elegir otra a mano no apaga la opción: el siguiente cambio vuelve a mandar.
+fn follow_target(cfg: &Config, before: Option<&str>, now: Option<&str>) -> Option<String> {
+    let now = now.filter(|n| cfg.follow_default && before != Some(*n))?;
+    (cfg.device.as_deref() != Some(now)).then(|| now.to_string())
+}
+
+/// Windows ha cambiado de salida predeterminada o se ha conectado, desconectado o activado algo. Se hace aquí y
+/// no en la interfaz para que valga también con la ventana escondida (atajos, bandeja y reglas por app usan la
+/// salida que se edita). La interfaz recibe `devices` con la salida a la que se ha pasado (o nada) y refresca.
+fn devices_changed(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let now = engine::default_device(false);
+    let before = std::mem::replace(&mut *st.default_output(), now.clone());
+    let cfg = st.cfg().clone();
+    let target = follow_target(&cfg, before.as_deref(), now.as_deref());
+    if let Some(id) = &target {
+        commit(app, Config { device: Some(id.clone()), ..cfg });
+    }
+    let _ = app.emit("devices", target);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let start_hidden = std::env::args().any(|a| a == "--hidden");
@@ -835,6 +874,15 @@ pub fn run() {
             let config_path = app.path().app_data_dir()?.join("config.json");
             let mut cfg = Config::load(&config_path);
             cfg.sanitize();
+            // Antes el micrófono se elegía en el mismo selector que las salidas
+            if cfg.device.as_deref().is_some_and(engine::is_input) {
+                cfg.mic_device = cfg.device.take();
+            }
+            // Siguiendo a Windows, se arranca en la salida que tenga puesta
+            let default_output = engine::default_device(false);
+            if cfg.follow_default && default_output.is_some() {
+                cfg.device = default_output.clone();
+            }
             app.manage(AppState {
                 config: Mutex::new(cfg.clone()),
                 config_path,
@@ -852,6 +900,7 @@ pub fn run() {
                 watcher: OnceLock::new(),
                 hotkeys_failed: Mutex::new(vec![]),
                 room: Mutex::new(vec![]),
+                default_output: Mutex::new(default_output),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -882,6 +931,8 @@ pub fn run() {
             register_hotkeys(app.handle(), &cfg);
             osd::init(app.handle());
             let _ = app.state::<AppState>().watcher.set(watch_foreground(app.handle().clone()));
+            let handle = app.handle().clone();
+            engine::watch_devices(move || devices_changed(&handle));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
             let _ = apply(&cfg, &Live::default());
             Ok(())
@@ -975,11 +1026,34 @@ mod tests {
         assert!(old.app_rules.is_empty());
         assert_eq!(old.analyzer_mode, "spectrum");
         assert_eq!(old.mic, Mic::default());
+        assert!(old.follow_default && old.mic_device.is_none());
+        let mut bad: Config = serde_json::from_str(r#"{"micDevice":"../x","followDefault":false}"#).unwrap();
+        bad.sanitize();
+        assert!(!bad.follow_default && bad.mic_device.is_none());
         // Ajustes del micrófono fuera de rango
         let mut m: Config = serde_json::from_str(r#"{"mic":{"bypass":true,"dsp":{"gate":{"on":true,"threshold":20,"range":500}}}}"#).unwrap();
         m.sanitize();
         assert!(m.mic.bypass && m.mic.dsp.gate.on);
         assert_eq!((m.mic.dsp.gate.threshold, m.mic.dsp.gate.range), (0.0, 90.0));
+    }
+
+    #[test]
+    fn follow_default_output() {
+        let a = "{00000000-0000-0000-0000-00000000000a}";
+        let b = "{00000000-0000-0000-0000-00000000000b}";
+        let cfg = Config { device: Some(a.into()), ..Config::default() };
+        // Windows pasa de A a B: se edita B
+        assert_eq!(follow_target(&cfg, Some(a), Some(b)).as_deref(), Some(b));
+        // Sin cambio de predeterminada (otro aviso, p. ej. un micro enchufado): nada, aunque se edite otra a mano
+        let manual = Config { device: Some(b.into()), ..Config::default() };
+        assert_eq!(follow_target(&manual, Some(a), Some(a)), None);
+        // Elegida otra a mano y Windows cambia: vuelve a mandar Windows
+        assert_eq!(follow_target(&manual, Some(b), Some(a)).as_deref(), Some(a));
+        // Ya se edita la nueva, sin salida predeterminada u opción apagada: nada
+        assert_eq!(follow_target(&manual, Some(a), Some(b)), None);
+        assert_eq!(follow_target(&cfg, Some(a), None), None);
+        let off = Config { follow_default: false, ..cfg.clone() };
+        assert_eq!(follow_target(&off, Some(a), Some(b)), None);
     }
 
     #[test]

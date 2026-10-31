@@ -29,6 +29,8 @@ ebur128 = "0.1"
 poxidsp = { path = "../dsp", features = ["serde"] }
 
 [target.'cfg(windows)'.dependencies]
+# Lo pide `#[implement]` (avisos de dispositivos de audio); es la misma versión que ya trae `windows`
+windows-core = "0.61"
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Graphics_Dwm",
