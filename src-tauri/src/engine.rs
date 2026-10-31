@@ -583,8 +583,12 @@ pub fn uninstall() -> Result<()> {
 
 fn hidden(exe: &str, args: &[&str]) -> std::process::Output {
     use std::os::windows::process::CommandExt;
-    Command::new(exe)
-        .args(args)
+    let mut cmd = Command::new(exe);
+    // Los programas del motor (Qt) buscan sus complementos en la carpeta de trabajo: se lanzan desde la suya
+    if let Some(dir) = std::path::Path::new(exe).parent().filter(|d| !d.as_os_str().is_empty()) {
+        cmd.current_dir(dir);
+    }
+    cmd.args(args)
         .creation_flags(CREATE_NO_WINDOW.0)
         .output()
         .unwrap_or_else(|_| std::process::Output { status: Default::default(), stdout: vec![], stderr: vec![] })
