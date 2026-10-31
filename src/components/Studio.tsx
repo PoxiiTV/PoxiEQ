@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Car, Ear, Earbuds, Laptop, Smartphone, Speaker, Tv } from 'lucide-react'
+import { ArrowLeftRight, Car, Ear, Earbuds, Laptop, Ruler, Smartphone, Speaker, Tv } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Listen, Sim } from '../lib/api'
 import { setState, setStudio, useStore } from '../lib/store'
@@ -14,7 +14,7 @@ const SIMS: { id: Sim; icon: LucideIcon }[] = [
   { id: 'speaker', icon: Speaker }
 ]
 
-/** Panel «Estudio»: monitorización, simulación de otros sistemas y test de audición */
+/** Panel «Estudio»: monitorización, simulación de otros sistemas, test de audición y corrección de sala */
 export function Studio(): React.JSX.Element {
   const t = useT()
   const studio = useStore((s) => s.studio)
@@ -80,6 +80,22 @@ export function Studio(): React.JSX.Element {
           <small>{t('hearing.cardText')}</small>
           <button className="btn btn-sm btn-primary" onClick={() => setState({ modal: 'hearing' })}>
             {t('hearing.start')}
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <div className="dyn-head">
+          <span className="label">{t('room.title')}</span>
+        </div>
+        <div className="dyn-card hearing-card">
+          <div className="dyn-card-head">
+            <Ruler size={16} />
+            <b>{t('room.cardTitle')}</b>
+          </div>
+          <small>{t('room.cardText')}</small>
+          <button className="btn btn-sm btn-primary" onClick={() => setState({ modal: 'room' })}>
+            {t('room.start')}
           </button>
         </div>
       </section>

@@ -6,6 +6,7 @@ import '@fontsource-variable/nunito'
 import './styles/app.css'
 import { api, type Config } from './lib/api'
 import { currentCurve, getState, grouper, redo, refreshEngine, setState, STUDIO_OFF, toast, undo } from './lib/store'
+import { keyLabel } from './lib/hotkeys'
 import { MAX_FILE } from './lib/share'
 import { t } from './i18n'
 import { applyTheme, followSystem } from './lib/theme'
@@ -63,8 +64,17 @@ async function start(): Promise<void> {
     const bands = currentCurve({ config: e.payload, engine: s.engine }).bands.length
     setState({ config: e.payload, selected: s.selected !== null && s.selected < bands ? s.selected : null })
   })
-  // Al esconder la ventana Rust quita lo momentáneo (monitorización, simulación, test de audición): aquí se refleja
-  void listen('live-reset', () => setState((s) => ({ studio: STUDIO_OFF, modal: s.modal === 'hearing' ? null : s.modal })))
+  // Al esconder la ventana Rust quita lo momentáneo (monitorización, simulación, test de audición, medición de
+  // sala): aquí se refleja
+  void listen('live-reset', () => setState((s) => ({ studio: STUDIO_OFF, modal: s.modal === 'hearing' || s.modal === 'room' ? null : s.modal })))
+  // Atajos que tiene otro programa: se avisa de los nuevos (y Ajustes los marca)
+  const failedHotkeys = (list: string[]): void => {
+    const fresh = list.filter((k) => !getState().hotkeysFailed.includes(k))
+    setState({ hotkeysFailed: list })
+    if (fresh.length) toast(t('keys.failed', { k: fresh.map(keyLabel).join(', ') }), 'err', { secs: 10 })
+  }
+  void listen<string[]>('hotkeys-failed', (e) => failedHotkeys(e.payload))
+  void api.hotkeysFailed().then(failedHotkeys)
   // Cascos enchufados o desenchufados mientras la app estaba escondida
   window.addEventListener('focus', () => void refreshEngine())
   // Se enseña la ventana ya pintada (sin parpadeo blanco), salvo si arrancó con Windows en la bandeja

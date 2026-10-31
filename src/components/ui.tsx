@@ -15,8 +15,8 @@ export function Modal({
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent): void => {
-      // Un desplegable o menú abierto se cierra él solo primero
-      if (e.key === 'Escape' && !document.querySelector('.dd.open, .ctx')) {
+      // Un desplegable o menú abierto se cierra él solo primero (y Esc en el grabador de atajos solo cancela)
+      if (e.key === 'Escape' && !document.querySelector('.dd.open, .ctx, .key-rec.rec')) {
         e.stopPropagation()
         onClose()
       }

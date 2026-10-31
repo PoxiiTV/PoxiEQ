@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AudioLines, ChevronDown, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
+import { AudioLines, ChevronDown, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
@@ -82,18 +82,60 @@ export function Dynamics(): React.JSX.Element | null {
               <Slider label={t('dsp.maxGain')} value={dsp.leveler.maxGain} min={0} max={24} fmt={db} onChange={(maxGain) => set('leveler', { maxGain })} />
             </Card>
             <Card icon={Gauge} title={t('dsp.comp')} hint={t('dsp.compHint')} on={dsp.comp.on} onToggle={(on) => set('comp', { on })}>
-              <Slider label={t('dsp.threshold')} value={dsp.comp.threshold} min={-60} max={0} fmt={(v) => `${num(v, 0)} dB`} onChange={(threshold) => set('comp', { threshold })} />
-              <Slider label={t('dsp.ratio')} value={dsp.comp.ratio} min={1} max={20} step={0.1} fmt={(v) => `${num(v)}:1`} onChange={(ratio) => set('comp', { ratio })} />
-              <Slider label={t('dsp.attack')} value={dsp.comp.attack} min={0.1} max={200} log fmt={(v) => `${num(v, v < 10 ? 1 : 0)} ms`} onChange={(attack) => set('comp', { attack })} />
-              <Slider label={t('dsp.release')} value={dsp.comp.release} min={10} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set('comp', { release })} />
-              <Slider label={t('dsp.knee')} value={dsp.comp.knee} min={0} max={24} fmt={(v) => `${Math.round(v)} dB`} onChange={(knee) => set('comp', { knee })} />
-              <Slider label={t('dsp.makeup')} value={dsp.comp.makeup} min={0} max={24} step={0.5} fmt={db} onChange={(makeup) => set('comp', { makeup })} />
+              <CompSliders comp={dsp.comp} set={(patch) => set('comp', patch)} />
             </Card>
             <Card icon={ShieldCheck} title={t('dsp.limiter')} hint={t('dsp.limiterHint')} on={dsp.limiter.on} onToggle={(on) => set('limiter', { on })}>
               <Slider label={t('dsp.ceiling')} value={dsp.limiter.ceiling} min={-12} max={0} step={0.1} fmt={(v) => `${num(v)} dBTP`} onChange={(ceiling) => set('limiter', { ceiling })} />
             </Card>
           </div>
         )}
+      </section>
+    </div>
+  )
+}
+
+/** Compresor: los mismos controles en las salidas (ajustes avanzados) y en el micrófono */
+function CompSliders({ comp, set }: { comp: Dsp['comp']; set: (patch: Partial<Dsp['comp']>) => void }): React.JSX.Element {
+  const t = useT()
+  return (
+    <>
+      <Slider label={t('dsp.threshold')} value={comp.threshold} min={-60} max={0} fmt={(v) => `${num(v, 0)} dB`} onChange={(threshold) => set({ threshold })} />
+      <Slider label={t('dsp.ratio')} value={comp.ratio} min={1} max={20} step={0.1} fmt={(v) => `${num(v)}:1`} onChange={(ratio) => set({ ratio })} />
+      <Slider label={t('dsp.attack')} value={comp.attack} min={0.1} max={200} log fmt={(v) => `${num(v, v < 10 ? 1 : 0)} ms`} onChange={(attack) => set({ attack })} />
+      <Slider label={t('dsp.release')} value={comp.release} min={10} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set({ release })} />
+      <Slider label={t('dsp.knee')} value={comp.knee} min={0} max={24} fmt={(v) => `${Math.round(v)} dB`} onChange={(knee) => set({ knee })} />
+      <Slider label={t('dsp.makeup')} value={comp.makeup} min={0} max={24} step={0.5} fmt={db} onChange={(makeup) => set({ makeup })} />
+    </>
+  )
+}
+
+/** Panel «Dinámica» de un micrófono: puerta de ruido y compresor, antes de que lo reciba cualquier app */
+export function MicDynamics(): React.JSX.Element | null {
+  const t = useT()
+  const mic = useStore((s) => s.config?.mic)
+  if (!mic) return null
+  const set = <K extends 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => updateConfig({ mic: { ...mic, dsp: { ...mic.dsp, [key]: { ...mic.dsp[key], ...patch } } } })
+  const g = mic.dsp.gate
+  return (
+    <div className="dyn">
+      <Install />
+      <section>
+        <div className="dyn-head">
+          <span className="label">{t('mic.dynamics')}</span>
+        </div>
+        <small className="studio-hint">{t('mic.hint')}</small>
+        <div className="dyn-cards">
+          <Card icon={DoorClosed} title={t('mic.gate')} hint={t('mic.gateHint')} on={g.on} onToggle={(on) => set('gate', { on })}>
+            <Slider label={t('dsp.threshold')} value={g.threshold} min={-90} max={0} fmt={(v) => `${num(v, 0)} dBFS`} onChange={(threshold) => set('gate', { threshold })} />
+            <Slider label={t('mic.range')} value={g.range} min={0} max={90} fmt={(v) => `${num(-v, 0)} dB`} onChange={(range) => set('gate', { range })} />
+            <Slider label={t('dsp.attack')} value={g.attack} min={0.1} max={50} log fmt={(v) => `${num(v, v < 10 ? 1 : 0)} ms`} onChange={(attack) => set('gate', { attack })} />
+            <Slider label={t('mic.hold')} value={g.hold} min={0} max={2000} step={10} fmt={(v) => `${Math.round(v)} ms`} onChange={(hold) => set('gate', { hold })} />
+            <Slider label={t('dsp.release')} value={g.release} min={5} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set('gate', { release })} />
+          </Card>
+          <Card icon={Gauge} title={t('dsp.comp')} hint={t('mic.compHint')} on={mic.dsp.comp.on} onToggle={(on) => set('comp', { on })}>
+            <CompSliders comp={mic.dsp.comp} set={(patch) => set('comp', patch)} />
+          </Card>
+        </div>
       </section>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Power, Trash2 } from 'lucide-react'
 import { bandDb, clamp, curveDb, fmtDb, fmtFreq, hasGain, logFreqs, MAX_BANDS, MAX_F, MAX_G, MIN_F, MIN_G, type Band, type Kind } from '../lib/eq'
-import { currentCurve, setCurve, setState, toast, useStore } from '../lib/store'
+import { currentCurve, editingMic, setCurve, setState, toast, useStore } from '../lib/store'
 import { t as tr, useT } from '../i18n'
 import { Analyzer } from './Analyzer'
 
@@ -39,7 +39,7 @@ export function Graph(): React.JSX.Element {
   const t = useT()
   const curve = useStore((s) => currentCurve(s))
   const selected = useStore((s) => s.selected)
-  const bypass = useStore((s) => !!s.config?.bypass)
+  const bypass = useStore((s) => (editingMic(s) ? !!s.config?.mic.bypass : !!s.config?.bypass))
   const analyzer = useStore((s) => !!s.config?.analyzer)
   const mode = useStore((s) => s.config?.analyzerMode ?? 'spectrum')
   const box = useRef<HTMLDivElement>(null)

@@ -25,6 +25,8 @@ pub struct Settings {
     pub dialog: Dialog,
     pub crossfeed: Crossfeed,
     pub speakers: Speakers,
+    /// Puerta de ruido (micrófono). Va la primera de la cadena.
+    pub gate: Gate,
 }
 
 /// Limitador brickwall con lookahead
@@ -105,6 +107,23 @@ pub struct Speakers {
     pub amount: f32,
 }
 
+/// Puerta de ruido: por debajo del umbral baja la señal `range` dB (para el ruido de fondo del micrófono)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Gate {
+    pub on: bool,
+    /// dBFS (pico) a partir del cual se abre; cierra 3 dB por debajo (histéresis)
+    pub threshold: f32,
+    /// dB que baja con la puerta cerrada (atenuación)
+    pub range: f32,
+    /// ms para abrir
+    pub attack: f32,
+    /// ms que sigue abierta cuando la señal ya ha bajado
+    pub hold: f32,
+    /// ms para cerrar
+    pub release: f32,
+}
+
 impl Default for Limiter {
     fn default() -> Self {
         Self { on: false, ceiling: -1.0 }
@@ -140,6 +159,11 @@ impl Default for Speakers {
         Self { on: false, amount: 1.0 }
     }
 }
+impl Default for Gate {
+    fn default() -> Self {
+        Self { on: false, threshold: -50.0, range: 30.0, attack: 1.0, hold: 150.0, release: 200.0 }
+    }
+}
 
 fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
     if v.is_finite() {
@@ -150,8 +174,11 @@ fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
 }
 
 /// Valores en orden fijo: es el formato del ChunkData (versión 1). Lo nuevo va siempre al final: un plugin
-/// anterior lee lo suyo e ignora el resto.
-const FIELDS: usize = 22;
+/// anterior lee lo suyo e ignora el resto, y uno nuevo completa con los valores por defecto lo que no trae
+/// un chunk anterior (como mínimo [`MIN_FIELDS`]).
+const FIELDS: usize = 28;
+/// Campos de la primera versión publicada del chunk (hasta los altavoces virtuales)
+const MIN_FIELDS: usize = 22;
 const MAGIC: &[u8; 4] = b"PXD1";
 
 impl Settings {
@@ -177,6 +204,12 @@ impl Settings {
         x.freq = clamp(x.freq, 300.0, 2000.0, d.crossfeed.freq);
         x.feed = clamp(x.feed, 1.0, 15.0, d.crossfeed.feed);
         self.speakers.amount = clamp(self.speakers.amount, 0.0, 1.0, d.speakers.amount);
+        let g = &mut self.gate;
+        g.threshold = clamp(g.threshold, -90.0, 0.0, d.gate.threshold);
+        g.range = clamp(g.range, 0.0, 90.0, d.gate.range);
+        g.attack = clamp(g.attack, 0.1, 50.0, d.gate.attack);
+        g.hold = clamp(g.hold, 0.0, 2000.0, d.gate.hold);
+        g.release = clamp(g.release, 5.0, 2000.0, d.gate.release);
         // Crossfeed y altavoces virtuales hacen lo mismo de dos formas: juntos se cruzaría dos veces
         if self.speakers.on {
             self.crossfeed.on = false;
@@ -185,12 +218,12 @@ impl Settings {
 
     /// Con todo apagado el plugin ni se carga
     pub fn active(&self) -> bool {
-        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on
+        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on || self.gate.on
     }
 
     fn fields(&self) -> [f32; FIELDS] {
         let on = |b: bool| if b { 1.0 } else { 0.0 };
-        let (l, c, v, b, d, x, h) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers);
+        let (l, c, v, b, d, x, h, g) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers, self.gate);
         [
             on(l.on), l.ceiling,
             on(c.on), c.threshold, c.ratio, c.attack, c.release, c.knee, c.makeup,
@@ -199,6 +232,7 @@ impl Settings {
             on(d.on), d.amount,
             on(x.on), x.freq, x.feed,
             on(h.on), h.amount,
+            on(g.on), g.threshold, g.range, g.attack, g.hold, g.release,
         ]
     }
 
@@ -212,6 +246,7 @@ impl Settings {
             dialog: Dialog { on: on(f[15]), amount: f[16] },
             crossfeed: Crossfeed { on: on(f[17]), freq: f[18], feed: f[19] },
             speakers: Speakers { on: on(f[20]), amount: f[21] },
+            gate: Gate { on: on(f[22]), threshold: f[23], range: f[24], attack: f[25], hold: f[26], release: f[27] },
         };
         s.sanitize();
         s
@@ -228,16 +263,17 @@ impl Settings {
         out
     }
 
-    /// Lo contrario de [`Settings::chunk`]. Un chunk que no es nuestro (o de otra versión) da `None`:
-    /// el plugin se queda en paso directo.
+    /// Lo contrario de [`Settings::chunk`]. Un chunk que no es nuestro da `None`: el plugin se queda en paso
+    /// directo. Uno de una versión anterior (más corto) completa lo que le falta con los valores por defecto.
     pub fn from_chunk(data: &[u8]) -> Option<(Self, u32)> {
-        if data.len() < 8 + FIELDS * 4 || &data[..4] != MAGIC {
+        if data.len() < 8 + MIN_FIELDS * 4 || &data[..4] != MAGIC {
             return None;
         }
         let word = |i: usize| [data[i], data[i + 1], data[i + 2], data[i + 3]];
         let key = u32::from_le_bytes(word(4));
-        let mut f = [0f32; FIELDS];
-        for (i, v) in f.iter_mut().enumerate() {
+        let mut f = Settings::default().fields();
+        let n = ((data.len() - 8) / 4).min(FIELDS);
+        for (i, v) in f.iter_mut().enumerate().take(n) {
             *v = f32::from_le_bytes(word(8 + i * 4));
         }
         Some((Self::from_fields(f), key))
@@ -280,7 +316,33 @@ mod tests {
         assert_eq!(back, s);
         assert_eq!(key, 0xdead_beef);
         assert!(Settings::from_chunk(b"PXD1").is_none(), "corto");
-        assert!(Settings::from_chunk(&[0u8; 100]).is_none(), "sin firma");
+        assert!(Settings::from_chunk(&[0u8; 200]).is_none(), "sin firma");
+    }
+
+    #[test]
+    fn chunk_de_una_version_anterior() {
+        // Un chunk de 22 campos (antes de la puerta de ruido) se lee igual y la puerta queda por defecto
+        let mut s = Settings::default();
+        s.limiter.on = true;
+        s.speakers.amount = 0.3;
+        s.gate.on = true;
+        s.gate.threshold = -40.0;
+        let full = s.chunk(7);
+        let old = &full[..8 + MIN_FIELDS * 4];
+        let (back, key) = Settings::from_chunk(old).unwrap();
+        assert_eq!(key, 7);
+        assert!(back.limiter.on && back.speakers.amount == 0.3);
+        assert_eq!(back.gate, Gate::default());
+        // Uno más largo (de una versión futura) se lee hasta donde sabemos
+        let mut future = full.clone();
+        future.extend_from_slice(&1f32.to_le_bytes());
+        assert_eq!(Settings::from_chunk(&future).unwrap().0, back_with_gate(&back, s.gate));
+        // Ni la mitad de un campo
+        assert!(Settings::from_chunk(&full[..8 + MIN_FIELDS * 4 - 1]).is_none());
+    }
+
+    fn back_with_gate(s: &Settings, gate: Gate) -> Settings {
+        Settings { gate, ..*s }
     }
 
     #[test]

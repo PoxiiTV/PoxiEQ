@@ -7,7 +7,6 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use windows::core::HSTRING;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 
@@ -55,31 +54,36 @@ pub fn stop() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
 }
 
-pub fn start(app: AppHandle, device_id: String) {
+/// Arranca la captura de `device_id`: de una salida, lo que suena (loopback); de una entrada (`input`), lo que
+/// llega del micrófono ya procesado por el motor (la captura normal pasa por su etapa de captura).
+pub fn start(app: AppHandle, device_id: String, input: bool) {
     let gen = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::spawn(move || unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let _ = run(&app, &device_id, gen);
+        let _ = run(&app, &device_id, input, gen);
     });
 }
 
-unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> {
+/// Canales y frecuencia de un formato de mezcla si es float32 (lo que entrega el modo compartido en la
+/// práctica); otro formato = `None`
+pub unsafe fn float_mix(fmt: *const WAVEFORMATEX) -> Option<(usize, f64)> {
+    let f = &*fmt;
+    let ext = f.wFormatTag == 0xFFFE && (*(fmt as *const WAVEFORMATEXTENSIBLE)).SubFormat.data1 == 3;
+    (f.wBitsPerSample == 32 && (f.wFormatTag == 3 || ext) && f.nChannels > 0).then_some((f.nChannels as usize, f.nSamplesPerSec as f64))
+}
+
+unsafe fn run(app: &AppHandle, id: &str, input: bool, gen: u64) -> windows::core::Result<()> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-    let dev = en.GetDevice(&HSTRING::from(format!("{{0.0.0.00000000}}.{id}")))?;
+    let dev = en.GetDevice(&crate::engine::endpoint_id(id, input))?;
     let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
     let fmt = client.GetMixFormat()?;
-    let (channels, rate, float) = {
-        let f = &*fmt;
-        let ext = f.wFormatTag == 0xFFFE && (*(fmt as *const WAVEFORMATEXTENSIBLE)).SubFormat.data1 == 3;
-        (f.nChannels as usize, f.nSamplesPerSec as f32, f.wBitsPerSample == 32 && (f.wFormatTag == 3 || ext))
-    };
-    let init = client.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 2_000_000, 0, fmt, None);
+    let mix = float_mix(fmt);
+    let flags = if input { 0 } else { AUDCLNT_STREAMFLAGS_LOOPBACK };
+    let init = client.Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 2_000_000, 0, fmt, None);
     CoTaskMemFree(Some(fmt as _));
     init?;
-    // Límite: el modo compartido entrega float32 en la práctica; otro formato = sin analizador
-    if !float || channels == 0 {
-        return Ok(());
-    }
+    let Some((channels, rate)) = mix else { return Ok(()) };
+    let rate = rate as f32;
     let capture: IAudioCaptureClient = client.GetService()?;
     client.Start()?;
 
@@ -168,9 +172,9 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
                 _ => (0.0, 0.0),
             };
             dsp_beat = reading.map(|r| r.beat);
-            let mut re: Vec<f32> = (0..N).map(|i| ring[(pos + i) % N] * window[i]).collect();
-            let mut im = vec![0f32; N];
-            fft(&mut re, &mut im);
+            let mut re: Vec<f64> = (0..N).map(|i| (ring[(pos + i) % N] * window[i]) as f64).collect();
+            let mut im = vec![0f64; N];
+            fft(&mut re, &mut im, false);
             let _ = app.emit("spectrum", levels(&re, &im, &edges));
             let n = win.len().max(1) as f64;
             let (ll, rr, lr) = (sums[0].max(0.0), sums[1].max(0.0), sums[2]);
@@ -206,20 +210,21 @@ fn band_edges(rate: f32) -> Vec<(usize, usize)> {
 }
 
 /// Nivel en dBFS de cada banda (el bin más fuerte, normalizado a la ventana de Hann)
-fn levels(re: &[f32], im: &[f32], edges: &[(usize, usize)]) -> Vec<f32> {
-    let norm = 4.0 / N as f32;
+fn levels(re: &[f64], im: &[f64], edges: &[(usize, usize)]) -> Vec<f32> {
+    let norm = 4.0 / N as f64;
     edges
         .iter()
         .map(|&(a, b)| {
-            let peak = (a..b).map(|k| (re[k] * re[k] + im[k] * im[k]).sqrt()).fold(0f32, f32::max) * norm;
-            (20.0 * peak.max(1e-7).log10()).max(-120.0)
+            let peak = (a..b).map(|k| (re[k] * re[k] + im[k] * im[k]).sqrt()).fold(0f64, f64::max) * norm;
+            (20.0 * peak.max(1e-7).log10()).max(-120.0) as f32
         })
         .collect()
 }
 
-/// FFT radix-2 en el sitio (N potencia de 2)
-fn fft(re: &mut [f32], im: &mut [f32]) {
+/// FFT radix-2 en el sitio (longitud potencia de 2). `inverse` hace la inversa, ya dividida por N.
+pub fn fft(re: &mut [f64], im: &mut [f64], inverse: bool) {
     let n = re.len();
+    debug_assert!(n.is_power_of_two() && im.len() == n);
     let mut j = 0;
     for i in 1..n {
         let mut bit = n >> 1;
@@ -235,10 +240,11 @@ fn fft(re: &mut [f32], im: &mut [f32]) {
     }
     let mut len = 2;
     while len <= n {
-        let ang = -2.0 * std::f32::consts::PI / len as f32;
+        let ang = if inverse { 2.0 } else { -2.0 } * std::f64::consts::PI / len as f64;
+        // Giros de esta etapa, calculados una vez (no en cada mariposa)
+        let twiddle: Vec<(f64, f64)> = (0..len / 2).map(|k| (ang * k as f64).sin_cos()).collect();
         for start in (0..n).step_by(len) {
-            for k in 0..len / 2 {
-                let (s, c) = (ang * k as f32).sin_cos();
+            for (k, &(s, c)) in twiddle.iter().enumerate() {
                 let (a, b) = (start + k, start + k + len / 2);
                 let tr = re[b] * c - im[b] * s;
                 let ti = re[b] * s + im[b] * c;
@@ -249,6 +255,10 @@ fn fft(re: &mut [f32], im: &mut [f32]) {
             }
         }
         len <<= 1;
+    }
+    if inverse {
+        let k = 1.0 / n as f64;
+        re.iter_mut().chain(im.iter_mut()).for_each(|v| *v *= k);
     }
 }
 
@@ -261,9 +271,9 @@ mod tests {
         let rate = 48000.0;
         let f = 1000.0;
         let window: Vec<f32> = (0..N).map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / N as f32).cos()).collect();
-        let mut re: Vec<f32> = (0..N).map(|i| 0.5 * (2.0 * std::f32::consts::PI * f * i as f32 / rate).sin() * window[i]).collect();
-        let mut im = vec![0f32; N];
-        fft(&mut re, &mut im);
+        let mut re: Vec<f64> = (0..N).map(|i| (0.5 * (2.0 * std::f32::consts::PI * f * i as f32 / rate).sin() * window[i]) as f64).collect();
+        let mut im = vec![0f64; N];
+        fft(&mut re, &mut im, false);
         let edges = band_edges(rate);
         let l = levels(&re, &im, &edges);
         let loudest = l.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).unwrap().0;
@@ -271,5 +281,16 @@ mod tests {
         assert!((band_freq / f).log2().abs() < 0.2, "banda {loudest} = {band_freq} Hz");
         // Amplitud 0.5 = -6 dBFS (con algo de margen por caer entre bins)
         assert!((l[loudest] + 6.0).abs() < 1.5, "{} dB", l[loudest]);
+    }
+
+    #[test]
+    fn fft_ida_y_vuelta() {
+        let x: Vec<f64> = (0..256).map(|i| ((i * 37 % 101) as f64 - 50.0) / 50.0).collect();
+        let (mut re, mut im) = (x.clone(), vec![0.0; 256]);
+        fft(&mut re, &mut im, false);
+        // Bin 0 = suma
+        assert!((re[0] - x.iter().sum::<f64>()).abs() < 1e-9);
+        fft(&mut re, &mut im, true);
+        assert!(re.iter().zip(&x).all(|(a, b)| (a - b).abs() < 1e-12) && im.iter().all(|v| v.abs() < 1e-12));
     }
 }

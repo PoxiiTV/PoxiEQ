@@ -1543,3 +1543,304 @@
 .hearing .modal-actions {
   flex-wrap: wrap;
 }
+
+/* ——— Grupos en los desplegables (salidas / micrófonos) ——— */
+.dd-group {
+  padding: 8px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dd-group:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* ——— Micrófono: que se vea siempre qué se está editando ——— */
+.device-pick .kind {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.device-pick.mic .kind {
+  color: var(--accent-2);
+}
+.titlebar .device-pick .kind[data-tip]::after {
+  left: 0;
+  right: auto;
+}
+.mic-chip {
+  flex: none;
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.meter-thr {
+  position: absolute;
+  left: 26px;
+  right: 0;
+  height: 2px;
+  margin-bottom: -1px;
+  border-radius: 1px;
+  background: var(--accent-2);
+  box-shadow: 0 0 6px var(--accent-glow);
+  z-index: 1;
+}
+.meter.collapsed .meter-thr {
+  left: 0;
+}
+
+/* ——— Grabador de atajos ——— */
+.key-rec-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+  max-width: 240px;
+}
+.key-rec {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 136px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
+  font-weight: 800;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 160ms var(--ease-out);
+}
+.key-rec:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .key-rec:hover {
+    border-color: rgba(var(--accent-rgb), 0.5);
+  }
+}
+.key-rec.empty span {
+  color: var(--muted);
+  font-weight: 700;
+}
+.key-rec.rec {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  animation: key-rec-pulse 1.4s ease-in-out infinite;
+}
+@keyframes key-rec-pulse {
+  50% {
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+}
+.key-rec.bad {
+  border-color: rgba(245, 158, 11, 0.6);
+  color: var(--warning);
+}
+.key-rec-err {
+  max-width: 240px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .key-rec.rec {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+}
+
+/* ——— Corrección de sala ——— */
+.modal.room {
+  width: min(700px, 100%);
+}
+.room-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+  margin: 4px 0 12px;
+}
+.room-grid .label {
+  margin: 0;
+}
+.room-grid .dd-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-range.room-level {
+  width: auto;
+}
+.set-range.room-level b {
+  min-width: 78px;
+}
+.room-status {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.room-busy,
+.room-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.room-busy svg,
+.room-verdict svg {
+  flex: none;
+  margin-top: 1px;
+}
+.room-verdict em {
+  font-style: normal;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.room-verdict.ok svg {
+  color: var(--success);
+}
+.room-verdict.quiet svg {
+  color: var(--warning);
+}
+.room-verdict.loud svg {
+  color: var(--danger);
+}
+.room-takes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.room-takes > div {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.room-takes small {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.room-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0 6px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.room-graph .span {
+  fill: var(--accent-soft);
+  opacity: 0.45;
+}
+.room-graph .grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.room-graph .grid.zero line {
+  stroke: var(--border-strong);
+}
+.room-graph .grid text {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.room-graph path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.room-graph .measured {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  opacity: 0.8;
+}
+.room-graph .target {
+  stroke: var(--text-2);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5;
+}
+.room-graph .corrected {
+  stroke: var(--accent-2);
+}
+.room-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+  color: var(--text-2);
+  font-weight: 700;
+}
+.room-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 0;
+  margin: 0 6px 3px 0;
+  border-top: 2px solid;
+  vertical-align: middle;
+}
+.room-legend .measured::before {
+  border-color: var(--muted);
+}
+.room-legend .target::before {
+  border-top-style: dashed;
+  border-color: var(--text-2);
+}
+.room-legend .corrected::before {
+  border-color: var(--accent-2);
+}
+.room-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 10px 20px;
+  align-items: center;
+}
+.room-opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.room-controls .segmented button {
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.modal .room-summary {
+  margin: 12px 0 0;
+  color: var(--text-2);
+}
+.room-name {
+  display: block;
+  margin-top: 14px;
+}
+.room .modal-actions {
+  flex-wrap: wrap;
+}

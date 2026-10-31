@@ -101,6 +101,43 @@ fn filters<'a>(bands: impl IntoIterator<Item = &'a Band>) -> String {
     bands.into_iter().filter(|b| b.on).map(filter_line).collect()
 }
 
+/// Respuesta en dB de una banda a `f` (biquads RBJ a 48 kHz, como `bandDb` en `eq.ts` y el motor)
+pub fn band_db(b: &Band, f: f64) -> f64 {
+    use std::f64::consts::PI;
+    let a = 10f64.powf(b.gain / 40.0);
+    let w0 = 2.0 * PI * b.freq / 48000.0;
+    let (cos, alpha) = (w0.cos(), w0.sin() / (2.0 * b.q));
+    let sq = 2.0 * a.sqrt() * alpha;
+    let c = match b.kind {
+        Kind::Peak => [1.0 + alpha * a, -2.0 * cos, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * cos, 1.0 - alpha / a],
+        Kind::LowShelf => [
+            a * (a + 1.0 - (a - 1.0) * cos + sq),
+            2.0 * a * (a - 1.0 - (a + 1.0) * cos),
+            a * (a + 1.0 - (a - 1.0) * cos - sq),
+            a + 1.0 + (a - 1.0) * cos + sq,
+            -2.0 * (a - 1.0 + (a + 1.0) * cos),
+            a + 1.0 + (a - 1.0) * cos - sq,
+        ],
+        Kind::HighShelf => [
+            a * (a + 1.0 + (a - 1.0) * cos + sq),
+            -2.0 * a * (a - 1.0 + (a + 1.0) * cos),
+            a * (a + 1.0 + (a - 1.0) * cos - sq),
+            a + 1.0 - (a - 1.0) * cos + sq,
+            2.0 * (a - 1.0 - (a + 1.0) * cos),
+            a + 1.0 - (a - 1.0) * cos - sq,
+        ],
+        Kind::LowPass => [(1.0 - cos) / 2.0, 1.0 - cos, (1.0 - cos) / 2.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha],
+        Kind::HighPass => [(1.0 + cos) / 2.0, -(1.0 + cos), (1.0 + cos) / 2.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha],
+    };
+    let w = 2.0 * PI * f / 48000.0;
+    let resp = |k: [f64; 3]| {
+        let re = k[0] + k[1] * w.cos() + k[2] * (2.0 * w).cos();
+        let im = -(k[1] * w.sin() + k[2] * (2.0 * w).sin());
+        re * re + im * im
+    };
+    10.0 * (resp([c[0], c[1], c[2]]) / resp([c[3], c[4], c[5]])).log10()
+}
+
 pub fn sanitize_presets(presets: &mut Vec<Preset>) {
     presets.truncate(200);
     for p in presets.iter_mut() {
@@ -267,10 +304,23 @@ impl Studio {
             out.push_str(&filters(c.bands));
         }
         if !out.is_empty() {
-            out.insert_str(0, "# Herramientas de estudio (momentáneas)\r\n");
+            // Solo para las salidas: sin `Stage`, lo de antes del primer `Device:` lo procesaría también el
+            // micrófono (en captura todas las etapas coinciden por defecto)
+            out.insert_str(0, "# Herramientas de estudio (momentáneas)\r\nStage: post-mix\r\n");
         }
         out
     }
+}
+
+/// Micrófono: lo mismo para todas las entradas activadas. Su EQ va en `Config.curves` con el GUID de la
+/// entrada, como el de cualquier salida.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Mic {
+    /// Sin procesar. Aparte del bypass de las salidas: el atajo de bypass no quita la puerta en un directo.
+    pub bypass: bool,
+    /// Puerta de ruido y compresor (PoxiDSP en la etapa de captura)
+    pub dsp: poxidsp::Settings,
 }
 
 /// Lo que suena ahora sin guardarse en la configuración
@@ -281,29 +331,57 @@ pub struct Live {
     pub studio: Studio,
     /// Test de audición: todo en plano (sin EQ, dinámica ni herramientas)
     pub hearing: bool,
+    /// Medición de sala: todo en plano, también el micrófono (graba lo que suena de verdad)
+    pub measuring: bool,
+}
+
+/// Solo GUIDs: es lo único que Equalizer APO compara sin ambigüedad
+fn is_guid(id: &str) -> bool {
+    id.starts_with('{') && id.ends_with('}') && id[1..id.len() - 1].chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
 /// Texto de `poxieq.txt`. Primero las herramientas de estudio, antes de cualquier `Device:` (valen para todas
-/// las salidas, también en bypass: son de escucha, no del EQ); luego una sección `Device:` por dispositivo,
-/// nada si está en bypass. La dinámica (PoxiDSP) va al final, solo en L/R y solo si hay algo encendido.
-pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, live: &Live) -> String {
+/// las salidas, también en bypass: son de escucha, no del EQ); luego una sección `Device:` por salida, nada
+/// si está en bypass. La dinámica (PoxiDSP) va al final, solo en L/R y solo si hay algo encendido.
+///
+/// Las entradas (`is_input`) llevan su propia sección con `Stage: capture` (su única etapa), su EQ y la
+/// puerta/compresor de [`Mic`]. No dependen del bypass, del A/B ni del test de audición, solo de `mic.bypass`.
+pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, mic: &Mic, live: &Live, is_input: impl Fn(&str) -> bool) -> String {
     let mut out = String::from("# PoxiEQ: archivo generado automáticamente, los cambios a mano se pierden\r\n");
+    if live.measuring {
+        out.push_str("# Medición de sala: todo en plano\r\n");
+        return out;
+    }
+    let mut ids: Vec<&String> = curves.keys().filter(|id| is_guid(id)).collect();
+    ids.sort();
+    let (inputs, outputs): (Vec<&String>, Vec<&String>) = ids.into_iter().partition(|id| is_input(id));
     if live.hearing {
         out.push_str("# Test de audición: todo en plano\r\n");
-        return out;
-    }
-    out.push_str(&live.studio.render());
-    if bypass {
-        out.push_str("# Bypass activado\r\n");
-        return out;
-    }
-    let mut ids: Vec<&String> = curves.keys().collect();
-    ids.sort();
-    for id in ids {
-        // Solo GUIDs: es lo único que Equalizer APO compara sin ambigüedad
-        if !id.starts_with('{') || !id.ends_with('}') || !id[1..id.len() - 1].chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
-            continue;
+    } else {
+        out.push_str(&live.studio.render());
+        if bypass {
+            out.push_str("# Bypass activado\r\n");
+        } else {
+            render_outputs(&mut out, curves, &outputs, loudness, dsp, live);
         }
+    }
+    if !mic.bypass {
+        for id in inputs {
+            let c = &curves[id];
+            out.push_str(&format!("\r\nDevice: {id}\r\nStage: capture\r\nPreamp: {:.1} dB\r\n", c.preamp));
+            out.push_str(&filters(&c.bands));
+            // Todos los canales (un micro mono es «C», no «L R»): el motor reparte de dos en dos
+            if mic.dsp.active() {
+                let chunk = poxidsp::base64(&mic.dsp.chunk(poxidsp::device_key(id)));
+                out.push_str(&format!("Channel: all\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\n", poxidsp::DLL_NAME));
+            }
+        }
+    }
+    out
+}
+
+fn render_outputs(out: &mut String, curves: &HashMap<String, Curve>, ids: &[&String], loudness: &Loudness, dsp: &poxidsp::Settings, live: &Live) {
+    for &id in ids {
         let c = &curves[id];
         if let Some(g) = live.compare {
             out.push_str(&format!("\r\nDevice: {id}\r\nPreamp: {:.1} dB\r\n", clamp(g, -30.0, 12.0, 0.0)));
@@ -327,12 +405,57 @@ pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness
             out.push_str(&format!("Channel: L R\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
         }
     }
-    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `render` sin micrófonos
+    fn out(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, live: &Live) -> String {
+        render(curves, bypass, loudness, dsp, &Mic::default(), live, |_| false)
+    }
+
+    #[test]
+    fn microfono_en_su_etapa() {
+        let out_id = "{6af377fe-6370-495b-afe3-95fac2e918f7}".to_string();
+        let mic_id = "{0d1b4c9a-1111-4a2b-9c3d-123456789abc}".to_string();
+        let pk = Band { kind: Kind::Peak, freq: 200.0, gain: -3.0, q: 1.0, on: true };
+        let curves = HashMap::from([
+            (out_id.clone(), Curve { bands: vec![pk.clone()], ..Curve::default() }),
+            (mic_id.clone(), Curve { preamp: 4.0, bands: vec![pk], ..Curve::default() }),
+        ]);
+        let is_input = |id: &str| id == mic_id;
+        let none = poxidsp::Settings::default();
+        let mut mic = Mic::default();
+        mic.dsp.gate.on = true;
+        mic.dsp.comp.on = true;
+        let live = Live { studio: Studio { listen: Listen::Mono, ..Studio::default() }, ..Live::default() };
+        let text = render(&curves, false, &Loudness::default(), &none, &mic, &live, is_input);
+        let chunk = poxidsp::base64(&mic.dsp.chunk(poxidsp::device_key(&mic_id)));
+        let section = format!(
+            "Device: {mic_id}\r\nStage: capture\r\nPreamp: 4.0 dB\r\nFilter: ON PK Fc 200.0 Hz Gain -3.0 dB Q 1.000\r\nChannel: all\r\nVSTPlugin: Library \"PoxiDSP.dll\" ChunkData \"{chunk}\"\r\n"
+        );
+        assert!(text.contains(&section), "{text}");
+        // Las herramientas de estudio (antes de cualquier `Device:`) no llegan al micrófono
+        let studio_at = text.find("Copy:").unwrap();
+        assert!(text[..studio_at].contains("Stage: post-mix\r\n"));
+        assert!(text.contains(&format!("Device: {out_id}\r\nPreamp")));
+
+        // Ni el bypass, ni el A/B ni el test de audición le quitan la puerta al micrófono
+        for (bypass, live) in [(true, Live::default()), (false, Live { compare: Some(-1.0), ..Live::default() }), (false, Live { hearing: true, ..Live::default() })] {
+            assert!(render(&curves, bypass, &Loudness::default(), &none, &mic, &live, is_input).contains(&section));
+        }
+        // Su propio bypass sí
+        let off = Mic { bypass: true, ..mic };
+        assert!(!render(&curves, false, &Loudness::default(), &none, &off, &Live::default(), is_input).contains(&mic_id));
+        // Con la puerta y el compresor apagados el plugin ni se carga
+        let plain = render(&curves, false, &Loudness::default(), &none, &Mic::default(), &Live::default(), is_input);
+        assert!(plain.contains(&mic_id) && !plain.contains("VSTPlugin"));
+        // La medición de sala lo deja todo en plano, micrófono incluido
+        let m = render(&curves, false, &Loudness::default(), &none, &mic, &Live { measuring: true, ..live }, is_input);
+        assert!(!m.contains("Device") && !m.contains("Copy"));
+    }
 
     #[test]
     fn render_and_sanitize() {
@@ -360,7 +483,7 @@ mod tests {
         let off = Loudness::default();
         let none = poxidsp::Settings::default();
         let live = Live::default();
-        let text = render(&curves, false, &off, &none, &live);
+        let text = out(&curves, false, &off, &none, &live);
         assert!(text.contains(&format!("Device: {id}\r\nPreamp: -30.0 dB")));
         assert!(text.contains("Filter: ON PK Fc 20.0 Hz Gain 3.0 dB Q 1.410"));
         assert!(text.contains("Filter: ON HPQ Fc 30.0 Hz Q 1.000"));
@@ -369,19 +492,19 @@ mod tests {
         assert!(!text.contains("Loudness"));
         assert!(!text.contains("VSTPlugin"), "con la dinámica apagada el plugin ni se carga");
         let on = Loudness { on: true, offset: -6.0, strength: 0.5 };
-        assert!(render(&curves, false, &on, &none, &live).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
+        assert!(out(&curves, false, &on, &none, &live).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
         let mut dsp = none;
         dsp.limiter.on = true;
-        let text = render(&curves, false, &on, &dsp, &live);
+        let text = out(&curves, false, &on, &dsp, &live);
         let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(&id)));
         assert!(text.ends_with(&format!("Filter: ON HPQ Fc 30.0 Hz Q 1.000\r\nChannel: L R\r\nVSTPlugin: Library \"PoxiDSP.dll\" ChunkData \"{chunk}\"\r\nChannel: all\r\n")));
-        let ab = render(&curves, false, &on, &dsp, &Live { compare: Some(-2.5), ..live });
+        let ab = out(&curves, false, &on, &dsp, &Live { compare: Some(-2.5), ..live });
         assert!(ab.contains("Preamp: -2.5 dB") && !ab.contains("Filter") && !ab.contains("Loudness") && !ab.contains("VSTPlugin"));
 
         assert!(!text.contains("Copy") && !text.contains("estudio"), "sin herramientas de estudio no se escribe nada");
 
         curves.clear();
-        assert!(!render(&curves, true, &off, &dsp, &live).contains("Device"));
+        assert!(!out(&curves, true, &off, &dsp, &live).contains("Device"));
     }
 
     #[test]
@@ -418,48 +541,11 @@ mod tests {
         let mut dsp = poxidsp::Settings::default();
         dsp.limiter.on = true;
         let live = Live { studio: st(Listen::Mono, false, false, false), ..Live::default() };
-        let text = render(&curves, false, &Loudness::default(), &dsp, &live);
+        let text = out(&curves, false, &Loudness::default(), &dsp, &live);
         assert!(text.find("Copy:").unwrap() < text.find("Device:").unwrap());
-        assert!(render(&curves, true, &Loudness::default(), &dsp, &live).contains("Copy: L=0.5*L"));
-        let test = render(&curves, false, &Loudness::default(), &dsp, &Live { hearing: true, ..live });
+        assert!(out(&curves, true, &Loudness::default(), &dsp, &live).contains("Copy: L=0.5*L"));
+        let test = out(&curves, false, &Loudness::default(), &dsp, &Live { hearing: true, ..live });
         assert!(!test.contains("Copy") && !test.contains("Device") && !test.contains("VSTPlugin"));
-    }
-
-    /// Respuesta en dB de una banda a `f` (biquads RBJ a 48 kHz, como `bandDb` en `eq.ts`)
-    fn band_db(b: &Band, f: f64) -> f64 {
-        use std::f64::consts::PI;
-        let a = 10f64.powf(b.gain / 40.0);
-        let w0 = 2.0 * PI * b.freq / 48000.0;
-        let (cos, alpha) = (w0.cos(), w0.sin() / (2.0 * b.q));
-        let sq = 2.0 * a.sqrt() * alpha;
-        let c = match b.kind {
-            Kind::Peak => [1.0 + alpha * a, -2.0 * cos, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * cos, 1.0 - alpha / a],
-            Kind::LowShelf => [
-                a * (a + 1.0 - (a - 1.0) * cos + sq),
-                2.0 * a * (a - 1.0 - (a + 1.0) * cos),
-                a * (a + 1.0 - (a - 1.0) * cos - sq),
-                a + 1.0 + (a - 1.0) * cos + sq,
-                -2.0 * (a - 1.0 + (a + 1.0) * cos),
-                a + 1.0 + (a - 1.0) * cos - sq,
-            ],
-            Kind::HighShelf => [
-                a * (a + 1.0 + (a - 1.0) * cos + sq),
-                -2.0 * a * (a - 1.0 + (a + 1.0) * cos),
-                a * (a + 1.0 + (a - 1.0) * cos - sq),
-                a + 1.0 - (a - 1.0) * cos + sq,
-                2.0 * (a - 1.0 - (a + 1.0) * cos),
-                a + 1.0 - (a - 1.0) * cos - sq,
-            ],
-            Kind::LowPass => [(1.0 - cos) / 2.0, 1.0 - cos, (1.0 - cos) / 2.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha],
-            Kind::HighPass => [(1.0 + cos) / 2.0, -(1.0 + cos), (1.0 + cos) / 2.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha],
-        };
-        let w = 2.0 * PI * f / 48000.0;
-        let resp = |k: [f64; 3]| {
-            let re = k[0] + k[1] * w.cos() + k[2] * (2.0 * w).cos();
-            let im = -(k[1] * w.sin() + k[2] * (2.0 * w).sin());
-            re * re + im * im
-        };
-        10.0 * (resp([c[0], c[1], c[2]]) / resp([c[3], c[4], c[5]])).log10()
     }
 
     #[test]
@@ -492,11 +578,11 @@ mod tests {
         let curves = HashMap::from([(id, curve)]);
         let mut dsp = poxidsp::Settings::default();
         dsp.limiter.on = true;
-        let text = render(&curves, false, &Loudness::default(), &dsp, &Live::default());
+        let text = out(&curves, false, &Loudness::default(), &dsp, &Live::default());
         assert!(text.contains(
             "Filter: ON PK Fc 4000.0 Hz Gain 3.0 dB Q 1.410\r\nChannel: L\r\nFilter: ON PK Fc 4000.0 Hz Gain -1.5 dB Q 1.410\r\nChannel: R\r\nChannel: all\r\nChannel: L R\r\nVSTPlugin"
         ));
         // En el A/B suena el original: sin el ajuste
-        assert!(!render(&curves, false, &Loudness::default(), &dsp, &Live { compare: Some(0.0), ..Live::default() }).contains("Channel"));
+        assert!(!out(&curves, false, &Loudness::default(), &dsp, &Live { compare: Some(0.0), ..Live::default() }).contains("Channel"));
     }
 }

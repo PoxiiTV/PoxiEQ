@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Curve } from './eq'
+import type { Band, Curve } from './eq'
 
 export type Accent = 'cyan' | 'blue' | 'emerald' | 'violet' | 'pink' | 'amber' | 'red'
 
@@ -25,6 +25,22 @@ export interface Dsp {
   crossfeed: { on: boolean; freq: number; feed: number }
   /** Altavoces virtuales (HRIR): excluye el crossfeed. `amount` 0…1 */
   speakers: { on: boolean; amount: number }
+  /** Puerta de ruido (micrófono): dBFS, dB de atenuación y ms */
+  gate: { on: boolean; threshold: number; range: number; attack: number; hold: number; release: number }
+}
+
+/** Micrófono: lo mismo en todas las entradas activadas (su EQ va en `curves` con el id de la entrada) */
+export interface Mic {
+  /** Sin procesar (aparte del bypass de las salidas) */
+  bypass: boolean
+  /** Solo se usan la puerta y el compresor */
+  dsp: Dsp
+}
+
+/** Atajos globales en el formato del registrador (`control+alt+Numpad0`); `null` = sin atajo */
+export interface Hotkeys {
+  bypass: string | null
+  presets: { keys: string | null; preset: string | null }[]
 }
 
 /** Monitorización: qué se escucha. `mono` es el mid, (L + R) / 2 */
@@ -61,7 +77,6 @@ export interface Config {
   accent: Accent
   closeToTray: boolean
   bypass: boolean
-  bypassHotkey: boolean
   analyzer: boolean
   analyzerMode: AnalyzerMode
   seenVersion: string
@@ -72,8 +87,8 @@ export interface Config {
   meterCollapsed: boolean
   dsp: Dsp
   appRules: AppRule[]
-  /** Ctrl+Alt+1…9: id del preset de cada atajo */
-  presetKeys: (string | null)[]
+  hotkeys: Hotkeys
+  mic: Mic
 }
 
 /** Lo que Rust necesita para aplicar un preset sin la interfaz (atajos, bandeja, reglas por app) */
@@ -101,6 +116,8 @@ export interface Device {
   default: boolean
   enabled: boolean
   unplugged: boolean
+  /** Entrada (micrófono) */
+  input: boolean
 }
 
 export interface EngineStatus {
@@ -140,6 +157,34 @@ export interface AppError {
   detail?: string | null
 }
 
+/** Niveles en el micrófono durante un barrido (dBFS) y posiciones medidas */
+export interface RoomLevels {
+  noise: number
+  peak: number
+  takes: number
+}
+
+export interface RoomParams {
+  /** Ancho del suavizado en octavas */
+  smoothing: number
+  /** Caída del objetivo hacia agudos (dB/octava, ≤ 0) */
+  slope: number
+  /** Hasta dónde se corrige (Hz) */
+  high: number
+  maxBoost: number
+  filters: number
+}
+
+export interface RoomFit {
+  freqs: number[]
+  measured: number[]
+  target: number[]
+  corrected: number[]
+  bands: Band[]
+  /** Por debajo no se sube nada (el altavoz ya no llega) */
+  low: number
+}
+
 export const api = {
   appInfo: () => invoke<AppInfo>('app_info'),
   configGet: () => invoke<Config>('config_get'),
@@ -161,5 +206,13 @@ export const api = {
   studioSet: (studio: Studio) => invoke<void>('studio_set', { studio }),
   hearingSet: (on: boolean) => invoke<void>('hearing_set', { on }),
   meterReset: () => invoke<void>('meter_reset'),
-  appQuit: () => invoke<void>('app_quit')
+  appQuit: () => invoke<void>('app_quit'),
+  hotkeyCheck: (keys: string) => invoke<string>('hotkey_check', { keys }),
+  hotkeysPause: (paused: boolean) => invoke<void>('hotkeys_pause', { paused }),
+  hotkeysFailed: () => invoke<string[]>('hotkeys_failed'),
+  roomCheck: (output: string, input: string, level: number) => invoke<RoomLevels>('room_check', { output, input, level }),
+  roomMeasure: (output: string, input: string, level: number) => invoke<RoomLevels>('room_measure', { output, input, level }),
+  roomReset: () => invoke<void>('room_reset'),
+  roomCancel: () => invoke<void>('room_cancel'),
+  roomFit: (params: RoomParams) => invoke<RoomFit>('room_fit', { params })
 }

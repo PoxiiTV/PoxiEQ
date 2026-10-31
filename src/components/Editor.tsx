@@ -1,39 +1,52 @@
 import { useEffect, useRef, useState } from 'react'
-import { AudioWaveform, Copy, Ear, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
+import { AudioWaveform, Copy, Ear, Mic, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
 import { dspActive } from '../lib/dsp'
-import { currentCurve, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
+import { currentCurve, editingMic, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
 import { addBand, bandColor, Graph, KINDS, removeBand, updateBand } from './Graph'
-import { Dynamics } from './Dynamics'
+import { Dynamics, MicDynamics } from './Dynamics'
 import { Studio } from './Studio'
 
 export function Editor(): React.JSX.Element {
   const t = useT()
   const curve = useStore((s) => currentCurve(s))
-  const bypass = useStore((s) => !!s.config?.bypass)
-  const tab = useStore((s) => s.tab)
-  const dspOn = useStore((s) => !!s.config && dspActive(s.config.dsp))
+  // Micrófono: su EQ, su puerta y su compresor (sin estudio ni A/B: son de escucha)
+  const mic = useStore((s) => editingMic(s))
+  const bypass = useStore((s) => (mic ? !!s.config?.mic.bypass : !!s.config?.bypass))
+  const picked = useStore((s) => s.tab)
+  const tab = mic && picked === 'studio' ? 'eq' : picked
+  const dspOn = useStore((s) => !!s.config && dspActive(mic ? s.config.mic.dsp : s.config.dsp))
   const studioOn = useStore((s) => studioActive(s.studio))
   const clips = headroom(curve) > 0.05
+  const resume = (): void => {
+    const cfg = useStore.getState().config
+    if (cfg) updateConfig(mic ? { mic: { ...cfg.mic, bypass: false } } : { bypass: false })
+  }
 
   return (
     <div className="editor">
       {bypass && (
         <div className="banner">
           <Power size={16} />
-          <span>{t('eq.bypassBanner')}</span>
+          <span>{t(mic ? 'mic.bypassBanner' : 'eq.bypassBanner')}</span>
           <div className="spacer" />
-          <button className="btn btn-sm btn-primary" onClick={() => updateConfig({ bypass: false })}>
+          <button className="btn btn-sm btn-primary" onClick={resume}>
             {t('eq.bypassResume')}
           </button>
         </div>
       )}
       {studioOn && <StudioBanner />}
       <div className="toolbar">
+        {mic && (
+          <span className="chip mic-chip" data-tip={t('mic.chipTip')}>
+            <Mic size={13} />
+            {t('mic.chip')}
+          </span>
+        )}
         <div className="segmented tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'eq'} className={tab === 'eq' ? 'on' : ''} onClick={() => setState({ tab: 'eq' })}>
             {t('tabs.eq')}
@@ -42,13 +55,15 @@ export function Editor(): React.JSX.Element {
             {t('tabs.dsp')}
             {dspOn && <i className="tab-dot" aria-hidden />}
           </button>
-          <button role="tab" aria-selected={tab === 'studio'} className={tab === 'studio' ? 'on' : ''} onClick={() => setState({ tab: 'studio' })}>
-            {t('tabs.studio')}
-            {studioOn && <i className="tab-dot warn" aria-hidden />}
-          </button>
+          {!mic && (
+            <button role="tab" aria-selected={tab === 'studio'} className={tab === 'studio' ? 'on' : ''} onClick={() => setState({ tab: 'studio' })}>
+              {t('tabs.studio')}
+              {studioOn && <i className="tab-dot warn" aria-hidden />}
+            </button>
+          )}
         </div>
         <HistoryButtons />
-        {tab === 'eq' && <EqTools curve={curve} clips={clips} bypass={bypass} />}
+        {tab === 'eq' && <EqTools curve={curve} clips={clips} bypass={bypass || mic} />}
       </div>
       {tab === 'eq' ? (
         <>
@@ -57,7 +72,7 @@ export function Editor(): React.JSX.Element {
           <Bands />
         </>
       ) : tab === 'dsp' ? (
-        <Dynamics />
+        mic ? <MicDynamics /> : <Dynamics />
       ) : (
         <Studio />
       )}
@@ -106,7 +121,8 @@ function HistoryButtons(): React.JSX.Element {
   )
 }
 
-/** Preamp, A/B y acciones de la curva (barra de la pestaña EQ) */
+/** Preamp, A/B y acciones de la curva (barra de la pestaña EQ). Sin A/B si no suena la curva (bypass) o es un
+ *  micrófono (no se escucha aquí). */
 function EqTools({ curve, clips, bypass }: { curve: Curve; clips: boolean; bypass: boolean }): React.JSX.Element {
   const t = useT()
   return (

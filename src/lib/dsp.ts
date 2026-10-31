@@ -27,7 +27,7 @@ const PRESETS: Record<Exclude<Sound, 'natural'>, Chain> = {
   }
 }
 
-const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed', 'speakers'] as const
+const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed', 'speakers', 'gate'] as const
 
 export function withSound(d: Dsp, s: Sound): Dsp {
   if (s !== 'natural') return { ...d, ...structuredClone(PRESETS[s]) }

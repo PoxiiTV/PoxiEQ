@@ -8,7 +8,7 @@ import { allPresets, currentCurve, refreshEngine, setState, toast, updateConfig,
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
-import { Range, Select, type Option } from './controls'
+import { KeyRecorder, Range, Select, type Option } from './controls'
 import { Logo, Modal, Switch } from './ui'
 
 type Cat = 'general' | 'auto' | 'keys' | 'engine' | 'about'
@@ -239,23 +239,35 @@ function AutoRules(): React.JSX.Element {
   )
 }
 
-/** Atajos globales: bypass y un preset en cada Ctrl+Alt+1…9 */
+/** Atajos globales: bypass y nueve huecos de preset, cada uno con la combinación que se grabe */
 function Keys(): React.JSX.Element {
   const t = useT()
   const cfg = useStore((s) => s.config!)
-  const keys = Array.from({ length: 9 }, (_, i) => cfg.presetKeys[i] ?? null)
-  const assign = (i: number, id: string): void => updateConfig({ presetKeys: keys.map((k, j) => (j === i ? id || null : k)) })
+  const failed = useStore((s) => s.hotkeysFailed)
+  const h = cfg.hotkeys
+  const all = [h.bypass, ...h.presets.map((p) => p.keys)]
+  /** Las combinaciones de los demás atajos (`own` = posición en `all`), para no repetir ninguna */
+  const others = (own: number): string[] => all.filter((k, i): k is string => !!k && i !== own)
+  const setSlot = (i: number, patch: Partial<(typeof h.presets)[number]>): void =>
+    updateConfig({ hotkeys: { ...h, presets: h.presets.map((p, j) => (j === i ? { ...p, ...patch } : p)) } })
   return (
     <>
       <h3>{t('keys.title')}</h3>
-      <Row title={t('settings.hotkey')} hint={t('settings.hotkeyHint')}>
-        <Switch on={cfg.bypassHotkey} label={t('settings.hotkey')} onChange={(bypassHotkey) => updateConfig({ bypassHotkey })} />
+      <p className="hint set-intro">{t('keys.hint')}</p>
+      <Row title={t('keys.bypass')} hint={t('keys.bypassHint')}>
+        <KeyRecorder
+          value={h.bypass}
+          taken={others(0)}
+          failed={!!h.bypass && failed.includes(h.bypass)}
+          label={t('keys.bypass')}
+          onChange={(bypass) => updateConfig({ hotkeys: { ...h, bypass } })}
+        />
       </Row>
       <h3 style={{ marginTop: 22 }}>{t('keys.presets')}</h3>
-      <p className="hint set-intro">{t('keys.hint')}</p>
-      {keys.map((id, i) => (
-        <Row key={i} title={`Ctrl+Alt+${i + 1}`}>
-          <Select size="sm" value={id ?? ''} options={presetOptions(cfg, id, t('keys.none'))} label={`Ctrl+Alt+${i + 1}`} onChange={(v) => assign(i, v)} />
+      {h.presets.map((p, i) => (
+        <Row key={i} title={t('keys.slot', { n: i + 1 })}>
+          <Select size="sm" value={p.preset ?? ''} options={presetOptions(cfg, p.preset, t('keys.none'))} label={t('keys.slot', { n: i + 1 })} onChange={(v) => setSlot(i, { preset: v || null })} />
+          <KeyRecorder value={p.keys} taken={others(i + 1)} failed={!!p.keys && !!p.preset && failed.includes(p.keys)} label={t('keys.slot', { n: i + 1 })} onChange={(keys) => setSlot(i, { keys })} />
         </Row>
       ))}
     </>
@@ -267,6 +279,8 @@ function Engine(): React.JSX.Element {
   const engine = useStore((s) => s.engine)
   const step = useStore((s) => s.setup)
   const devices = engine?.devices ?? []
+  const outputs = devices.filter((d) => !d.input)
+  const inputs = devices.filter((d) => d.input)
   const [want, setWant] = useState<Record<string, boolean>>({})
   useEffect(() => setWant(Object.fromEntries(devices.map((d) => [d.id, d.enabled]))), [engine]) // eslint-disable-line react-hooks/exhaustive-deps
   const enable = devices.filter((d) => want[d.id] && !d.enabled).map((d) => d.id)
@@ -281,11 +295,24 @@ function Engine(): React.JSX.Element {
       <div className="hint" style={{ marginBottom: 6 }}>
         {t('settings.devicesHint')}
       </div>
-      {devices.map((d) => (
+      {outputs.map((d) => (
         <Row key={d.id} title={d.name} hint={`${d.device}${d.default ? ` · ${t('device.default')}` : ''}`}>
           <Switch on={!!want[d.id]} label={d.name} onChange={(on) => setWant({ ...want, [d.id]: on })} />
         </Row>
       ))}
+      {inputs.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 22 }}>{t('settings.inputs')}</h3>
+          <div className="hint" style={{ marginBottom: 6 }}>
+            {t('settings.inputsHint')}
+          </div>
+          {inputs.map((d) => (
+            <Row key={d.id} title={d.name} hint={`${d.device}${d.default ? ` · ${t('device.default')}` : ''}`}>
+              <Switch on={!!want[d.id]} label={d.name} onChange={(on) => setWant({ ...want, [d.id]: on })} />
+            </Row>
+          ))}
+        </>
+      )}
       <div className="modal-actions">
         <button className="btn btn-primary" disabled={!!step || (!enable.length && !disable.length)} onClick={() => void runSetup(enable, disable)}>
           {step && <LoaderCircle size={16} className="spin" />}

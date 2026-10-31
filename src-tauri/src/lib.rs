@@ -3,13 +3,16 @@ mod apps;
 mod autoeq;
 pub mod engine;
 mod eq;
+mod hotkeys;
 mod osd;
+mod room;
 
-use eq::{Curve, Live, Loudness, Preset};
+use eq::{Curve, Live, Loudness, Mic, Preset};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -20,9 +23,6 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 // Instalador oficial de Equalizer APO, fijado por hash: si cambia, no se ejecuta
 const APO_URL: &str = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
 const APO_SHA256: &str = "7403be7427bbe1936a40dded082829b6e217fc4f5990fee5cba501f0ae055afa";
-const BYPASS_HOTKEY: &str = "Ctrl+Alt+E";
-/// Atajos de preset: Ctrl+Alt+1…9
-const PRESET_KEYS: usize = 9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -34,7 +34,6 @@ pub struct Config {
     pub accent: String,
     pub close_to_tray: bool,
     pub bypass: bool,
-    pub bypass_hotkey: bool,
     pub analyzer: bool,
     /// `spectrum` (espectro con retención de picos) o `spectrogram`
     pub analyzer_mode: String,
@@ -50,8 +49,15 @@ pub struct Config {
     pub dsp: poxidsp::Settings,
     /// Preset automático por aplicación en primer plano
     pub app_rules: Vec<apps::AppRule>,
-    /// Preset de cada atajo Ctrl+Alt+1…9 (`None`: sin asignar)
-    pub preset_keys: Vec<Option<String>>,
+    /// Atajos globales: bypass y un preset por hueco, cada uno con su combinación
+    pub hotkeys: hotkeys::Hotkeys,
+    /// Formato anterior de los atajos (Ctrl+Alt+E y Ctrl+Alt+1…9): solo se lee, para migrarlo
+    #[serde(skip_serializing)]
+    pub bypass_hotkey: Option<bool>,
+    #[serde(skip_serializing)]
+    pub preset_keys: Option<Vec<Option<String>>>,
+    /// Micrófono: puerta de ruido, compresor y su propio bypass (su EQ va en `curves`)
+    pub mic: Mic,
 }
 
 impl Default for Config {
@@ -62,7 +68,6 @@ impl Default for Config {
             accent: "cyan".into(),
             close_to_tray: true,
             bypass: false,
-            bypass_hotkey: true,
             analyzer: true,
             analyzer_mode: "spectrum".into(),
             seen_version: String::new(),
@@ -73,7 +78,10 @@ impl Default for Config {
             meter_collapsed: false,
             dsp: poxidsp::Settings::default(),
             app_rules: vec![],
-            preset_keys: vec![None; PRESET_KEYS],
+            hotkeys: hotkeys::Hotkeys::default(),
+            bypass_hotkey: None,
+            preset_keys: None,
+            mic: Mic::default(),
         }
     }
 }
@@ -98,6 +106,7 @@ impl Config {
         eq::sanitize_presets(&mut self.presets);
         self.loudness.sanitize();
         self.dsp.sanitize();
+        self.mic.dsp.sanitize();
         if !matches!(self.analyzer_mode.as_str(), "spectrum" | "spectrogram") {
             self.analyzer_mode = "spectrum".into();
         }
@@ -105,12 +114,10 @@ impl Config {
             self.device = None;
         }
         apps::sanitize_rules(&mut self.app_rules);
-        self.preset_keys.resize(PRESET_KEYS, None);
-        for k in &mut self.preset_keys {
-            if k.as_deref().is_some_and(|id| !apps::valid_preset_id(id)) {
-                *k = None;
-            }
+        if self.bypass_hotkey.is_some() || self.preset_keys.is_some() {
+            self.hotkeys = hotkeys::Hotkeys::migrate(self.bypass_hotkey.take(), self.preset_keys.take());
         }
+        self.hotkeys.sanitize(apps::valid_preset_id);
     }
 
     /// Lo que pinta el menú de la bandeja: si cambia, se rehace
@@ -140,6 +147,10 @@ pub struct AppState {
     presets: Mutex<Vec<PresetEntry>>,
     /// Hilo que vigila la app en primer plano (se despierta al cambiar las reglas)
     watcher: OnceLock<std::thread::Thread>,
+    /// Atajos que Windows no ha dejado registrar (los tiene otro programa)
+    hotkeys_failed: Mutex<Vec<String>>,
+    /// Corrección de sala: respuesta de cada posición medida (potencia en la rejilla de `room`)
+    room: Mutex<Vec<Vec<f64>>>,
 }
 
 impl AppState {
@@ -157,6 +168,14 @@ impl AppState {
 
     fn live(&self) -> MutexGuard<'_, Live> {
         self.live.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn room(&self) -> MutexGuard<'_, Vec<Vec<f64>>> {
+        self.room.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn failed(&self) -> MutexGuard<'_, Vec<String>> {
+        self.hotkeys_failed.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -209,7 +228,7 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
     cfg.sanitize();
     let (tray, keys, rules) = {
         let old = st.cfg();
-        (old.tray_key(), (old.bypass_hotkey, old.preset_keys.clone()), old.app_rules.clone())
+        (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone())
     };
     *st.cfg() = cfg.clone();
     if let Ok(json) = serde_json::to_string_pretty(&cfg) {
@@ -221,7 +240,7 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
     if tray != cfg.tray_key() {
         refresh_tray(app);
     }
-    if keys != (cfg.bypass_hotkey, cfg.preset_keys.clone()) {
+    if keys != cfg.hotkeys {
         register_hotkeys(app, &cfg);
     }
     if rules != cfg.app_rules {
@@ -329,7 +348,8 @@ fn apply(cfg: &Config, live: &Live) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, live)).map_err(|e| problem("engine.write", e))
+    let text = eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, &cfg.mic, live, engine::is_input);
+    engine::write_config(&text).map_err(|e| problem("engine.write", e))
 }
 
 /// Cambia lo momentáneo y lo hace sonar
@@ -365,8 +385,10 @@ fn hearing_set(st: State<'_, AppState>, on: bool) -> Res<()> {
     })
 }
 
-/// Al esconder la ventana o salir no se queda nada momentáneo puesto (mono, simulación, test…) sin que se vea
+/// Al esconder la ventana o salir no se queda nada momentáneo puesto (mono, simulación, test, medición…)
+/// sin que se vea
 fn reset_live(app: &AppHandle) {
+    ROOM_CANCEL.store(true, Ordering::SeqCst);
     let st = app.state::<AppState>();
     if *st.live() != Live::default() {
         let _ = set_live(&st, |l| *l = Live::default());
@@ -507,10 +529,116 @@ async fn autoeq_fetch(path: String) -> Res<String> {
     autoeq::fetch(&path).await.map_err(|e| problem("autoeq.offline", e))
 }
 
-/// Analizador: solo con la ventana a la vista (la interfaz lo para al esconderse)
+/// Analizador: solo con la ventana a la vista (la interfaz lo para al esconderse). De una salida mide lo que
+/// suena; de un micrófono, lo que llega de él ya procesado.
 #[tauri::command]
 fn analyzer_start(app: AppHandle, device: String) {
-    analyzer::start(app, device);
+    if engine::is_device_id(&device) {
+        let input = engine::is_input(&device);
+        analyzer::start(app, device, input);
+    }
+}
+
+// ---------------------------------------------------------- corrección de sala
+
+/// Una medición cada vez, y la petición de cortarla (cancelar, esconder la ventana, salir)
+static ROOM_BUSY: AtomicBool = AtomicBool::new(false);
+static ROOM_CANCEL: AtomicBool = AtomicBool::new(false);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomLevels {
+    /// dBFS en el micrófono: ruido de fondo antes del barrido y pico durante
+    noise: f64,
+    peak: f64,
+    /// Posiciones medidas
+    takes: usize,
+}
+
+/// Salida de verdad y micrófono de verdad
+fn room_devices(output: &str, input: &str) -> Res<()> {
+    if engine::is_device_id(output) && !engine::is_input(output) && engine::is_input(input) {
+        Ok(())
+    } else {
+        Err(problem("engine.badDevice", None))
+    }
+}
+
+/// Barrido por la salida mientras graba el micro. Mientras suena todo va en plano (EQ, PoxiDSP, estudio y
+/// micrófono, como el A/B pero entero) y al terminar, falle o se cancele, vuelve lo de siempre.
+fn room_take(app: &AppHandle, output: &str, input: &str, level: f64, secs: f64) -> Res<room::Take> {
+    if ROOM_BUSY.swap(true, Ordering::SeqCst) {
+        return Err(problem("room.busy", None));
+    }
+    ROOM_CANCEL.store(false, Ordering::SeqCst);
+    let st = app.state::<AppState>();
+    let result = set_live(&st, |l| l.measuring = true).and_then(|_| {
+        // El motor relee el archivo al momento; margen para que no suene nada procesado
+        std::thread::sleep(Duration::from_millis(400));
+        let level = if level.is_finite() { level } else { room::MIN_LEVEL };
+        room::record(output, input, level, secs, &ROOM_CANCEL).map_err(|e| match e {
+            room::Error::Cancelled => problem("room.cancelled", None),
+            room::Error::Format => problem("room.format", None),
+            room::Error::Device(d) => problem("room.device", d),
+        })
+    });
+    let _ = set_live(&st, |l| l.measuring = false);
+    ROOM_BUSY.store(false, Ordering::SeqCst);
+    result
+}
+
+/// Barrido corto para ver el nivel que llega al micrófono
+#[tauri::command]
+async fn room_check(app: AppHandle, output: String, input: String, level: f64) -> Res<RoomLevels> {
+    room_devices(&output, &input)?;
+    let handle = app.clone();
+    let take = tauri::async_runtime::spawn_blocking(move || room_take(&handle, &output, &input, level, room::CHECK_SECS))
+        .await
+        .map_err(|_| problem("room.device", None))??;
+    let takes = app.state::<AppState>().room().len();
+    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes })
+}
+
+/// Mide una posición y la añade a la media (como mucho `MAX_TAKES`: la más antigua sale)
+#[tauri::command]
+async fn room_measure(app: AppHandle, output: String, input: String, level: f64) -> Res<RoomLevels> {
+    room_devices(&output, &input)?;
+    let handle = app.clone();
+    let (take, grid) = tauri::async_runtime::spawn_blocking(move || {
+        let take = room_take(&handle, &output, &input, level, room::MEASURE_SECS)?;
+        let grid = take.analyze();
+        Ok::<_, Problem>((take, grid))
+    })
+    .await
+    .map_err(|_| problem("room.device", None))??;
+    let st = app.state::<AppState>();
+    let mut takes = st.room();
+    if takes.len() >= room::MAX_TAKES {
+        takes.remove(0);
+    }
+    takes.push(grid);
+    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes: takes.len() })
+}
+
+#[tauri::command]
+fn room_reset(st: State<'_, AppState>) {
+    st.room().clear();
+}
+
+#[tauri::command]
+fn room_cancel() {
+    ROOM_CANCEL.store(true, Ordering::SeqCst);
+}
+
+/// Curva y filtros con los ajustes elegidos (no vuelve a medir)
+#[tauri::command]
+async fn room_fit(app: AppHandle, mut params: room::FitParams) -> Res<room::Fit> {
+    params.sanitize();
+    let takes = app.state::<AppState>().room().clone();
+    if takes.is_empty() {
+        return Err(problem("room.empty", None));
+    }
+    tauri::async_runtime::spawn_blocking(move || room::fit(&room::average(&takes), &params)).await.map_err(|_| problem("room.empty", None))
 }
 
 #[tauri::command]
@@ -575,42 +703,75 @@ fn toggle_bypass(app: &AppHandle, notify: bool) {
     let mut cfg = st.cfg().clone();
     cfg.bypass = !cfg.bypass;
     let off = cfg.bypass;
+    let keys = cfg.hotkeys.bypass.as_deref().map(hotkeys::label).unwrap_or_default();
     commit(app, cfg);
     if notify {
         let l = st.labels();
-        osd::show(app, if off { &l.eq_off } else { &l.eq_on }, BYPASS_HOTKEY, if off { "off" } else { "on" });
+        osd::show(app, if off { &l.eq_off } else { &l.eq_on }, &keys, if off { "off" } else { "on" });
     }
 }
 
-/// Ctrl+Alt+N: el preset asignado a ese hueco, con aviso en pantalla
+/// Atajo de un hueco de preset: el preset asignado, con aviso en pantalla
 fn preset_hotkey(app: &AppHandle, slot: usize) {
-    let id = app.state::<AppState>().cfg().preset_keys.get(slot).cloned().flatten();
-    if let Some(name) = id.and_then(|id| apply_preset(app, &id)) {
-        osd::show(app, &name, &format!("Ctrl+Alt+{}", slot + 1), "preset");
+    let key = app.state::<AppState>().cfg().hotkeys.presets.get(slot).cloned().unwrap_or_default();
+    if let Some(name) = key.preset.and_then(|id| apply_preset(app, &id)) {
+        osd::show(app, &name, &key.keys.as_deref().map(hotkeys::label).unwrap_or_default(), "preset");
     }
 }
 
-/// Atajos globales: el de bypass y solo los huecos de preset que tengan algo asignado
-/// (un atajo registrado deja de llegar a las demás apps; con AltGr, Ctrl+Alt+N es también un símbolo)
+/// Atajos globales: el de bypass y los huecos de preset con combinación y preset. Un atajo registrado deja de
+/// llegar a las demás apps; si otro programa ya lo tiene, Windows no deja registrarlo: se apunta y se avisa.
 fn register_hotkeys(app: &AppHandle, cfg: &Config) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    if cfg.bypass_hotkey {
-        let _ = gs.on_shortcut(BYPASS_HOTKEY, |app, _, ev| {
+    let mut failed = vec![];
+    if let Some(k) = &cfg.hotkeys.bypass {
+        let ok = gs.on_shortcut(k.as_str(), |app, _, ev| {
             if ev.state == ShortcutState::Pressed {
                 toggle_bypass(app, true);
             }
         });
-    }
-    for (slot, id) in cfg.preset_keys.iter().enumerate() {
-        if id.is_some() {
-            let _ = gs.on_shortcut(format!("Ctrl+Alt+{}", slot + 1).as_str(), move |app, _, ev| {
-                if ev.state == ShortcutState::Pressed {
-                    preset_hotkey(app, slot);
-                }
-            });
+        if ok.is_err() {
+            failed.push(k.clone());
         }
     }
+    for (slot, p) in cfg.hotkeys.presets.iter().enumerate() {
+        let (Some(k), Some(_)) = (&p.keys, &p.preset) else { continue };
+        let ok = gs.on_shortcut(k.as_str(), move |app, _, ev| {
+            if ev.state == ShortcutState::Pressed {
+                preset_hotkey(app, slot);
+            }
+        });
+        if ok.is_err() {
+            failed.push(k.clone());
+        }
+    }
+    *app.state::<AppState>().failed() = failed.clone();
+    let _ = app.emit("hotkeys-failed", failed);
+}
+
+/// Comprueba una combinación grabada en Ajustes: su forma canónica o el motivo del rechazo
+#[tauri::command]
+fn hotkey_check(keys: String) -> Res<String> {
+    hotkeys::check(&keys).map_err(|code| problem(code, None))
+}
+
+/// Mientras se graba un atajo no hay ninguno registrado: si no, Windows se lo quedaría antes de llegar a la
+/// ventana (y saltaría el bypass en vez de grabarse)
+#[tauri::command]
+fn hotkeys_pause(app: AppHandle, st: State<'_, AppState>, paused: bool) {
+    if paused {
+        let _ = app.global_shortcut().unregister_all();
+    } else {
+        let cfg = st.cfg().clone();
+        register_hotkeys(&app, &cfg);
+    }
+}
+
+/// Atajos que no se han podido registrar (para avisar en Ajustes)
+#[tauri::command]
+fn hotkeys_failed(st: State<'_, AppState>) -> Vec<String> {
+    st.failed().clone()
 }
 
 /// Preset automático por app: sondeo ligero (cada 500 ms) de la ventana en primer plano.
@@ -689,6 +850,8 @@ pub fn run() {
                 live: Mutex::new(Live::default()),
                 presets: Mutex::new(vec![]),
                 watcher: OnceLock::new(),
+                hotkeys_failed: Mutex::new(vec![]),
+                room: Mutex::new(vec![]),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -754,6 +917,14 @@ pub fn run() {
             meter_reset,
             analyzer_stop,
             app_quit,
+            hotkey_check,
+            hotkeys_pause,
+            hotkeys_failed,
+            room_check,
+            room_measure,
+            room_reset,
+            room_cancel,
+            room_fit,
         ])
         .build(tauri::generate_context!())
         .expect("no se ha podido arrancar PoxiEQ")
@@ -771,24 +942,44 @@ mod tests {
     #[test]
     fn sanitize_new_fields() {
         let mut cfg: Config = serde_json::from_str(
-            r#"{"analyzerMode":"3d","device":"../../x","presetKeys":["b:bass",null,"z:mal","u:abc",null,null,null,null,null,"b:flat","b:music"],
+            r#"{"analyzerMode":"3d","device":"../../x","bypassHotkey":true,"presetKeys":["b:bass",null,"z:mal","u:abc",null,null,null,null,null,"b:flat","b:music"],
                 "appRules":[{"exe":"Spotify.exe","name":"Spotify","preset":"b:music","on":true}]}"#,
         )
         .unwrap();
         cfg.sanitize();
         assert_eq!(cfg.analyzer_mode, "spectrum");
         assert_eq!(cfg.device, None);
-        assert_eq!(cfg.preset_keys.len(), PRESET_KEYS);
-        assert_eq!(cfg.preset_keys[0].as_deref(), Some("b:bass"));
-        assert_eq!(cfg.preset_keys[2], None);
-        assert_eq!(cfg.preset_keys[3].as_deref(), Some("u:abc"));
         assert_eq!(cfg.app_rules[0].exe, "spotify.exe");
+        // Atajos del formato anterior: mismos presets en cada hueco, teclas nuevas (teclado numérico)
+        let h = &cfg.hotkeys;
+        assert_eq!(h.bypass.as_deref(), Some("control+alt+Numpad0"));
+        assert_eq!(h.presets.len(), hotkeys::SLOTS);
+        assert_eq!(h.presets[0].preset.as_deref(), Some("b:bass"));
+        assert_eq!(h.presets[0].keys.as_deref(), Some("control+alt+Numpad1"));
+        assert_eq!(h.presets[2].preset, None);
+        assert_eq!(h.presets[3].preset.as_deref(), Some("u:abc"));
+        // Al guardarse ya no lleva el formato anterior, y al volver a cargarse no se migra otra vez
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(!json.contains("bypassHotkey") && !json.contains("presetKeys"));
+        let mut again: Config = serde_json::from_str(&json).unwrap();
+        again.sanitize();
+        assert_eq!(again.hotkeys, cfg.hotkeys);
+        // Bypass sin atajo en el formato anterior: sigue sin atajo
+        let mut off: Config = serde_json::from_str(r#"{"bypassHotkey":false,"presetKeys":[null]}"#).unwrap();
+        off.sanitize();
+        assert_eq!(off.hotkeys.bypass, None);
         // Una configuración de antes (sin los campos nuevos) carga con los valores por defecto
         let mut old: Config = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
         old.sanitize();
-        assert_eq!(old.preset_keys, vec![None; PRESET_KEYS]);
+        assert_eq!(old.hotkeys, hotkeys::Hotkeys::default());
         assert!(old.app_rules.is_empty());
         assert_eq!(old.analyzer_mode, "spectrum");
+        assert_eq!(old.mic, Mic::default());
+        // Ajustes del micrófono fuera de rango
+        let mut m: Config = serde_json::from_str(r#"{"mic":{"bypass":true,"dsp":{"gate":{"on":true,"threshold":20,"range":500}}}}"#).unwrap();
+        m.sanitize();
+        assert!(m.mic.bypass && m.mic.dsp.gate.on);
+        assert_eq!((m.mic.dsp.gate.threshold, m.mic.dsp.gate.range), (0.0, 90.0));
     }
 
     #[test]
@@ -804,14 +995,5 @@ mod tests {
         assert_eq!(file_stem("COM1"), "preset");
         assert_eq!(file_stem("Comedia"), "Comedia");
         assert_eq!(file_stem("  "), "preset");
-    }
-
-    #[test]
-    fn hotkeys_parse() {
-        use tauri_plugin_global_shortcut::Shortcut;
-        assert!(BYPASS_HOTKEY.parse::<Shortcut>().is_ok());
-        for slot in 1..=PRESET_KEYS {
-            assert!(format!("Ctrl+Alt+{slot}").parse::<Shortcut>().is_ok(), "Ctrl+Alt+{slot}");
-        }
     }
 }

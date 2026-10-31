@@ -27,13 +27,15 @@ interface State {
   /** Herramientas de estudio puestas ahora (momentáneas, no van a la configuración) */
   studio: Studio
   settingsOpen: boolean
-  modal: 'autoeq' | 'savePreset' | 'import' | 'hearing' | null
+  modal: 'autoeq' | 'savePreset' | 'import' | 'hearing' | 'room' | null
   /** Preset que se está compartiendo (ventana de compartir abierta) */
   sharing: Preset | null
   /** Código que llega a la ventana de importar (archivo arrastrado) */
   importCode: string
   /** Hay algo que deshacer / rehacer */
   history: { undo: boolean; redo: boolean }
+  /** Atajos que Windows no ha dejado registrar (los tiene otro programa) */
+  hotkeysFailed: string[]
   toasts: Toast[]
 }
 
@@ -52,6 +54,7 @@ export const useStore = create<State>(() => ({
   sharing: null,
   importCode: '',
   history: { undo: false, redo: false },
+  hotkeysFailed: [],
   toasts: []
 }))
 
@@ -96,9 +99,9 @@ async function flush(): Promise<void> {
 export function updateConfig(patch: Partial<Config>, record = true): void {
   const cur = getState().config
   if (!cur) return
-  const touches = (patch.curves && patch.curves !== cur.curves) || (patch.dsp && patch.dsp !== cur.dsp)
+  const touches = (patch.curves && patch.curves !== cur.curves) || (patch.dsp && patch.dsp !== cur.dsp) || (patch.mic && patch.mic !== cur.mic)
   if (record && touches) {
-    history.record({ curves: cur.curves, dsp: cur.dsp }, grouper.next(performance.now()))
+    history.record({ curves: cur.curves, dsp: cur.dsp, mic: cur.mic }, grouper.next(performance.now()))
     syncHistory()
   }
   const next = { ...cur, ...patch }
@@ -122,9 +125,9 @@ export function setStudio(patch: Partial<Studio>): void {
   })
 }
 
-// ——— Deshacer / rehacer (curvas y dinámica) ———
+// ——— Deshacer / rehacer (curvas, dinámica y micrófono) ———
 
-type Snapshot = Pick<Config, 'curves' | 'dsp'>
+type Snapshot = Pick<Config, 'curves' | 'dsp' | 'mic'>
 const history = new History<Snapshot>()
 /** Agrupa los cambios por gesto: lo alimentan los eventos de puntero de toda la ventana (`main.tsx`) */
 export const grouper = new Grouper()
@@ -137,7 +140,7 @@ function syncHistory(): void {
 function travel(dir: 'undo' | 'redo'): void {
   const cfg = getState().config
   if (!cfg) return
-  const snap = history[dir]({ curves: cfg.curves, dsp: cfg.dsp })
+  const snap = history[dir]({ curves: cfg.curves, dsp: cfg.dsp, mic: cfg.mic })
   if (!snap) return
   const bands = currentCurve({ config: { ...cfg, ...snap }, engine: getState().engine }).bands.length
   const sel = getState().selected
@@ -151,10 +154,16 @@ export const redo = (): void => travel('redo')
 
 // ——— Dispositivo y curva actuales ———
 
+/** Lo que se edita: la salida o el micrófono elegido si está conectado y, si no, la salida predeterminada */
 export function currentDevice(s: Pick<State, 'config' | 'engine'> = getState()): Device | null {
   const list = s.engine?.devices.filter((d) => !d.unplugged) ?? []
-  return list.find((d) => d.id === s.config?.device) ?? list.find((d) => d.default) ?? list[0] ?? null
+  const outputs = list.filter((d) => !d.input)
+  return list.find((d) => d.id === s.config?.device) ?? outputs.find((d) => d.default) ?? outputs[0] ?? null
 }
+
+/** Se está editando un micrófono */
+export const editingMic = (s: Pick<State, 'config' | 'engine'> = getState()): boolean => !!currentDevice(s)?.input
+
 
 // Una sola instancia: los selectores de zustand necesitan devolver la misma referencia si nada cambia
 const FLAT: Curve = Object.freeze(builtinCurve('b:flat'))
@@ -190,6 +199,15 @@ export function savePreset(name: string): void {
   const presets: Preset[] = [...cfg.presets, { id, name, curve }]
   const dev = currentDevice()?.id
   updateConfig({ presets, curves: dev ? { ...cfg.curves, [dev]: curve } : cfg.curves })
+}
+
+/** Preset hecho para una salida concreta (corrección de sala): se añade a «Mis presets» y se pone en ella */
+export function savePresetFor(name: string, curve: Curve, device: string): void {
+  const cfg = getState().config
+  if (!cfg) return
+  const id = newPresetId()
+  const c = { ...curve, preset: id }
+  updateConfig({ presets: [...cfg.presets, { id, name, curve: c }], curves: { ...cfg.curves, [device]: c } })
 }
 
 /** Preset que llega compartido: se añade a «Mis presets» y se pone */

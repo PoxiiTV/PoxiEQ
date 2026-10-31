@@ -27,7 +27,7 @@ export function Setup(): React.JSX.Element {
         <Logo size={72} />
         <h1>{installed ? t('setup.title', { d: device.name }) : t('setup.titleInstall')}</h1>
         <p className="device-name">{device.device}</p>
-        <p>{installed ? t('setup.text') : t('setup.textInstall')}</p>
+        <p>{!installed ? t('setup.textInstall') : device.input ? t('setup.textMic') : t('setup.text')}</p>
         <ul className="setup-points">
           <li>
             <RotateCcw size={16} /> {t('setup.noReboot')}

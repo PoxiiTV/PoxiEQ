@@ -27,6 +27,7 @@ use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 const RENDER: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render";
+const CAPTURE: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture";
 const APP: &str = r"SOFTWARE\EqualizerAPO";
 const CHILD: &str = r"SOFTWARE\EqualizerAPO\Child APOs";
 
@@ -75,7 +76,7 @@ fn hklm() -> RegKey {
 
 // ------------------------------------------------------------------ estado
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Device {
     /// GUID del endpoint, tal cual aparece en el registro: `{xxxxxxxx-...}`
@@ -87,6 +88,8 @@ pub struct Device {
     pub default: bool,
     pub enabled: bool,
     pub unplugged: bool,
+    /// Entrada (micrófono): en el motor solo tiene etapa de captura
+    pub input: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -105,19 +108,20 @@ pub fn status() -> Status {
     Status {
         installed,
         config_dir: app.and_then(|k| k.get_value("ConfigPath").ok()),
-        devices: devices(),
+        devices: [devices(false), devices(true)].concat(),
         dsp: DspState::Missing,
     }
 }
 
-fn devices() -> Vec<Device> {
-    let Ok(render) = hklm().open_subkey(RENDER) else { return vec![] };
-    let default = default_device();
-    let mut list: Vec<Device> = render
+/// Salidas (`input` = false) o entradas conectadas, la predeterminada primero
+fn devices(input: bool) -> Vec<Device> {
+    let Ok(root) = hklm().open_subkey(if input { CAPTURE } else { RENDER }) else { return vec![] };
+    let default = default_device(input);
+    let mut list: Vec<Device> = root
         .enum_keys()
         .flatten()
         .filter_map(|id| {
-            let key = render.open_subkey(&id).ok()?;
+            let key = root.open_subkey(&id).ok()?;
             let state: u32 = key.get_value("DeviceState").ok()?;
             // Solo activos o desenchufados: los «no presentes» y deshabilitados no se tocan
             // Los deshabilitados llevan 0x10000000 en el registro, no DEVICE_STATE_DISABLED
@@ -132,6 +136,7 @@ fn devices() -> Vec<Device> {
                 name: props.get_value(CONNECTION_NAME).unwrap_or_default(),
                 device: props.get_value(DEVICE_NAME).unwrap_or_default(),
                 unplugged,
+                input,
                 id,
             })
         })
@@ -140,8 +145,24 @@ fn devices() -> Vec<Device> {
     list
 }
 
+/// Clave del dispositivo en el registro: en `Render` si es una salida y, si no, en `Capture`
+/// (lo mismo que hace `DeviceAPOInfo::load`)
+fn dev_path(id: &str) -> String {
+    let render = format!(r"{RENDER}\{id}");
+    if hklm().open_subkey(&render).is_ok() {
+        render
+    } else {
+        format!(r"{CAPTURE}\{id}")
+    }
+}
+
+/// El GUID es de una entrada (micrófono)
+pub fn is_input(id: &str) -> bool {
+    is_device_id(id) && hklm().open_subkey(format!(r"{RENDER}\{id}")).is_err() && hklm().open_subkey(format!(r"{CAPTURE}\{id}")).is_ok()
+}
+
 fn is_enabled(id: &str) -> bool {
-    let Ok(fx) = hklm().open_subkey(format!(r"{RENDER}\{id}\FxProperties")) else { return false };
+    let Ok(fx) = hklm().open_subkey(format!(r"{}\FxProperties", dev_path(id))) else { return false };
     FX.iter().any(|name| {
         fx.get_value::<String, _>(name)
             .is_ok_and(|v| v.eq_ignore_ascii_case(PRE_MIX) || v.eq_ignore_ascii_case(POST_MIX))
@@ -162,14 +183,14 @@ pub fn active_device(preferred: Option<&str>) -> Option<String> {
             .and_then(|k| k.get_value::<u32, _>("DeviceState"))
             .is_ok_and(|s| s & DEVICE_STATE_ACTIVE.0 != 0 && s & (DEVICE_STATE_DISABLED.0 | 0x1000_0000) == 0)
     };
-    preferred.filter(|id| is_device_id(id) && plugged(id)).map(String::from).or_else(default_device)
+    preferred.filter(|id| is_device_id(id) && plugged(id)).map(String::from).or_else(|| default_device(false))
 }
 
-fn default_device() -> Option<String> {
+fn default_device(input: bool) -> Option<String> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let dev = en.GetDefaultAudioEndpoint(if input { eCapture } else { eRender }, eConsole).ok()?;
         let id = dev.GetId().ok()?;
         let s = id.to_string().ok();
         CoTaskMemFree(Some(id.0 as _));
@@ -188,11 +209,15 @@ enum Mode {
 }
 
 /// Registra Equalizer APO en el dispositivo. Requiere administrador.
+///
+/// En una entrada (micrófono) solo hay etapa de captura: el APO de pre-mix va en LFX o SFX, no se toca
+/// GFX/MFX/EFX y no hay APO original de post-mix (como `DeviceAPOInfo::install` con `input`).
 pub fn enable(id: &str) -> Result<()> {
     if is_enabled(id) {
         return Ok(());
     }
-    let dev_path = format!(r"{RENDER}\{id}");
+    let dev_path = dev_path(id);
+    let input = dev_path.starts_with(CAPTURE);
     let fx_path = format!(r"{dev_path}\FxProperties");
     let (child, _) = hklm().create_subkey(format!(r"{CHILD}\{id}")).map_err(err("Child APOs"))?;
 
@@ -246,7 +271,7 @@ pub fn enable(id: &str) -> Result<()> {
     };
     let real = |g: &String| if g == NO_KEY || g == NO_VALUE { String::new() } else { g.clone() };
     child.set_value("PreMixChild", &real(pre)).map_err(err("Child APOs"))?;
-    child.set_value("PostMixChild", &real(post)).map_err(err("Child APOs"))?;
+    child.set_value("PostMixChild", &if input { String::new() } else { real(post) }).map_err(err("Child APOs"))?;
     child.set_value("AllowSilentBufferModification", &"false").map_err(err("Child APOs"))?;
     let _ = child.delete_value("DisableAutomaticAdjustment");
     child.set_value("Version", &"2").map_err(err("Child APOs"))?;
@@ -261,7 +286,9 @@ pub fn enable(id: &str) -> Result<()> {
     match mode {
         Mode::LfxGfx => {
             set(FX[L], PRE_MIX)?;
-            set(FX[G], POST_MIX)?;
+            if !input {
+                set(FX[G], POST_MIX)?;
+            }
             for i in [S, M, E] {
                 let _ = fx.delete_value(FX[i]);
             }
@@ -271,7 +298,9 @@ pub fn enable(id: &str) -> Result<()> {
             let _ = fx.delete_value(FX[G]);
             set(FX[S], PRE_MIX)?;
             mode_list(SFX_MODES)?;
-            if mode == Mode::SfxMfx {
+            if input {
+                // Entrada: MFX y EFX se quedan como estaban
+            } else if mode == Mode::SfxMfx {
                 set(FX[M], POST_MIX)?;
                 mode_list(MFX_MODES)?;
             } else {
@@ -290,7 +319,7 @@ pub fn disable(id: &str) -> Result<()> {
     let child_path = format!(r"{CHILD}\{id}");
     let Ok(child) = hklm().open_subkey(&child_path) else { return Ok(()) };
     let orig: Vec<String> = FX.iter().map(|n| child.get_value(n).unwrap_or_default()).collect();
-    let fx_path = format!(r"{RENDER}\{id}\FxProperties");
+    let fx_path = format!(r"{}\FxProperties", dev_path(id));
 
     if orig[0] == NO_KEY {
         let _ = hklm().delete_subkey(&fx_path);
@@ -542,17 +571,20 @@ pub fn check(ids: &[String]) -> Result<Vec<Check>> {
     app.set_value("DeviceTestPipeName", &pipe).map_err(err("EqualizerAPO"))?;
 
     let mut results: Vec<Check> = ids.iter().map(|id| Check { id: id.clone(), ..Default::default() }).collect();
+    // Las entradas solo tienen etapa de captura (el APO avisa como «PreMix»)
+    let inputs: Vec<bool> = ids.iter().map(|id| is_input(id)).collect();
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         if let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) {
-            for id in ids {
-                let _ = open_stream(&en, id);
+            for (id, &input) in ids.iter().zip(&inputs) {
+                let _ = open_stream(&en, id, input);
             }
         }
     }
 
+    let done = |r: &Check, input: bool| r.pre_mix && (r.post_mix || input);
     let deadline = Instant::now() + Duration::from_secs(3);
-    while results.iter().any(|r| !(r.pre_mix && r.post_mix)) {
+    while results.iter().zip(&inputs).any(|(r, &input)| !done(r, input)) {
         let Some(left) = deadline.checked_duration_since(Instant::now()) else { break };
         let Ok(msg) = rx.recv_timeout(left) else { break };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&msg) else { continue };
@@ -569,11 +601,22 @@ pub fn check(ids: &[String]) -> Result<Vec<Check>> {
         }
     }
     let _ = app.delete_value("DeviceTestPipeName");
+    for (r, &input) in results.iter_mut().zip(&inputs) {
+        if input {
+            // En captura no hay post-mix: cuenta solo la etapa de captura
+            r.post_mix = r.pre_mix;
+        }
+    }
     Ok(results)
 }
 
-unsafe fn open_stream(en: &IMMDeviceEnumerator, id: &str) -> windows::core::Result<()> {
-    let dev = en.GetDevice(&HSTRING::from(format!("{{0.0.0.00000000}}.{id}")))?;
+/// Identificador completo del endpoint para `IMMDeviceEnumerator::GetDevice`
+pub fn endpoint_id(id: &str, input: bool) -> HSTRING {
+    HSTRING::from(format!("{{0.0.{}.00000000}}.{id}", if input { 1 } else { 0 }))
+}
+
+unsafe fn open_stream(en: &IMMDeviceEnumerator, id: &str, input: bool) -> windows::core::Result<()> {
+    let dev = en.GetDevice(&endpoint_id(id, input))?;
     let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
     let format = client.GetMixFormat()?;
     let res = client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 1_000_000, 0, format, None);

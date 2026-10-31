@@ -1,5 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Power, Settings, Square, X } from 'lucide-react'
+import { Mic, Minus, Power, Settings, Speaker, Square, X } from 'lucide-react'
+import { keyLabel } from '../lib/hotkeys'
 import { currentDevice, dismiss, setState, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
@@ -11,8 +12,18 @@ export function TitleBar(): React.JSX.Element {
   const t = useT()
   const devices = useStore((s) => s.engine?.devices)
   const device = useStore((s) => currentDevice(s))
-  const bypass = useStore((s) => !!s.config?.bypass)
+  const mic = !!device?.input
+  // El botón enciende y apaga lo que se edita: el EQ de las salidas o el procesado del micrófono
+  const off = useStore((s) => (mic ? !!s.config?.mic.bypass : !!s.config?.bypass))
+  const hotkey = useStore((s) => s.config?.hotkeys.bypass)
   const list = (devices ?? []).filter((d) => !d.unplugged)
+  const toggle = (): void => {
+    const cfg = useStore.getState().config
+    if (!cfg) return
+    if (mic) updateConfig({ mic: { ...cfg.mic, bypass: !cfg.mic.bypass } })
+    else updateConfig({ bypass: !cfg.bypass })
+  }
+  const tip = mic ? t(off ? 'titlebar.micBypassOn' : 'titlebar.micBypassOff') : `${t(off ? 'titlebar.bypassOn' : 'titlebar.bypassOff')}${hotkey ? ` · ${keyLabel(hotkey)}` : ''}`
 
   return (
     <header className="titlebar" data-tauri-drag-region>
@@ -23,13 +34,20 @@ export function TitleBar(): React.JSX.Element {
         </span>
       </div>
       {device && (
-        <div className="no-drag device-pick">
+        <div className={`no-drag device-pick ${mic ? 'mic' : ''}`}>
           <span className={`dot ${device.enabled ? 'ok' : ''}`} />
+          <span className="kind" data-tip={t(mic ? 'titlebar.micTip' : 'titlebar.outputTip')}>
+            {mic ? <Mic size={15} /> : <Speaker size={15} />}
+          </span>
           <Select
             size="sm"
             value={device.id}
             label={t('titlebar.device')}
-            options={list.map((d) => ({ value: d.id, label: `${d.name} · ${d.device}${d.default ? ` (${t('device.default')})` : ''}` }))}
+            options={list.map((d) => ({
+              value: d.id,
+              label: `${d.name} · ${d.device}${d.default ? ` (${t('device.default')})` : ''}`,
+              group: t(d.input ? 'titlebar.inputs' : 'titlebar.outputs')
+            }))}
             onChange={(id) => {
               setState({ selected: null })
               updateConfig({ device: id })
@@ -38,15 +56,9 @@ export function TitleBar(): React.JSX.Element {
         </div>
       )}
       <div className="spacer" data-tauri-drag-region />
-      <button
-        className={`power no-drag ${bypass ? 'bypassed' : ''}`}
-        onClick={() => updateConfig({ bypass: !bypass })}
-        data-tip={bypass ? t('titlebar.bypassOn') : t('titlebar.bypassOff')}
-        aria-label={bypass ? t('titlebar.bypassOn') : t('titlebar.bypassOff')}
-        aria-pressed={!bypass}
-      >
+      <button className={`power no-drag ${off ? 'bypassed' : ''}`} onClick={toggle} data-tip={tip} aria-label={tip} aria-pressed={!off}>
         <Power size={15} />
-        <span>EQ</span>
+        <span>{mic ? 'MIC' : 'EQ'}</span>
       </button>
       <button className="icon-btn no-drag" onClick={() => setState({ settingsOpen: true })} data-tip={t('titlebar.settings')} aria-label={t('titlebar.settings')}>
         <Settings size={16} />

@@ -12,7 +12,8 @@ const OFF: Dsp = {
   bass: { on: false, freq: 100, amount: 0.4 },
   dialog: { on: false, amount: 4 },
   crossfeed: { on: false, freq: 700, feed: 4.5 },
-  speakers: { on: false, amount: 1 }
+  speakers: { on: false, amount: 1 },
+  gate: { on: false, threshold: -50, range: 30, attack: 1, hold: 150, release: 200 }
 }
 
 test('cada preset de sonoridad se reconoce a sí mismo', () => {

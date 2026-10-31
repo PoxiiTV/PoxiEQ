@@ -1,7 +1,8 @@
 //! Procesadores de PoxiDSP. Todo en f64 y muestra a muestra; la memoria se reserva solo en
 //! [`Chain::new`] (fuera del hilo de audio), nunca en [`Chain::tick`].
 //!
-//! Orden: diálogos → graves → nivelador → compresor → crossfeed o altavoces virtuales → limitador.
+//! Orden: puerta de ruido → diálogos → graves → nivelador → compresor → crossfeed o altavoces virtuales →
+//! limitador.
 
 use crate::Settings;
 use std::f64::consts::PI;
@@ -66,6 +67,76 @@ impl Biquad {
 }
 
 const BUTTERWORTH: f64 = std::f64::consts::FRAC_1_SQRT_2;
+
+// ------------------------------------------------------------ puerta
+
+/// Histéresis: abre en el umbral y cierra 3 dB por debajo (así una voz que ronda el umbral no tartamudea)
+const GATE_HYSTERESIS: f64 = 3.0;
+/// Caída del detector de pico: aguanta entre crestas de una voz grave sin cerrarse a cada ciclo
+const GATE_DETECTOR_MS: f64 = 10.0;
+
+/// Puerta de ruido con estéreo enlazado. Detector de pico → estado abierto/cerrado (con histéresis y hold)
+/// → ganancia suavizada en dB: hacia 0 dB con el ataque, hacia −`range` con la relajación. Abierta y
+/// asentada, la ganancia es exactamente 1 (no toca la señal).
+struct Gate {
+    open_at: f64,
+    close_at: f64,
+    floor_db: f64,
+    det: f64,
+    det_rel: f64,
+    hold_len: u32,
+    hold: u32,
+    open: bool,
+    /// Ganancia actual en dB (≤ 0)
+    g_db: f64,
+    att: f64,
+    rel: f64,
+}
+
+impl Gate {
+    fn new(fs: f64, g: &crate::Gate) -> Self {
+        let thr = g.threshold as f64;
+        Self {
+            open_at: db_to_lin(thr),
+            close_at: db_to_lin(thr - GATE_HYSTERESIS),
+            floor_db: -(g.range as f64),
+            det: 0.0,
+            det_rel: coef(GATE_DETECTOR_MS, fs),
+            hold_len: (g.hold as f64 * 0.001 * fs) as u32,
+            hold: 0,
+            open: false,
+            // Arranca cerrada: el ruido de fondo no se cuela al cargar
+            g_db: -(g.range as f64),
+            att: coef(g.attack as f64, fs),
+            rel: coef(g.release as f64, fs),
+        }
+    }
+
+    #[inline]
+    fn tick(&mut self, l: f64, r: f64) -> (f64, f64) {
+        let a = l.abs().max(r.abs());
+        self.det = if a > self.det { a } else { a + (self.det - a) * self.det_rel };
+        if self.det >= if self.open { self.close_at } else { self.open_at } {
+            self.open = true;
+            self.hold = self.hold_len;
+        } else if self.hold > 0 {
+            self.hold -= 1;
+        } else {
+            self.open = false;
+        }
+        let target = if self.open { 0.0 } else { self.floor_db };
+        let k = if target > self.g_db { self.att } else { self.rel };
+        self.g_db = target + (self.g_db - target) * k;
+        if (self.g_db - target).abs() < 1e-6 {
+            self.g_db = target;
+        }
+        if self.g_db == 0.0 {
+            return (l, r);
+        }
+        let g = db_to_lin(self.g_db);
+        (l * g, r * g)
+    }
+}
 
 // ------------------------------------------------------------- diálogos
 
@@ -585,6 +656,7 @@ pub struct Meters {
 }
 
 pub struct Chain {
+    gate: Option<Gate>,
     voice: Option<Voice>,
     harmonics: Option<Harmonics>,
     agc: Option<Agc>,
@@ -610,6 +682,7 @@ impl Chain {
     pub fn new(s: &Settings, fs: f64) -> Self {
         let fs = if fs.is_finite() { fs.clamp(8000.0, 768_000.0) } else { 48000.0 };
         Self {
+            gate: s.gate.on.then(|| Gate::new(fs, &s.gate)),
             voice: s.dialog.on.then(|| Voice::new(fs, s.dialog.amount as f64)),
             harmonics: s.bass.on.then(|| Harmonics::new(fs, s.bass.freq as f64, s.bass.amount as f64)),
             agc: s.leveler.on.then(|| Agc::new(fs, s.leveler.target as f64, s.leveler.max_gain as f64)),
@@ -653,6 +726,9 @@ impl Chain {
             return dry;
         }
         let (mut l, mut r) = dry;
+        if let Some(p) = &mut self.gate {
+            (l, r) = p.tick(l, r);
+        }
         if let Some(p) = &mut self.voice {
             (l, r) = p.tick(l, r);
         }
@@ -1048,11 +1124,84 @@ mod tests {
         assert!(or.iter().all(|&v| v == 0.0));
     }
 
+    fn gate(threshold: f32, range: f32, hold: f32) -> Settings {
+        with(|s| s.gate = crate::Gate { on: true, threshold, range, attack: 1.0, hold, release: 50.0 })
+    }
+
+    /// Ganancia (dB) que aplica la cadena en cada muestra (con la misma entrada en L y R)
+    fn gains(chain: &mut Chain, x: &[f64]) -> Vec<f64> {
+        x.iter().map(|&v| if v == 0.0 { f64::NAN } else { lin_to_db(chain.tick(v, v).0 / v) }).collect()
+    }
+
+    #[test]
+    fn puerta_baja_el_ruido_y_deja_pasar_la_voz() {
+        // Ruido de fondo a −60 dBFS con umbral −45: cerrada, baja exactamente la atenuación
+        let mut chain = Chain::new(&gate(-45.0, 30.0, 100.0), FS);
+        let hiss: Vec<f64> = noise(48000, 4).iter().map(|v| v * 0.001).collect();
+        let (ol, or) = run(&mut chain, &hiss, &hiss);
+        assert_eq!(ol, or);
+        let tail = 24000;
+        let atten = lin_to_db(rms(&ol[tail..]) / rms(&hiss[tail..]));
+        assert!((atten + 30.0).abs() < 0.1, "atenuación {atten:.2} dB");
+
+        // Voz (tono a −20 dBFS): abierta, sale bit a bit igual en cuanto se asienta el ataque
+        let mut chain = Chain::new(&gate(-45.0, 30.0, 100.0), FS);
+        let x = sine(220.0, 0.1, 0.5);
+        let (ol, _) = run(&mut chain, &x, &x);
+        assert_eq!(&ol[4800..], &x[4800..], "abierta no toca la señal");
+        // El ataque abre rápido: a los 5 ms ya no queda ni 1 dB
+        let mut chain = Chain::new(&gate(-45.0, 30.0, 100.0), FS);
+        let g = gains(&mut chain, &x);
+        assert!(g[240..].iter().filter(|v| v.is_finite()).all(|&v| v > -1.0));
+
+        // Atenuación 0: la puerta no hace nada aunque esté cerrada
+        let mut chain = Chain::new(&gate(-45.0, 0.0, 100.0), FS);
+        let (ol, _) = run(&mut chain, &hiss, &hiss);
+        assert_eq!(ol, hiss);
+    }
+
+    #[test]
+    fn puerta_aguanta_el_hold_y_luego_cierra() {
+        // 200 ms de voz y después ruido de fondo: sigue abierta durante el hold (150 ms) y luego cierra
+        let mut chain = Chain::new(&gate(-40.0, 40.0, 150.0), FS);
+        let mut x = sine(300.0, 0.2, 0.2);
+        x.extend(noise(48000, 8).iter().map(|v| v * 0.0005 + 1e-9));
+        let g = gains(&mut chain, &x);
+        let at = |ms: f64| g[(FS * ms / 1000.0) as usize];
+        assert!(at(300.0) > -0.5, "en el hold sigue abierta: {:.1} dB", at(300.0));
+        // Hold 150 ms (más lo que tarda el detector en caer) y relajación de 50 ms: a los 700 ms ya ha cerrado
+        assert!(at(700.0) < -39.0, "cerrada: {:.1} dB", at(700.0));
+        assert!(at(1100.0) < -39.9);
+    }
+
+    #[test]
+    fn puerta_no_tartamudea_en_el_umbral() {
+        // Un tono que oscila ±1 dB alrededor del umbral: con la histéresis de 3 dB, abre una vez y se queda
+        let mut gate = Gate::new(FS, &crate::Gate { on: true, threshold: -30.0, range: 40.0, attack: 1.0, hold: 0.0, release: 20.0 });
+        let mut changes = 0;
+        let mut was = gate.open;
+        for i in 0..(FS as usize * 2) {
+            let t = i as f64 / FS;
+            let amp = db_to_lin(-30.0 + (2.0 * PI * 3.0 * t).sin());
+            gate.tick(amp * (2.0 * PI * 200.0 * t).sin(), 0.0);
+            if gate.open != was {
+                changes += 1;
+                was = gate.open;
+            }
+        }
+        assert_eq!(changes, 1, "cambios de estado: {changes}");
+    }
+
+    fn rms(x: &[f64]) -> f64 {
+        (x.iter().map(|v| v * v).sum::<f64>() / x.len() as f64).sqrt()
+    }
+
     #[test]
     fn la_cadena_aguanta_basura() {
         let mut s = Settings::default();
         (s.limiter.on, s.comp.on, s.leveler.on, s.bass.on, s.dialog.on, s.crossfeed.on) = (true, true, true, true, true, true);
         s.speakers.on = true;
+        s.gate.on = true;
         let mut chain = Chain::new(&s, FS);
         for x in [f64::NAN, f64::INFINITY, -f64::INFINITY, 1e300, -1e300, 0.0, 1e-310] {
             let (l, r) = chain.tick(x, -x);

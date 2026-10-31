@@ -12,6 +12,7 @@ import { Settings } from './components/Settings'
 import { ImportModal, SavePresetModal, ShareModal, UpdateModal, WhatsNew } from './components/Overlays'
 import { AutoEqModal } from './components/AutoEq'
 import { HearingModal } from './components/Hearing'
+import { RoomModal } from './components/Room'
 import { ContextMenu } from './components/ContextMenu'
 
 export function App(): React.JSX.Element {
@@ -60,6 +61,7 @@ export function App(): React.JSX.Element {
       <ImportModal />
       <AutoEqModal />
       <HearingModal />
+      <RoomModal />
       <UpdateModal />
       <WhatsNew />
       <ContextMenu />

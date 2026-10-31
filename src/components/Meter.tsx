@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
 import { api } from '../lib/api'
-import { updateConfig, useStore } from '../lib/store'
+import { editingMic, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 
 interface Levels {
@@ -29,10 +29,16 @@ const frac = (db: number): number => Math.min(1, Math.max(0, (db - MIN) / -MIN))
 const fmt = (v: number): string => (v <= -119 ? '−∞' : v.toFixed(1).replace('-', '−'))
 
 /** Columna fija de medidores de lo que sale de verdad (después del EQ): pico, RMS, LUFS, true peak, fase y,
- *  cuando la dinámica actúa, su reducción de ganancia */
+ *  cuando la dinámica actúa, su reducción de ganancia. Con un micrófono, lo que reciben las apps (ya procesado)
+ *  y la raya del umbral de la puerta de ruido. */
 export function Meter(): React.JSX.Element {
   const t = useT()
   const collapsed = useStore((s) => !!s.config?.meterCollapsed)
+  const mic = useStore((s) => editingMic(s))
+  const gate = useStore((s) => {
+    const m = s.config?.mic
+    return mic && m && m.dsp.gate.on && !m.bypass ? m.dsp.gate.threshold : null
+  })
   const [lv, setLv] = useState<Levels | null>(null)
   const [clip, setClip] = useState(false)
   const hold = useRef([{ v: MIN, at: 0 }, { v: MIN, at: 0 }])
@@ -73,6 +79,7 @@ export function Meter(): React.JSX.Element {
           </span>
         ))}
       </div>
+      {gate !== null && <i className="meter-thr" style={{ bottom: `calc(18px + ${frac(gate)} * (100% - 34px))` }} data-tip={t('meter.gateTip', { v: fmt(gate) })} />}
       {[0, 1].map((i) => (
         <div key={i} className="meter-bar">
           <i className="rms" style={{ clipPath: `inset(${(1 - frac(lv?.rms[i] ?? MIN)) * 100}% 0 0 0 round 4px)` }} />
@@ -105,7 +112,7 @@ export function Meter(): React.JSX.Element {
   return (
     <aside className="meter">
       <div className="meter-head">
-        <span className="label">{t('meter.title')}</span>
+        <span className="label">{t(mic ? 'meter.mic' : 'meter.title')}</span>
         <button className="icon-btn" onClick={() => updateConfig({ meterCollapsed: true })} aria-label={t('meter.collapse')}>
           <ChevronRight size={15} />
         </button>
