@@ -5,7 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import '@fontsource-variable/nunito'
 import './styles/app.css'
 import { api, type Config } from './lib/api'
-import { currentCurve, getState, grouper, redo, refreshEngine, setState, toast, undo } from './lib/store'
+import { currentCurve, getState, grouper, redo, refreshEngine, setState, STUDIO_OFF, toast, undo } from './lib/store'
 import { MAX_FILE } from './lib/share'
 import { t } from './i18n'
 import { applyTheme, followSystem } from './lib/theme'
@@ -63,6 +63,8 @@ async function start(): Promise<void> {
     const bands = currentCurve({ config: e.payload, engine: s.engine }).bands.length
     setState({ config: e.payload, selected: s.selected !== null && s.selected < bands ? s.selected : null })
   })
+  // Al esconder la ventana Rust quita lo momentáneo (monitorización, simulación, test de audición): aquí se refleja
+  void listen('live-reset', () => setState((s) => ({ studio: STUDIO_OFF, modal: s.modal === 'hearing' ? null : s.modal })))
   // Cascos enchufados o desenchufados mientras la app estaba escondida
   window.addEventListener('focus', () => void refreshEngine())
   // Se enseña la ventana ya pintada (sin parpadeo blanco), salvo si arrancó con Windows en la bandeja

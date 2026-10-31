@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Copy, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2 } from 'lucide-react'
+import { AudioWaveform, Copy, Ear, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
 import { dspActive } from '../lib/dsp'
-import { currentCurve, redo, setCurve, setState, toast, undo, updateConfig, useStore } from '../lib/store'
+import { currentCurve, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
 import { addBand, bandColor, Graph, KINDS, removeBand, updateBand } from './Graph'
 import { Dynamics } from './Dynamics'
+import { Studio } from './Studio'
 
 export function Editor(): React.JSX.Element {
   const t = useT()
@@ -16,6 +17,7 @@ export function Editor(): React.JSX.Element {
   const bypass = useStore((s) => !!s.config?.bypass)
   const tab = useStore((s) => s.tab)
   const dspOn = useStore((s) => !!s.config && dspActive(s.config.dsp))
+  const studioOn = useStore((s) => studioActive(s.studio))
   const clips = headroom(curve) > 0.05
 
   return (
@@ -30,6 +32,7 @@ export function Editor(): React.JSX.Element {
           </button>
         </div>
       )}
+      {studioOn && <StudioBanner />}
       <div className="toolbar">
         <div className="segmented tabs" role="tablist">
           <button role="tab" aria-selected={tab === 'eq'} className={tab === 'eq' ? 'on' : ''} onClick={() => setState({ tab: 'eq' })}>
@@ -38,6 +41,10 @@ export function Editor(): React.JSX.Element {
           <button role="tab" aria-selected={tab === 'dsp'} className={tab === 'dsp' ? 'on' : ''} onClick={() => setState({ tab: 'dsp' })}>
             {t('tabs.dsp')}
             {dspOn && <i className="tab-dot" aria-hidden />}
+          </button>
+          <button role="tab" aria-selected={tab === 'studio'} className={tab === 'studio' ? 'on' : ''} onClick={() => setState({ tab: 'studio' })}>
+            {t('tabs.studio')}
+            {studioOn && <i className="tab-dot warn" aria-hidden />}
           </button>
         </div>
         <HistoryButtons />
@@ -49,9 +56,36 @@ export function Editor(): React.JSX.Element {
           <div className="hint-line small muted">{t('eq.hint')}</div>
           <Bands />
         </>
-      ) : (
+      ) : tab === 'dsp' ? (
         <Dynamics />
+      ) : (
+        <Studio />
       )}
+    </div>
+  )
+}
+
+/** Aviso fijo mientras haya algo de estudio puesto (en cualquier pestaña): que no se quede por error */
+function StudioBanner(): React.JSX.Element {
+  const t = useT()
+  const studio = useStore((s) => s.studio)
+  const parts = [
+    studio.listen !== 'stereo' && t(`studio.listen.${studio.listen}`),
+    studio.flipL && 'Ø L',
+    studio.flipR && 'Ø R',
+    studio.swap && t('studio.swap'),
+    studio.sim && t('studio.simulating', { s: t(`studio.sims.${studio.sim}.name`) })
+  ].filter(Boolean)
+  return (
+    <div className="banner studio-banner" role="status">
+      <AudioWaveform size={16} />
+      <span>
+        {t('studio.banner')} <b>{parts.join(' · ')}</b>
+      </span>
+      <div className="spacer" />
+      <button className="btn btn-sm btn-primary" onClick={() => setStudio(STUDIO_OFF)}>
+        {t('studio.off')}
+      </button>
     </div>
   )
 }
@@ -101,9 +135,18 @@ function EqTools({ curve, clips, bypass }: { curve: Curve; clips: boolean; bypas
           </span>
         )}
       </div>
+      {!!curve.ears && (
+        <span className="chip ears" data-tip={t('eq.earsTip')}>
+          <Ear size={13} />
+          {t('eq.ears')}
+          <button aria-label={t('eq.earsRemove')} onClick={() => setCurve({ ...curve, ears: null })}>
+            <X size={12} />
+          </button>
+        </span>
+      )}
       <div className="spacer" />
       {!bypass && <AbButton curve={curve} />}
-      <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand() })}>
+      <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand(), ears: null })}>
         <RotateCcw size={16} />
       </button>
       <button className="icon-btn" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>

@@ -417,6 +417,7 @@ mod tests {
         let mut s = Settings::default();
         s.limiter.on = true;
         s.comp.on = true;
+        s.speakers.on = true;
         let chunk = s.chunk(1234);
         let h = Host::load(Some(&chunk));
 

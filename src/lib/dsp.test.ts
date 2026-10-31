@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Dsp } from './api'
-import { dspActive, soundOf, SOUNDS, withSound } from './dsp.ts'
+import { dspActive, soundOf, SOUNDS, withHeadphones, withSound } from './dsp.ts'
 
 // Lo mismo que `Settings::default()` en Rust
 const OFF: Dsp = {
@@ -11,7 +11,8 @@ const OFF: Dsp = {
   leveler: { on: false, target: -14, maxGain: 12 },
   bass: { on: false, freq: 100, amount: 0.4 },
   dialog: { on: false, amount: 4 },
-  crossfeed: { on: false, freq: 700, feed: 4.5 }
+  crossfeed: { on: false, freq: 700, feed: 4.5 },
+  speakers: { on: false, amount: 1 }
 }
 
 test('cada preset de sonoridad se reconoce a sí mismo', () => {
@@ -40,4 +41,16 @@ test('los presets no tocan los realces y Natural lo apaga todo', () => {
 test('un ajuste a mano deja el preset en personalizado', () => {
   const s = withSound(OFF, 'streaming')
   assert.equal(soundOf({ ...s, comp: { ...s.comp, ratio: 2.5 } }), null)
+})
+
+test('crossfeed y altavoces virtuales nunca a la vez', () => {
+  const x = withHeadphones(OFF, 'crossfeed', true)
+  assert.equal(x.crossfeed.on, true)
+  const v = withHeadphones(x, 'speakers', true)
+  assert.deepEqual([v.crossfeed.on, v.speakers.on], [false, true])
+  assert.equal(dspActive(v), true)
+  // Apagar uno no enciende el otro
+  const off = withHeadphones(v, 'speakers', false)
+  assert.deepEqual([off.crossfeed.on, off.speakers.on], [false, false])
+  assert.equal(withSound(v, 'natural').speakers.on, false)
 })

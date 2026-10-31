@@ -27,7 +27,7 @@ const PRESETS: Record<Exclude<Sound, 'natural'>, Chain> = {
   }
 }
 
-const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed'] as const
+const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed', 'speakers'] as const
 
 export function withSound(d: Dsp, s: Sound): Dsp {
   if (s !== 'natural') return { ...d, ...structuredClone(PRESETS[s]) }
@@ -40,6 +40,12 @@ const same = (a: object, b: object): boolean => Object.entries(a).every(([k, v])
 export function soundOf(d: Dsp): Sound | null {
   if (!dspActive(d)) return 'natural'
   return (Object.keys(PRESETS) as (keyof typeof PRESETS)[]).find((s) => (['leveler', 'comp', 'limiter'] as const).every((k) => same(PRESETS[s][k], d[k]))) ?? null
+}
+
+/** Crossfeed y altavoces virtuales son dos formas de lo mismo: encender uno apaga el otro */
+export function withHeadphones(d: Dsp, part: 'crossfeed' | 'speakers', on: boolean): Dsp {
+  const other = part === 'crossfeed' ? 'speakers' : 'crossfeed'
+  return { ...d, [part]: { ...d[part], on }, [other]: { ...d[other], on: on ? false : d[other].on } }
 }
 
 export function dspActive(d: Dsp): boolean {

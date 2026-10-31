@@ -1342,3 +1342,204 @@
 .share-code.bad {
   border-color: rgba(239, 68, 68, 0.55);
 }
+
+/* ——— Estudio: monitorización, simulaciones y test de audición ——— */
+.tab-dot.warn {
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+.studio-banner b {
+  font-weight: 800;
+  color: var(--warning);
+}
+.studio-banner span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.segmented.listen {
+  flex-wrap: wrap;
+}
+.segmented.listen button:active,
+.toggle:active {
+  transform: scale(0.97);
+}
+.segmented.listen button {
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 160ms var(--ease-out);
+}
+.studio-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 160ms var(--ease-out);
+}
+@media (hover: hover) {
+  .toggle:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+}
+.toggle.on {
+  background: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.6);
+  color: var(--text);
+}
+.studio-hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.hearing-card {
+  max-width: 560px;
+}
+.hearing-card .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.chip.ears {
+  flex: none;
+  gap: 6px;
+  padding-right: 4px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.chip.ears button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+.chip.ears button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.hearing-points {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.hearing-points li + li {
+  margin-top: 6px;
+}
+.hearing-warn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hearing-warn svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+.hearing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hearing-top .chip {
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.hearing-bar {
+  height: 4px;
+  margin: 12px 0 18px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.hearing-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient);
+  transition: width 250ms var(--ease-out);
+}
+.hearing-freq {
+  text-align: center;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+}
+.hearing-freq small {
+  margin-left: 6px;
+  font-size: 16px;
+  color: var(--muted);
+}
+.modal .hearing-ask {
+  margin: 10px 0 16px;
+  text-align: center;
+}
+.hearing-level {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 86px;
+  align-items: center;
+  gap: 8px;
+}
+.hearing-level b {
+  text-align: right;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.hearing-keys {
+  display: block;
+  margin-top: 8px;
+  text-align: center;
+}
+.hearing-curves {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 12px;
+}
+.hearing-curves .preview {
+  height: 120px;
+  margin-top: 6px;
+}
+.hearing .modal-actions {
+  flex-wrap: wrap;
+}

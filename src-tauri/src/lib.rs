@@ -5,7 +5,7 @@ pub mod engine;
 mod eq;
 mod osd;
 
-use eq::{Curve, Loudness, Preset};
+use eq::{Curve, Live, Loudness, Preset};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -14,7 +14,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 // Instalador oficial de Equalizer APO, fijado por hash: si cambia, no se ejecuta
@@ -135,8 +135,8 @@ pub struct AppState {
     config_path: PathBuf,
     start_hidden: bool,
     tray_labels: Mutex<TrayLabels>,
-    /// A/B en curso: ganancia del original igualado
-    compare: Mutex<Option<f64>>,
+    /// Lo momentáneo (A/B, herramientas de estudio, test de audición): no se guarda
+    live: Mutex<Live>,
     presets: Mutex<Vec<PresetEntry>>,
     /// Hilo que vigila la app en primer plano (se despierta al cambiar las reglas)
     watcher: OnceLock<std::thread::Thread>,
@@ -155,8 +155,8 @@ impl AppState {
         self.tray_labels.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
-    fn compare(&self) -> Option<f64> {
-        *self.compare.lock().unwrap_or_else(|e| e.into_inner())
+    fn live(&self) -> MutexGuard<'_, Live> {
+        self.live.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -199,7 +199,7 @@ fn config_get(st: State<'_, AppState>) -> Config {
 #[tauri::command]
 fn config_set(app: AppHandle, st: State<'_, AppState>, cfg: Config) -> Res<Config> {
     let cfg = store(&app, cfg);
-    apply(&cfg, st.compare())?;
+    apply(&cfg, &st.live())?;
     Ok(cfg)
 }
 
@@ -236,7 +236,8 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
 fn commit(app: &AppHandle, cfg: Config) {
     let cfg = store(app, cfg);
     let _ = app.emit("config", &cfg);
-    let _ = apply(&cfg, app.state::<AppState>().compare());
+    let live = *app.state::<AppState>().live();
+    let _ = apply(&cfg, &live);
 }
 
 /// Curva actual de la salida que se edita (sin curva guardada, la plana de serie, como en la interfaz)
@@ -324,20 +325,53 @@ fn file_stem(name: &str) -> String {
     }
 }
 
-fn apply(cfg: &Config, compare: Option<f64>) -> Res<()> {
+fn apply(cfg: &Config, live: &Live) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, compare)).map_err(|e| problem("engine.write", e))
+    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, live)).map_err(|e| problem("engine.write", e))
+}
+
+/// Cambia lo momentáneo y lo hace sonar
+fn set_live(st: &AppState, change: impl FnOnce(&mut Live)) -> Res<()> {
+    let live = {
+        let mut live = st.live();
+        change(&mut live);
+        *live
+    };
+    let cfg = st.cfg().clone();
+    apply(&cfg, &live)
 }
 
 /// A/B igualado: mientras se mantiene pulsado suena el original con `gain` dB para compararlo al mismo volumen
 #[tauri::command]
 fn compare_set(st: State<'_, AppState>, gain: Option<f64>) -> Res<()> {
-    let gain = gain.filter(|g| g.is_finite());
-    *st.compare.lock().unwrap_or_else(|e| e.into_inner()) = gain;
-    let cfg = st.cfg().clone();
-    apply(&cfg, gain)
+    set_live(&st, |l| l.compare = gain.filter(|g| g.is_finite()))
+}
+
+/// Herramientas de estudio (monitorización y simulación de otros sistemas). Lo que no es válido ni llega:
+/// serde rechaza cualquier valor fuera de los enumerados.
+#[tauri::command]
+fn studio_set(st: State<'_, AppState>, studio: eq::Studio) -> Res<()> {
+    set_live(&st, |l| l.studio = studio)
+}
+
+/// Test de audición: mientras dura, todo en plano (sin EQ, dinámica ni herramientas de estudio)
+#[tauri::command]
+fn hearing_set(st: State<'_, AppState>, on: bool) -> Res<()> {
+    set_live(&st, |l| {
+        l.hearing = on;
+        l.studio = eq::Studio::default();
+    })
+}
+
+/// Al esconder la ventana o salir no se queda nada momentáneo puesto (mono, simulación, test…) sin que se vea
+fn reset_live(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    if *st.live() != Live::default() {
+        let _ = set_live(&st, |l| *l = Live::default());
+        let _ = app.emit("live-reset", ());
+    }
 }
 
 #[tauri::command]
@@ -389,8 +423,10 @@ async fn engine_setup(app: AppHandle, enable: Vec<String>, disable: Vec<String>)
         .map_err(|e| problem("engine.elevation", e))?;
     let report: engine::SetupReport = serde_json::from_str(&out).map_err(|_| problem("engine.setup", None))?;
     // Recién instalado: escribir ya la curva que hubiera
-    let cfg = app.state::<AppState>().cfg().clone();
-    let _ = apply(&cfg, None);
+    let st = app.state::<AppState>();
+    let cfg = st.cfg().clone();
+    let live = *st.live();
+    let _ = apply(&cfg, &live);
     Ok(report)
 }
 
@@ -650,7 +686,7 @@ pub fn run() {
                     eq_on: "EQ encendido".into(),
                     eq_off: "EQ apagado".into(),
                 }),
-                compare: Mutex::new(None),
+                live: Mutex::new(Live::default()),
                 presets: Mutex::new(vec![]),
                 watcher: OnceLock::new(),
             });
@@ -684,7 +720,7 @@ pub fn run() {
             osd::init(app.handle());
             let _ = app.state::<AppState>().watcher.set(watch_foreground(app.handle().clone()));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
-            let _ = apply(&cfg, None);
+            let _ = apply(&cfg, &Live::default());
             Ok(())
         })
         .on_window_event(|w, ev| {
@@ -692,6 +728,7 @@ pub fn run() {
                 if w.app_handle().state::<AppState>().cfg().close_to_tray {
                     api.prevent_close();
                     let _ = w.hide();
+                    reset_live(w.app_handle());
                 }
             }
         })
@@ -712,12 +749,19 @@ pub fn run() {
             preset_export,
             analyzer_start,
             compare_set,
+            studio_set,
+            hearing_set,
             meter_reset,
             analyzer_stop,
             app_quit,
         ])
-        .run(tauri::generate_context!())
-        .expect("no se ha podido arrancar PoxiEQ");
+        .build(tauri::generate_context!())
+        .expect("no se ha podido arrancar PoxiEQ")
+        .run(|app, ev| {
+            if let RunEvent::Exit = ev {
+                reset_live(app);
+            }
+        });
 }
 
 #[cfg(test)]

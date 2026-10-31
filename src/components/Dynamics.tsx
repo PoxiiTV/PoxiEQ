@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { AudioLines, ChevronDown, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Volume2, Waves } from 'lucide-react'
+import { AudioLines, ChevronDown, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { soundOf, SOUNDS, withSound, type Sound } from '../lib/dsp'
+import { soundOf, SOUNDS, withHeadphones, withSound, type Sound } from '../lib/dsp'
 import { toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Range } from './controls'
@@ -60,9 +60,12 @@ export function Dynamics(): React.JSX.Element | null {
           <Card icon={Mic} title={t('dsp.dialog')} hint={t('dsp.dialogHint')} on={dsp.dialog.on} onToggle={(on) => set('dialog', { on })}>
             <Slider label={t('dsp.boost')} value={dsp.dialog.amount} min={0} max={12} step={0.5} fmt={db} onChange={(amount) => set('dialog', { amount })} />
           </Card>
-          <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => set('crossfeed', { on })}>
+          <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'crossfeed', on) })}>
             <Slider label={t('dsp.intensity')} value={dsp.crossfeed.feed} min={1} max={15} step={0.5} fmt={(v) => `${num(v)} dB`} onChange={(feed) => set('crossfeed', { feed })} />
             <Slider label={t('dsp.cutoff')} value={dsp.crossfeed.freq} min={300} max={2000} step={50} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('crossfeed', { freq })} />
+          </Card>
+          <Card icon={Speaker} title={t('dsp.speakers')} hint={t('dsp.speakersHint')} on={dsp.speakers.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'speakers', on) })}>
+            <Slider label={t('dsp.intensity')} value={dsp.speakers.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('speakers', { amount: v / 100 })} />
           </Card>
         </div>
       </section>

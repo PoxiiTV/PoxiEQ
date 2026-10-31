@@ -16,6 +16,9 @@
 - ↩️ **Deshacer y rehacer**: `Ctrl+Z` y `Ctrl+Y` en la curva y la dinámica.
 - 🔗 **Compartir presets**: como código para pegar en un chat o como archivo `.poxieq`.
 - 📈 **Analizador mejorado**: retención de picos y modo espectrograma.
+- 🎧 **Altavoces virtuales** para cascos: el estéreo suena delante de ti, como con dos altavoces, sin cambiar el timbre del centro.
+- 🎛️ **Pestaña Estudio**: mono, side, solo L / R, invertir polaridad e intercambiar canales, y simulación de móvil, portátil, coche, auriculares de botón, tele y altavoz bluetooth.
+- 👂 **Test de audición**: crea el preset «Mi audición» con una compensación suave para cada oído.
 
 ### 🇬🇧 English
 
@@ -31,3 +34,6 @@
 - ↩️ **Undo and redo**: `Ctrl+Z` and `Ctrl+Y` for the curve and dynamics.
 - 🔗 **Share presets**: as a code to paste in a chat or as a `.poxieq` file.
 - 📈 **Better analyzer**: peak hold and a spectrogram mode.
+- 🎧 **Virtual speakers** for headphones: stereo plays in front of you, like two speakers, without changing the tone of the center.
+- 🎛️ **Studio tab**: mono, side, solo L / R, polarity invert and channel swap, plus phone, laptop, car, earbuds, TV and Bluetooth speaker simulation.
+- 👂 **Hearing test**: creates the "My hearing" preset with a gentle compensation for each ear.

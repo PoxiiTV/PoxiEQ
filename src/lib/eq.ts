@@ -11,11 +11,19 @@ export interface Band {
   on: boolean
 }
 
+/** Bandas solo para un oído (después de las comunes): las crea el test de audición */
+export interface Ears {
+  left: Band[]
+  right: Band[]
+}
+
 export interface Curve {
   preamp: number
   autoPreamp: boolean
   bands: Band[]
   preset: string | null
+  /** Ajuste por oído; no viaja al compartir (es de quien hizo el test) */
+  ears?: Ears | null
 }
 
 export const MIN_F = 20

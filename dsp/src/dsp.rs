@@ -1,7 +1,7 @@
 //! Procesadores de PoxiDSP. Todo en f64 y muestra a muestra; la memoria se reserva solo en
 //! [`Chain::new`] (fuera del hilo de audio), nunca en [`Chain::tick`].
 //!
-//! Orden: diálogos → graves → nivelador → compresor → crossfeed → limitador.
+//! Orden: diálogos → graves → nivelador → compresor → crossfeed o altavoces virtuales → limitador.
 
 use crate::Settings;
 use std::f64::consts::PI;
@@ -325,6 +325,120 @@ impl Bs2b {
     }
 }
 
+// ------------------------------------------------- altavoces virtuales
+
+/// Tomas como mucho de cada respuesta (a frecuencias de muestreo muy altas se recorta la cola)
+const MAX_TAPS: usize = 1024;
+
+/// FIR directo sobre un historial duplicado: la ventana de las últimas `n` muestras siempre es un tramo
+/// continuo, sin módulos en el bucle (el compilador lo vectoriza)
+struct Fir {
+    h: Vec<f64>,
+    buf: Vec<f64>,
+    pos: usize,
+}
+
+impl Fir {
+    fn new(h: Vec<f64>) -> Self {
+        let n = h.len();
+        Self { h, buf: vec![0.0; 2 * n], pos: 0 }
+    }
+
+    #[inline]
+    fn tick(&mut self, x: f64) -> f64 {
+        let n = self.h.len();
+        self.pos = if self.pos == 0 { n - 1 } else { self.pos - 1 };
+        self.buf[self.pos] = x;
+        self.buf[self.pos + n] = x;
+        // h[k] · x[t − k], con cuatro sumas parciales para que no dependa cada suma de la anterior
+        let win = &self.buf[self.pos..self.pos + n];
+        let mut acc = [0.0; 4];
+        let (hc, wc) = (self.h.chunks_exact(4), win.chunks_exact(4));
+        let tail: f64 = hc.remainder().iter().zip(wc.remainder()).map(|(a, b)| a * b).sum();
+        for (a, b) in hc.zip(wc) {
+            for i in 0..4 {
+                acc[i] += a[i] * b[i];
+            }
+        }
+        acc[0] + acc[1] + acc[2] + acc[3] + tail
+    }
+}
+
+/// Cambia la frecuencia de muestreo de una respuesta al impulso (interpolación con sinc enventanada; al
+/// bajar de frecuencia filtra antes). Conserva la respuesta en frecuencia, no la amplitud de cada muestra.
+fn resample(src: &[f32], from: f64, to: f64) -> Vec<f64> {
+    // Ceros delante para que el principio de la sinc (antes del primer frente) no se corte
+    const PAD: usize = 8;
+    const ZEROS: f64 = 16.0;
+    let r = to / from;
+    let c = r.min(1.0);
+    let half = ZEROS / c;
+    let x: Vec<f64> = std::iter::repeat_n(0.0, PAD).chain(src.iter().map(|&v| v as f64)).collect();
+    let full = ((x.len() as f64 + half) * r).ceil() as usize;
+    let len = full.clamp(1, MAX_TAPS);
+    let mut out: Vec<f64> = (0..len)
+        .map(|n| {
+            let t = n as f64 / r;
+            let lo = (t - half).ceil().max(0.0) as usize;
+            let hi = ((t + half).floor() as usize).min(x.len() - 1);
+            (lo..=hi)
+                .map(|k| {
+                    let d = t - k as f64;
+                    let sinc = if d == 0.0 { 1.0 } else { (PI * c * d).sin() / (PI * c * d) };
+                    x[k] * sinc * 0.5 * (1.0 + (PI * d / half).cos())
+                })
+                .sum::<f64>()
+                * c
+                / r
+        })
+        .collect();
+    // Si se ha recortado por el límite de tomas, fundido corto al final
+    let fade = if full > len { 64 } else { 0 };
+    for i in 0..fade {
+        out[len - 1 - i] *= 0.5 * (1.0 - (PI * (i as f64 + 0.5) / fade as f64).cos());
+    }
+    out
+}
+
+/// Altavoces virtuales a ±30° con las HRIR del KEMAR ([`crate::hrir`]): cada oído recibe su canal por
+/// el trayecto cercano (ipsi) y el otro canal por el lejano (contra), cuatro trayectos en total:
+///
+/// ```text
+/// oído L = ipsi * L + contra * ((1 − k)·L + k·R)
+/// oído R = ipsi * R + contra * ((1 − k)·R + k·L)
+/// ```
+///
+/// `k` es la intensidad. Con k = 0 cada oído oye solo su canal (por ipsi + contra) y con k = 1 los
+/// altavoces completos. Así lo que está en el centro (L = R) pasa siempre por ipsi + contra, que las
+/// tablas ya traen compensado a plano: el timbre del centro no cambia con la intensidad y no hay filtro
+/// peine entre una señal seca y otra retrasada.
+///
+/// Como el juego es simétrico (LL = RR, LR = RL), se calcula en mid/side con dos convoluciones en vez
+/// de cuatro: `mid · (ipsi + contra)` y `side · (ipsi + (1 − 2k)·contra)`.
+struct Speakers {
+    mid: Fir,
+    side: Fir,
+}
+
+impl Speakers {
+    fn new(fs: f64, amount: f64) -> Self {
+        let ipsi = resample(&crate::hrir::IPSI, crate::hrir::RATE, fs);
+        let contra = resample(&crate::hrir::CONTRA, crate::hrir::RATE, fs);
+        let k = 1.0 - 2.0 * amount.clamp(0.0, 1.0);
+        Self {
+            mid: Fir::new(ipsi.iter().zip(&contra).map(|(i, c)| i + c).collect()),
+            side: Fir::new(ipsi.iter().zip(&contra).map(|(i, c)| i + k * c).collect()),
+        }
+    }
+
+    #[inline]
+    fn tick(&mut self, l: f64, r: f64) -> (f64, f64) {
+        let m = self.mid.tick(0.5 * (l + r));
+        let s = self.side.tick(0.5 * (l - r));
+        (m + s, m - s)
+    }
+}
+
 // ------------------------------------------------------------- limitador
 
 /// Lookahead del limitador
@@ -478,6 +592,7 @@ pub struct Chain {
     /// Recupera tras el compresor lo que este baja de media (solo con nivelador y compresor)
     trim: Option<Agc>,
     bs2b: Option<Bs2b>,
+    speakers: Option<Speakers>,
     limiter: Option<Brickwall>,
     /// Algo salió no finito (no debería): desde ahí, paso directo hasta la siguiente instancia
     failed: bool,
@@ -500,7 +615,9 @@ impl Chain {
             agc: s.leveler.on.then(|| Agc::new(fs, s.leveler.target as f64, s.leveler.max_gain as f64)),
             comp: s.comp.on.then(|| Compressor::new(fs, &s.comp)),
             trim: (s.leveler.on && s.comp.on).then(|| Agc::new(fs, s.leveler.target as f64, TRIM_MAX)),
-            bs2b: s.crossfeed.on.then(|| Bs2b::new(fs, s.crossfeed.freq as f64, s.crossfeed.feed as f64)),
+            // Nunca los dos (ya lo impide `Settings::sanitize`): con altavoces virtuales, el crossfeed sobra
+            bs2b: (s.crossfeed.on && !s.speakers.on).then(|| Bs2b::new(fs, s.crossfeed.freq as f64, s.crossfeed.feed as f64)),
+            speakers: s.speakers.on.then(|| Speakers::new(fs, s.speakers.amount as f64)),
             limiter: s.limiter.on.then(|| Brickwall::new(fs, s.limiter.ceiling as f64)),
             failed: false,
             gr_comp: 0.0,
@@ -553,6 +670,9 @@ impl Chain {
             (l, r) = p.tick(l, r);
         }
         if let Some(p) = &mut self.bs2b {
+            (l, r) = p.tick(l, r);
+        }
+        if let Some(p) = &mut self.speakers {
             (l, r) = p.tick(l, r);
         }
         if let Some(p) = &mut self.limiter {
@@ -829,10 +949,110 @@ mod tests {
         assert!(lin_to_db(tone(&ol, 100.0) / 0.5).abs() < 0.5);
     }
 
+    /// Respuesta (dB) de un FIR a una frecuencia
+    fn fir_db(h: &[f64], f: f64, fs: f64) -> f64 {
+        let w = 2.0 * PI * f / fs;
+        let (re, im) = h.iter().enumerate().fold((0.0, 0.0), |(re, im), (n, &v)| (re + v * (w * n as f64).cos(), im - v * (w * n as f64).sin()));
+        10.0 * (re * re + im * im).log10()
+    }
+
+    fn speakers(amount: f32) -> Settings {
+        with(|s| {
+            s.speakers.on = true;
+            s.speakers.amount = amount;
+        })
+    }
+
+    #[test]
+    fn remuestreo_conserva_la_respuesta() {
+        let base: Vec<f64> = crate::hrir::IPSI.iter().map(|&v| v as f64).collect();
+        // A la misma frecuencia sale idéntica (con los ceros de delante)
+        let same = resample(&crate::hrir::IPSI, crate::hrir::RATE, crate::hrir::RATE);
+        assert!(same[8..8 + base.len()].iter().zip(&base).all(|(a, b)| (a - b).abs() < 1e-9));
+        for fs in [32000.0, 48000.0, 96000.0, 192000.0] {
+            let h = resample(&crate::hrir::IPSI, crate::hrir::RATE, fs);
+            for f in [100.0, 1000.0, 5000.0, 10000.0, 14000.0] {
+                let d = fir_db(&h, f, fs) - fir_db(&base, f, crate::hrir::RATE);
+                assert!(d.abs() < 0.25, "{fs} Hz: {d:.2} dB de diferencia a {f} Hz");
+            }
+        }
+        // A frecuencias absurdas no pasa del límite de tomas
+        assert!(resample(&crate::hrir::IPSI, crate::hrir::RATE, 768_000.0).len() <= MAX_TAPS);
+    }
+
+    #[test]
+    fn altavoces_igual_que_cuatro_convoluciones() {
+        // Referencia: los cuatro trayectos (LL, LR, RL, RR) convolucionados a mano (intensidad exacta en f32)
+        let amount = 0.75;
+        let ipsi = resample(&crate::hrir::IPSI, crate::hrir::RATE, FS);
+        let contra = resample(&crate::hrir::CONTRA, crate::hrir::RATE, FS);
+        let (l, r) = (noise(3000, 21), noise(3000, 22));
+        let conv = |h: &[f64], x: &dyn Fn(usize) -> f64, t: usize| (0..h.len().min(t + 1)).map(|k| h[k] * x(t - k)).sum::<f64>();
+        let mut chain = Chain::new(&speakers(amount as f32), FS);
+        let (ol, or) = run(&mut chain, &l, &r);
+        for t in 0..l.len() {
+            let to_l = |i: usize| (1.0 - amount) * l[i] + amount * r[i];
+            let to_r = |i: usize| (1.0 - amount) * r[i] + amount * l[i];
+            let el = conv(&ipsi, &|i| l[i], t) + conv(&contra, &to_l, t);
+            let er = conv(&ipsi, &|i| r[i], t) + conv(&contra, &to_r, t);
+            assert!((ol[t] - el).abs() < 1e-9 && (or[t] - er).abs() < 1e-9, "muestra {t}");
+        }
+    }
+
+    #[test]
+    fn altavoces_conservan_el_centro() {
+        for amount in [0.0, 0.4, 1.0] {
+            // Ruido mono de 100 Hz a 10 kHz (donde está casi toda la energía de la música): misma energía
+            // (±1 dB) y los dos oídos idénticos
+            let mut band = [Biquad::highpass(FS, 100.0, BUTTERWORTH), Biquad::lowpass(FS, 10000.0, BUTTERWORTH), Biquad::lowpass(FS, 10000.0, BUTTERWORTH)];
+            let x: Vec<f64> = noise(48000 * 2, 31).iter().map(|v| band.iter_mut().fold(v * 0.3, |x, f| f.tick(x))).collect();
+            let mut chain = Chain::new(&speakers(amount), FS);
+            let (ol, or) = run(&mut chain, &x, &x);
+            assert_eq!(ol, or);
+            let e = |v: &[f64]| v.iter().map(|s| s * s).sum::<f64>();
+            let d = 10.0 * (e(&ol) / e(&x)).log10();
+            assert!(d.abs() < 1.0, "energía del centro {d:.2} dB con intensidad {amount}");
+            // Y tonos sueltos en la zona de la voz y los instrumentos, sin cambios de más de 2 dB
+            for f in [125.0, 250.0, 500.0, 1000.0, 2000.0, 3000.0, 5000.0] {
+                let x = sine(f, 0.3, 1.0);
+                let mut chain = Chain::new(&speakers(amount), FS);
+                let (ol, _) = run(&mut chain, &x, &x);
+                let d = lin_to_db(tone(&ol, f) / 0.3);
+                assert!(d.abs() < 2.0, "centro a {f} Hz: {d:.2} dB con intensidad {amount}");
+            }
+        }
+    }
+
+    #[test]
+    fn altavoces_dan_diferencias_entre_oidos() {
+        // Solo canal izquierdo a 1 kHz: llega al oído derecho más bajo (ILD) y más tarde (ITD)
+        let zero = vec![0.0; 48000];
+        let x = sine(1000.0, 0.3, 1.0);
+        let mut chain = Chain::new(&speakers(1.0), FS);
+        let (ol, or) = run(&mut chain, &x, &zero);
+        let ild = lin_to_db(tone(&ol, 1000.0) / tone(&or, 1000.0));
+        assert!((3.0..12.0).contains(&ild), "ILD a 1 kHz: {ild:.1} dB");
+        let mut imp = vec![0.0; 2000];
+        imp[0] = 1.0;
+        let mut chain = Chain::new(&speakers(1.0), FS);
+        let (ol, or) = run(&mut chain, &imp, &zero[..2000]);
+        let first = |v: &[f64]| {
+            let top = v.iter().fold(0f64, |m, s| m.max(s.abs()));
+            v.iter().position(|s| s.abs() > 0.3 * top).unwrap()
+        };
+        let itd = (first(&or) as f64 - first(&ol) as f64) / FS * 1000.0;
+        assert!((0.1..0.5).contains(&itd), "ITD {itd:.3} ms");
+        // Con intensidad 0 no cruza nada al otro oído
+        let mut chain = Chain::new(&speakers(0.0), FS);
+        let (_, or) = run(&mut chain, &x, &zero);
+        assert!(or.iter().all(|&v| v == 0.0));
+    }
+
     #[test]
     fn la_cadena_aguanta_basura() {
         let mut s = Settings::default();
         (s.limiter.on, s.comp.on, s.leveler.on, s.bass.on, s.dialog.on, s.crossfeed.on) = (true, true, true, true, true, true);
+        s.speakers.on = true;
         let mut chain = Chain::new(&s, FS);
         for x in [f64::NAN, f64::INFINITY, -f64::INFINITY, 1e300, -1e300, 0.0, 1e-310] {
             let (l, r) = chain.tick(x, -x);

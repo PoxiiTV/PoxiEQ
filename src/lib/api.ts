@@ -23,6 +23,21 @@ export interface Dsp {
   bass: { on: boolean; freq: number; amount: number }
   dialog: { on: boolean; amount: number }
   crossfeed: { on: boolean; freq: number; feed: number }
+  /** Altavoces virtuales (HRIR): excluye el crossfeed. `amount` 0…1 */
+  speakers: { on: boolean; amount: number }
+}
+
+/** Monitorización: qué se escucha. `mono` es el mid, (L + R) / 2 */
+export type Listen = 'stereo' | 'mono' | 'side' | 'left' | 'right'
+export type Sim = 'phone' | 'laptop' | 'car' | 'earbuds' | 'tv' | 'speaker'
+
+/** Herramientas de estudio: momentáneas, no se guardan (Rust las quita al esconder la ventana o salir) */
+export interface Studio {
+  listen: Listen
+  flipL: boolean
+  flipR: boolean
+  swap: boolean
+  sim: Sim | null
 }
 
 /** Cuando `exe` está en primer plano suena `preset` (validado en Rust: `apps::sanitize_rules`) */
@@ -143,6 +158,8 @@ export const api = {
   analyzerStart: (device: string) => invoke<void>('analyzer_start', { device }),
   analyzerStop: () => invoke<void>('analyzer_stop'),
   compareSet: (gain: number | null) => invoke<void>('compare_set', { gain }),
+  studioSet: (studio: Studio) => invoke<void>('studio_set', { studio }),
+  hearingSet: (on: boolean) => invoke<void>('hearing_set', { on }),
   meterReset: () => invoke<void>('meter_reset'),
   appQuit: () => invoke<void>('app_quit')
 }

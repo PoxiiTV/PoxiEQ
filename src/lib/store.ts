@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, type AppInfo, type Config, type Device, type EngineStatus, type Preset } from './api'
+import { api, type AppInfo, type Config, type Device, type EngineStatus, type Preset, type Studio } from './api'
 import { autoPreamp, BUILTIN, builtinCurve, type Curve } from './eq'
 import { Grouper, History } from './history'
 import { errorText, t } from '../i18n'
@@ -22,10 +22,12 @@ interface State {
   setup: SetupStep
   /** Banda elegida en la curva (índice) */
   selected: number | null
-  /** Pestaña del editor: curva o dinámica */
-  tab: 'eq' | 'dsp'
+  /** Pestaña del editor: curva, dinámica o estudio */
+  tab: 'eq' | 'dsp' | 'studio'
+  /** Herramientas de estudio puestas ahora (momentáneas, no van a la configuración) */
+  studio: Studio
   settingsOpen: boolean
-  modal: 'autoeq' | 'savePreset' | 'import' | null
+  modal: 'autoeq' | 'savePreset' | 'import' | 'hearing' | null
   /** Preset que se está compartiendo (ventana de compartir abierta) */
   sharing: Preset | null
   /** Código que llega a la ventana de importar (archivo arrastrado) */
@@ -35,6 +37,8 @@ interface State {
   toasts: Toast[]
 }
 
+export const STUDIO_OFF: Studio = { listen: 'stereo', flipL: false, flipR: false, swap: false, sim: null }
+
 export const useStore = create<State>(() => ({
   app: null,
   config: null,
@@ -42,6 +46,7 @@ export const useStore = create<State>(() => ({
   setup: null,
   selected: null,
   tab: 'eq',
+  studio: STUDIO_OFF,
   settingsOpen: false,
   modal: null,
   sharing: null,
@@ -100,6 +105,21 @@ export function updateConfig(patch: Partial<Config>, record = true): void {
   setState({ config: next })
   pending = next
   void flush()
+}
+
+// ——— Herramientas de estudio ———
+
+export const studioActive = (s: Studio): boolean => s.listen !== 'stereo' || s.flipL || s.flipR || s.swap || s.sim !== null
+
+/** Se pinta al momento y suena en segundo plano; si Rust lo rechaza, vuelve a lo de antes */
+export function setStudio(patch: Partial<Studio>): void {
+  const before = getState().studio
+  const studio = { ...before, ...patch }
+  setState({ studio })
+  api.studioSet(studio).catch((e: unknown) => {
+    setState({ studio: before })
+    toast(errorText(e), 'err')
+  })
 }
 
 // ——— Deshacer / rehacer (curvas y dinámica) ———

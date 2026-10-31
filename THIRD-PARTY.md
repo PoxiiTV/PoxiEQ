@@ -16,6 +16,17 @@
 - El crossfeed de PoxiDSP usa los filtros de bs2b reescritos en Rust. / PoxiDSP's crossfeed uses bs2b's filters,
   rewritten in Rust.
 
+## MIT KEMAR HRTF
+
+- Autores / Authors: Bill Gardner y / and Keith Martin, MIT Media Lab Machine Listening Group — «HRTF Measurements of a
+  KEMAR Dummy-Head Microphone» (1994), https://sound.media.mit.edu/resources/KEMAR.html
+- Licencia / License: «This data is Copyright 1994 by the MIT Media Laboratory. It is provided free with no restrictions
+  on use, provided the authors are cited when the data is used in any research or commercial application.»
+- Los altavoces virtuales de PoxiDSP usan las respuestas a 30° y 0° de elevación del juego «diffuse-field equalized»,
+  sin el retardo común y con la coloración del centro compensada (`scripts/hrir.mjs` → `dsp/src/hrir.rs`). / PoxiDSP's
+  virtual speakers use the 30°, 0° elevation responses from the diffuse-field equalized set, with the common delay
+  removed and the center coloration compensated.
+
 ## Otras / Others
 
 Tauri, React, Zustand, lucide-react, Nunito (Fontsource), winreg, windows-rs, reqwest, sha2 y serde, cada una con su

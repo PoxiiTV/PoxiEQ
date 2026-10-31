@@ -244,7 +244,7 @@ mod tests {
     }
 
     fn curve(preset: Option<&str>) -> Curve {
-        Curve { preamp: -1.0, auto_preamp: false, bands: vec![], preset: preset.map(String::from) }
+        Curve { preamp: -1.0, auto_preamp: false, bands: vec![], preset: preset.map(String::from), ears: None }
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! ([`Settings::chunk`]) y leer las medidas de la memoria compartida ([`shm`]).
 
 pub mod dsp;
+mod hrir;
 pub mod shm;
 mod vst;
 
@@ -23,6 +24,7 @@ pub struct Settings {
     pub bass: Bass,
     pub dialog: Dialog,
     pub crossfeed: Crossfeed,
+    pub speakers: Speakers,
 }
 
 /// Limitador brickwall con lookahead
@@ -93,6 +95,16 @@ pub struct Crossfeed {
     pub feed: f32,
 }
 
+/// Altavoces virtuales para auriculares: el estéreo suena desde dos altavoces delante (±30°) con
+/// respuestas de cabeza reales (HRIR del KEMAR del MIT). Excluye el crossfeed (ver [`Settings::sanitize`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Speakers {
+    pub on: bool,
+    /// 0…1: 0 = cada oído oye solo su canal, 1 = altavoces completos
+    pub amount: f32,
+}
+
 impl Default for Limiter {
     fn default() -> Self {
         Self { on: false, ceiling: -1.0 }
@@ -123,6 +135,11 @@ impl Default for Crossfeed {
         Self { on: false, freq: 700.0, feed: 4.5 }
     }
 }
+impl Default for Speakers {
+    fn default() -> Self {
+        Self { on: false, amount: 1.0 }
+    }
+}
 
 fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
     if v.is_finite() {
@@ -132,8 +149,9 @@ fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
     }
 }
 
-/// Valores en orden fijo: es el formato del ChunkData (versión 1)
-const FIELDS: usize = 20;
+/// Valores en orden fijo: es el formato del ChunkData (versión 1). Lo nuevo va siempre al final: un plugin
+/// anterior lee lo suyo e ignora el resto.
+const FIELDS: usize = 22;
 const MAGIC: &[u8; 4] = b"PXD1";
 
 impl Settings {
@@ -158,16 +176,21 @@ impl Settings {
         let x = &mut self.crossfeed;
         x.freq = clamp(x.freq, 300.0, 2000.0, d.crossfeed.freq);
         x.feed = clamp(x.feed, 1.0, 15.0, d.crossfeed.feed);
+        self.speakers.amount = clamp(self.speakers.amount, 0.0, 1.0, d.speakers.amount);
+        // Crossfeed y altavoces virtuales hacen lo mismo de dos formas: juntos se cruzaría dos veces
+        if self.speakers.on {
+            self.crossfeed.on = false;
+        }
     }
 
     /// Con todo apagado el plugin ni se carga
     pub fn active(&self) -> bool {
-        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on
+        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on
     }
 
     fn fields(&self) -> [f32; FIELDS] {
         let on = |b: bool| if b { 1.0 } else { 0.0 };
-        let (l, c, v, b, d, x) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed);
+        let (l, c, v, b, d, x, h) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers);
         [
             on(l.on), l.ceiling,
             on(c.on), c.threshold, c.ratio, c.attack, c.release, c.knee, c.makeup,
@@ -175,6 +198,7 @@ impl Settings {
             on(b.on), b.freq, b.amount,
             on(d.on), d.amount,
             on(x.on), x.freq, x.feed,
+            on(h.on), h.amount,
         ]
     }
 
@@ -187,6 +211,7 @@ impl Settings {
             bass: Bass { on: on(f[12]), freq: f[13], amount: f[14] },
             dialog: Dialog { on: on(f[15]), amount: f[16] },
             crossfeed: Crossfeed { on: on(f[17]), freq: f[18], feed: f[19] },
+            speakers: Speakers { on: on(f[20]), amount: f[21] },
         };
         s.sanitize();
         s
@@ -248,7 +273,8 @@ mod tests {
         let mut s = Settings::default();
         s.comp.on = true;
         s.comp.ratio = 4.5;
-        s.crossfeed.on = true;
+        s.speakers.on = true;
+        s.speakers.amount = 0.6;
         s.leveler.target = -23.0;
         let (back, key) = Settings::from_chunk(&s.chunk(0xdead_beef)).unwrap();
         assert_eq!(back, s);
@@ -267,6 +293,11 @@ mod tests {
         assert_eq!(s.comp.ratio, 3.0);
         assert_eq!(s.limiter.ceiling, 0.0);
         assert!(!Settings::default().active());
+        // Crossfeed y altavoces virtuales nunca juntos
+        let mut s = Settings::default();
+        (s.crossfeed.on, s.speakers.on, s.speakers.amount) = (true, true, 7.0);
+        s.sanitize();
+        assert!(!s.crossfeed.on && s.speakers.on && s.speakers.amount == 1.0);
     }
 
     #[test]
