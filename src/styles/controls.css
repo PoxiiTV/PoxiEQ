@@ -202,6 +202,21 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
     transform: scale(0.96) translateY(-4px);
   }
 }
+/* Sin sitio debajo: hacia arriba */
+.dd.up .dd-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom right;
+}
+.dd.block.up .dd-menu {
+  transform-origin: bottom left;
+}
+@starting-style {
+  .dd.up .dd-menu {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+}
 .dd-menu button {
   display: flex;
   align-items: center;

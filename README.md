@@ -30,11 +30,14 @@ PoxiEQ lo instala y lo activa por ti con un clic, **sin reiniciar el PC**.
 
 - ⚡ **Activación en un clic**: descarga el motor oficial (comprobando su firma SHA-256), lo instala en silencio y lo engancha a tus cascos o altavoces. Solo se corta el sonido un par de segundos.
 - 🖱️ **Curva en vivo**: arrastra los puntos, la **rueda** cambia el ancho (Q), **doble clic** añade una banda y el **clic derecho** cambia el tipo (campana, graves, agudos, paso bajo, paso alto).
-- 📊 **Analizador en tiempo real** detrás de la curva: ves lo que suena mientras ecualizas.
+- 📊 **Analizador en tiempo real** detrás de la curva: espectro con retención de picos o espectrograma, para ver lo que suena mientras ecualizas.
 - 🎧 **AutoEq**: pega la corrección de tu modelo de cascos (miles en [autoeq.app](https://autoeq.app)) y listo.
 - 🛡️ **Preamp automático**: baja lo justo para que la curva nunca sature.
 - 🔊 **Dinámica**: sonoridad igualada con un clic (Streaming −14 LUFS, Fuerte −9, Noche −23 para pelis sin molestar), limitador que nunca pasa de −1 dBTP, compresor, graves psicoacústicos, realce de diálogos y crossfeed para cascos. Con todo apagado no toca ni un bit.
-- 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos.
+- 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos. Compártelos con un código para pegar en un chat o como archivo `.poxieq` (arrástralo a la ventana para importarlo).
+- 🎯 **Preset por aplicación**: Spotify → Música, tu juego → Pasos. Cambia solo cuando la app pasa a primer plano y vuelve al que tenías al salir.
+- ⌨️ **Atajos de presets**: `Ctrl+Alt+1…9`, con un aviso en pantalla que no roba el foco (también desde la bandeja).
+- ↩️ **Deshacer y rehacer** (`Ctrl+Z` / `Ctrl+Y`) de la curva y la dinámica: un arrastre entero es un solo paso.
 - 🔌 **Un EQ por salida**: cada dispositivo guarda su propia curva.
 - ⏯️ **Bypass** con **Ctrl+Alt+E** desde cualquier sitio (también en juegos) y desde la bandeja.
 - 🎨 Temas oscuro y claro, 7 colores, español e inglés. Arranca con Windows si quieres y se actualiza solo.
@@ -66,7 +69,7 @@ Tauri 2 + Rust (motor, registro de Windows, analizador) y React + TypeScript (la
 
 - `start.bat`: modo desarrollo.
 - `deploy.bat`: instalador firmado + portable + `latest.json` en `deploy-hosting\`.
-- `cd src-tauri && cargo test`, `cd dsp && cargo test` y `npm test`: tests del núcleo, de la dinámica (PoxiDSP, el plugin propio que carga el motor) y de la matemática del EQ.
+- `cd src-tauri && cargo test`, `cd dsp && cargo test` y `npm test`: tests del núcleo (también las reglas por app), de la dinámica (PoxiDSP, el plugin propio que carga el motor), de la matemática del EQ, del historial de deshacer y del formato para compartir presets.
 
 ## 📄 Licencia
 
@@ -87,11 +90,14 @@ and enables it for you with one click, **without restarting your PC**.
 
 - ⚡ **One-click setup**: downloads the official engine (checking its SHA-256), installs it silently and hooks it to your headphones or speakers. The sound only cuts out for a couple of seconds.
 - 🖱️ **Live curve**: drag the points, the **wheel** changes the width (Q), **double click** adds a band and **right click** changes the type (bell, low shelf, high shelf, low pass, high pass).
-- 📊 **Real-time analyzer** behind the curve.
+- 📊 **Real-time analyzer** behind the curve: spectrum with peak hold, or spectrogram.
 - 🎧 **AutoEq**: paste the correction for your headphone model (thousands at [autoeq.app](https://autoeq.app)).
 - 🛡️ **Automatic preamp** so the curve never clips.
 - 🔊 **Dynamics**: one-click loudness matching (Streaming −14 LUFS, Loud −9, Night −23 for movies without disturbing anyone), a limiter that never goes above −1 dBTP, compressor, psychoacoustic bass, dialogue enhancer and headphone crossfeed. With everything off it doesn't touch a single bit.
-- 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own.
+- 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own. Share them as a code to paste in a chat or as a `.poxieq` file (drop it on the window to import it).
+- 🎯 **Preset per app**: Spotify → Music, your game → Footsteps. It switches when the app comes to the foreground and goes back to yours when you leave.
+- ⌨️ **Preset shortcuts**: `Ctrl+Alt+1…9`, with an on-screen notice that doesn't steal focus (also from the tray).
+- ↩️ **Undo and redo** (`Ctrl+Z` / `Ctrl+Y`) for the curve and dynamics: a whole drag is a single step.
 - 🔌 **One EQ per output**: each device keeps its own curve.
 - ⏯️ **Bypass** with **Ctrl+Alt+E** from anywhere (games included) and from the tray.
 - 🎨 Dark and light themes, 7 colors, Spanish and English. Optional start with Windows, updates itself.

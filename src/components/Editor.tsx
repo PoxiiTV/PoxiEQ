@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Copy, Plus, Power, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
+import { Copy, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
 import { dspActive } from '../lib/dsp'
-import { currentCurve, setCurve, setState, toast, updateConfig, useStore } from '../lib/store'
+import { currentCurve, redo, setCurve, setState, toast, undo, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
@@ -40,6 +40,7 @@ export function Editor(): React.JSX.Element {
             {dspOn && <i className="tab-dot" aria-hidden />}
           </button>
         </div>
+        <HistoryButtons />
         {tab === 'eq' && <EqTools curve={curve} clips={clips} bypass={bypass} />}
       </div>
       {tab === 'eq' ? (
@@ -51,6 +52,22 @@ export function Editor(): React.JSX.Element {
       ) : (
         <Dynamics />
       )}
+    </div>
+  )
+}
+
+/** Deshacer / rehacer curva y dinámica (también Ctrl+Z, Ctrl+Y y Ctrl+Mayús+Z) */
+function HistoryButtons(): React.JSX.Element {
+  const t = useT()
+  const can = useStore((s) => s.history)
+  return (
+    <div className="history-btns">
+      <button className="icon-btn" disabled={!can.undo} data-tip={t('eq.undo')} aria-label={t('eq.undo')} onClick={undo}>
+        <Undo2 size={16} />
+      </button>
+      <button className="icon-btn" disabled={!can.redo} data-tip={t('eq.redo')} aria-label={t('eq.redo')} onClick={redo}>
+        <Redo2 size={16} />
+      </button>
     </div>
   )
 }
@@ -92,8 +109,9 @@ function EqTools({ curve, clips, bypass }: { curve: Curve; clips: boolean; bypas
       <button className="icon-btn" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>
         <Copy size={16} />
       </button>
-      <button className="btn btn-sm" onClick={() => addBand()}>
-        <Plus size={15} /> {t('eq.add')}
+      <button className="btn btn-sm btn-add" data-tip={t('eq.add')} aria-label={t('eq.add')} onClick={() => addBand()}>
+        <Plus size={15} />
+        <span className="btn-label">{t('eq.add')}</span>
       </button>
     </>
   )

@@ -1,15 +1,18 @@
 mod analyzer;
+mod apps;
 mod autoeq;
 pub mod engine;
 mod eq;
+mod osd;
 
 use eq::{Curve, Loudness, Preset};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::time::Duration;
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -18,6 +21,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 const APO_URL: &str = "https://downloads.sourceforge.net/project/equalizerapo/1.4.2/EqualizerAPO-x64-1.4.2.exe";
 const APO_SHA256: &str = "7403be7427bbe1936a40dded082829b6e217fc4f5990fee5cba501f0ae055afa";
 const BYPASS_HOTKEY: &str = "Ctrl+Alt+E";
+/// Atajos de preset: Ctrl+Alt+1…9
+const PRESET_KEYS: usize = 9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -31,6 +36,8 @@ pub struct Config {
     pub bypass: bool,
     pub bypass_hotkey: bool,
     pub analyzer: bool,
+    /// `spectrum` (espectro con retención de picos) o `spectrogram`
+    pub analyzer_mode: String,
     pub seen_version: String,
     /// Dispositivo que se está editando
     pub device: Option<String>,
@@ -41,6 +48,10 @@ pub struct Config {
     pub meter_collapsed: bool,
     /// Dinámica y realces (PoxiDSP), los mismos en todas las salidas
     pub dsp: poxidsp::Settings,
+    /// Preset automático por aplicación en primer plano
+    pub app_rules: Vec<apps::AppRule>,
+    /// Preset de cada atajo Ctrl+Alt+1…9 (`None`: sin asignar)
+    pub preset_keys: Vec<Option<String>>,
 }
 
 impl Default for Config {
@@ -53,6 +64,7 @@ impl Default for Config {
             bypass: false,
             bypass_hotkey: true,
             analyzer: true,
+            analyzer_mode: "spectrum".into(),
             seen_version: String::new(),
             device: None,
             curves: HashMap::new(),
@@ -60,6 +72,8 @@ impl Default for Config {
             loudness: Loudness::default(),
             meter_collapsed: false,
             dsp: poxidsp::Settings::default(),
+            app_rules: vec![],
+            preset_keys: vec![None; PRESET_KEYS],
         }
     }
 }
@@ -84,7 +98,36 @@ impl Config {
         eq::sanitize_presets(&mut self.presets);
         self.loudness.sanitize();
         self.dsp.sanitize();
+        if !matches!(self.analyzer_mode.as_str(), "spectrum" | "spectrogram") {
+            self.analyzer_mode = "spectrum".into();
+        }
+        if self.device.as_deref().is_some_and(|d| !engine::is_device_id(d)) {
+            self.device = None;
+        }
+        apps::sanitize_rules(&mut self.app_rules);
+        self.preset_keys.resize(PRESET_KEYS, None);
+        for k in &mut self.preset_keys {
+            if k.as_deref().is_some_and(|id| !apps::valid_preset_id(id)) {
+                *k = None;
+            }
+        }
     }
+
+    /// Lo que pinta el menú de la bandeja: si cambia, se rehace
+    fn tray_key(&self) -> (bool, Option<String>, BTreeMap<String, Option<String>>) {
+        (self.bypass, self.device.clone(), self.curves.iter().map(|(k, c)| (k.clone(), c.preset.clone())).collect())
+    }
+}
+
+/// Preset listo para aplicarse desde Rust (atajos, bandeja, reglas por app). Lo manda la interfaz con el
+/// nombre ya traducido y, en `auto_gain`, el preamp automático de su curva (la matemática vive en `eq.ts`).
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetEntry {
+    id: String,
+    name: String,
+    curve: Curve,
+    auto_gain: f64,
 }
 
 pub struct AppState {
@@ -94,11 +137,26 @@ pub struct AppState {
     tray_labels: Mutex<TrayLabels>,
     /// A/B en curso: ganancia del original igualado
     compare: Mutex<Option<f64>>,
+    presets: Mutex<Vec<PresetEntry>>,
+    /// Hilo que vigila la app en primer plano (se despierta al cambiar las reglas)
+    watcher: OnceLock<std::thread::Thread>,
 }
 
 impl AppState {
     fn cfg(&self) -> MutexGuard<'_, Config> {
         self.config.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn presets(&self) -> MutexGuard<'_, Vec<PresetEntry>> {
+        self.presets.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn labels(&self) -> TrayLabels {
+        self.tray_labels.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    fn compare(&self) -> Option<f64> {
+        *self.compare.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -139,10 +197,20 @@ fn config_get(st: State<'_, AppState>) -> Config {
 
 /// Guarda la configuración y aplica la curva al momento (Equalizer APO relee el archivo solo).
 #[tauri::command]
-fn config_set(app: AppHandle, st: State<'_, AppState>, mut cfg: Config) -> Res<Config> {
+fn config_set(app: AppHandle, st: State<'_, AppState>, cfg: Config) -> Res<Config> {
+    let cfg = store(&app, cfg);
+    apply(&cfg, st.compare())?;
+    Ok(cfg)
+}
+
+/// Valida, guarda en disco y pone al día lo que depende de la configuración (bandeja, atajos, reglas)
+fn store(app: &AppHandle, mut cfg: Config) -> Config {
+    let st = app.state::<AppState>();
     cfg.sanitize();
-    let changed_bypass = st.cfg().bypass != cfg.bypass;
-    let changed_hotkey = st.cfg().bypass_hotkey != cfg.bypass_hotkey;
+    let (tray, keys, rules) = {
+        let old = st.cfg();
+        (old.tray_key(), (old.bypass_hotkey, old.preset_keys.clone()), old.app_rules.clone())
+    };
     *st.cfg() = cfg.clone();
     if let Ok(json) = serde_json::to_string_pretty(&cfg) {
         if let Some(dir) = st.config_path.parent() {
@@ -150,15 +218,110 @@ fn config_set(app: AppHandle, st: State<'_, AppState>, mut cfg: Config) -> Res<C
         }
         let _ = std::fs::write(&st.config_path, json);
     }
-    if changed_bypass {
-        refresh_tray(&app);
+    if tray != cfg.tray_key() {
+        refresh_tray(app);
     }
-    if changed_hotkey {
-        register_hotkey(&app, cfg.bypass_hotkey);
+    if keys != (cfg.bypass_hotkey, cfg.preset_keys.clone()) {
+        register_hotkeys(app, &cfg);
     }
-    let compare = *st.compare.lock().unwrap_or_else(|e| e.into_inner());
-    apply(&cfg, compare)?;
-    Ok(cfg)
+    if rules != cfg.app_rules {
+        if let Some(t) = st.watcher.get() {
+            t.unpark();
+        }
+    }
+    cfg
+}
+
+/// Cambio hecho desde Rust (atajo, bandeja, regla por app): se guarda, suena y se avisa a la interfaz
+fn commit(app: &AppHandle, cfg: Config) {
+    let cfg = store(app, cfg);
+    let _ = app.emit("config", &cfg);
+    let _ = apply(&cfg, app.state::<AppState>().compare());
+}
+
+/// Curva actual de la salida que se edita (sin curva guardada, la plana de serie, como en la interfaz)
+fn current_curve(st: &AppState) -> Option<(String, Curve)> {
+    let pref = st.cfg().device.clone();
+    let dev = engine::active_device(pref.as_deref())?;
+    let saved = st.cfg().curves.get(&dev).cloned();
+    let curve = saved.or_else(|| st.presets().iter().find(|p| p.id == "b:flat").map(|p| Curve { preset: Some(p.id.clone()), ..p.curve.clone() }));
+    Some((dev, curve.unwrap_or_default()))
+}
+
+/// Pone un preset en la salida que se edita, igual que `applyPreset` en la interfaz. Devuelve su nombre.
+fn apply_preset(app: &AppHandle, id: &str) -> Option<String> {
+    let st = app.state::<AppState>();
+    let entry = st.presets().iter().find(|p| p.id == id).cloned()?;
+    let (dev, cur) = current_curve(&st)?;
+    let auto = cur.auto_preamp || entry.curve.auto_preamp;
+    let curve = Curve {
+        preamp: if auto { entry.auto_gain } else { entry.curve.preamp },
+        auto_preamp: auto,
+        preset: Some(entry.id),
+        ..entry.curve
+    };
+    let mut cfg = st.cfg().clone();
+    cfg.curves.insert(dev, curve);
+    commit(app, cfg);
+    Some(entry.name)
+}
+
+/// La interfaz manda los presets (de serie ya traducidos y propios) para usarlos sin ella: bandeja y atajos
+#[tauri::command]
+fn presets_sync(app: AppHandle, st: State<'_, AppState>, mut presets: Vec<PresetEntry>) {
+    presets.truncate(300);
+    presets.retain_mut(|p| {
+        p.name = p.name.trim().chars().filter(|c| !c.is_control()).take(48).collect();
+        p.curve.sanitize();
+        p.auto_gain = eq::clamp(p.auto_gain, -30.0, 12.0, 0.0);
+        apps::valid_preset_id(&p.id) && !p.name.is_empty()
+    });
+    *st.presets() = presets;
+    refresh_tray(&app);
+}
+
+/// Apps abiertas con ventana, para crear una regla sin escribir rutas
+#[tauri::command]
+async fn apps_list() -> Vec<apps::OpenApp> {
+    tauri::async_runtime::spawn_blocking(apps::list).await.unwrap_or_default()
+}
+
+/// Guarda un preset compartido como `.poxieq` en Descargas y lo enseña en el Explorador
+#[tauri::command]
+fn preset_export(app: AppHandle, name: String, code: String) -> Res<String> {
+    if !share_code_ok(&code) {
+        return Err(problem("share.bad", None));
+    }
+    let dir = app.path().download_dir().or_else(|_| app.path().document_dir()).map_err(|e| problem("io.failed", e.to_string()))?;
+    let stem = file_stem(&name);
+    let mut path = dir.join(format!("{stem}.poxieq"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem} ({n}).poxieq"));
+        n += 1;
+    }
+    std::fs::write(&path, &code).map_err(|e| problem("io.failed", e.to_string()))?;
+    let _ = tauri_plugin_opener::reveal_item_in_dir(&path);
+    Ok(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+/// Código de preset compartido (`PXEQ1.` + base64url): solo eso y de tamaño razonable
+fn share_code_ok(code: &str) -> bool {
+    code.len() <= 8192 && code.strip_prefix("PXEQ1.").is_some_and(|b| !b.is_empty() && b.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'))
+}
+
+/// Nombre de archivo válido en Windows a partir del nombre del preset
+fn file_stem(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control() && !r#"<>:"/\|?*"#.contains(*c)).take(48).collect();
+    let clean = clean.trim().trim_end_matches(['.', ' ']);
+    let upper = clean.to_uppercase();
+    let reserved = ["CON", "PRN", "AUX", "NUL"].contains(&upper.as_str())
+        || (upper.len() == 4 && (upper.starts_with("COM") || upper.starts_with("LPT")) && upper.as_bytes()[3].is_ascii_digit());
+    if clean.is_empty() || reserved {
+        "preset".into()
+    } else {
+        clean.into()
+    }
 }
 
 fn apply(cfg: &Config, compare: Option<f64>) -> Res<()> {
@@ -197,8 +360,7 @@ async fn engine_status() -> engine::Status {
 /// dispositivos, reinicia el audio y comprueba. Un solo aviso de UAC.
 #[tauri::command]
 async fn engine_setup(app: AppHandle, enable: Vec<String>, disable: Vec<String>) -> Res<engine::SetupReport> {
-    let valid = |id: &String| id.len() == 38 && id.starts_with('{') && id.ends_with('}') && id[1..37].chars().all(|c| c.is_ascii_hexdigit() || c == '-');
-    if !enable.iter().chain(&disable).all(valid) {
+    if !enable.iter().chain(&disable).all(|id| engine::is_device_id(id)) {
         return Err(problem("engine.badDevice", None));
     }
     let dsp = engine::dsp_state() != engine::DspState::Current;
@@ -266,11 +428,16 @@ fn autostart_set(app: AppHandle, on: bool) -> Res<()> {
     if on { l.enable() } else { l.disable() }.map_err(|e| problem("io.failed", e.to_string()))
 }
 
+/// Textos que pinta Rust (bandeja y aviso en pantalla), en el idioma de la interfaz
 #[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TrayLabels {
     open: String,
     bypass: String,
     quit: String,
+    presets: String,
+    eq_on: String,
+    eq_off: String,
 }
 
 #[tauri::command]
@@ -332,14 +499,30 @@ fn show_window(app: &AppHandle) {
 
 fn refresh_tray(app: &AppHandle) {
     let st = app.state::<AppState>();
-    let l = st.tray_labels.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let l = st.labels();
     let bypass = st.cfg().bypass;
+    let active = current_curve(&st).and_then(|(_, c)| c.preset);
+    let presets: Vec<(String, String)> = st.presets().iter().map(|p| (p.id.clone(), p.name.clone())).collect();
     let build = || -> tauri::Result<Menu<tauri::Wry>> {
+        // Submenú de presets: los de serie, una raya y los propios; con check el que suena
+        let items = presets
+            .iter()
+            .map(|(id, name)| CheckMenuItem::with_id(app, format!("preset:{id}"), name, true, active.as_deref() == Some(id.as_str()), None::<&str>))
+            .collect::<tauri::Result<Vec<_>>>()?;
+        let mine = PredefinedMenuItem::separator(app)?;
+        let mut refs: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![];
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 && presets[i - 1].0.starts_with("b:") && !presets[i].0.starts_with("b:") {
+                refs.push(&mine);
+            }
+            refs.push(item);
+        }
         Menu::with_items(
             app,
             &[
                 &MenuItem::with_id(app, "open", &l.open, true, None::<&str>)?,
                 &CheckMenuItem::with_id(app, "bypass", &l.bypass, true, bypass, None::<&str>)?,
+                &Submenu::with_items(app, &l.presets, !refs.is_empty(), &refs)?,
                 &PredefinedMenuItem::separator(app)?,
                 &MenuItem::with_id(app, "quit", &l.quit, true, None::<&str>)?,
             ],
@@ -350,25 +533,94 @@ fn refresh_tray(app: &AppHandle) {
     }
 }
 
-/// Bypass desde la bandeja o el atajo: se guarda y se avisa a la interfaz para que lo pinte.
-fn toggle_bypass(app: &AppHandle) {
+/// Bypass desde la bandeja o el atajo; con el atajo, además, aviso en pantalla
+fn toggle_bypass(app: &AppHandle, notify: bool) {
     let st = app.state::<AppState>();
     let mut cfg = st.cfg().clone();
     cfg.bypass = !cfg.bypass;
-    if config_set(app.clone(), st, cfg.clone()).is_ok() {
-        let _ = app.emit("bypass", cfg.bypass);
+    let off = cfg.bypass;
+    commit(app, cfg);
+    if notify {
+        let l = st.labels();
+        osd::show(app, if off { &l.eq_off } else { &l.eq_on }, BYPASS_HOTKEY, if off { "off" } else { "on" });
     }
 }
 
-fn register_hotkey(app: &AppHandle, on: bool) {
+/// Ctrl+Alt+N: el preset asignado a ese hueco, con aviso en pantalla
+fn preset_hotkey(app: &AppHandle, slot: usize) {
+    let id = app.state::<AppState>().cfg().preset_keys.get(slot).cloned().flatten();
+    if let Some(name) = id.and_then(|id| apply_preset(app, &id)) {
+        osd::show(app, &name, &format!("Ctrl+Alt+{}", slot + 1), "preset");
+    }
+}
+
+/// Atajos globales: el de bypass y solo los huecos de preset que tengan algo asignado
+/// (un atajo registrado deja de llegar a las demás apps; con AltGr, Ctrl+Alt+N es también un símbolo)
+fn register_hotkeys(app: &AppHandle, cfg: &Config) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    if on {
+    if cfg.bypass_hotkey {
         let _ = gs.on_shortcut(BYPASS_HOTKEY, |app, _, ev| {
             if ev.state == ShortcutState::Pressed {
-                toggle_bypass(app);
+                toggle_bypass(app, true);
             }
         });
+    }
+    for (slot, id) in cfg.preset_keys.iter().enumerate() {
+        if id.is_some() {
+            let _ = gs.on_shortcut(format!("Ctrl+Alt+{}", slot + 1).as_str(), move |app, _, ev| {
+                if ev.state == ShortcutState::Pressed {
+                    preset_hotkey(app, slot);
+                }
+            });
+        }
+    }
+}
+
+/// Preset automático por app: sondeo ligero (cada 500 ms) de la ventana en primer plano.
+/// Sin reglas activas el hilo se queda dormido hasta que cambien.
+fn watch_foreground(app: AppHandle) -> std::thread::Thread {
+    std::thread::spawn(move || {
+        let own = std::env::current_exe().ok().and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned())).unwrap_or_default();
+        let mut auto = apps::Auto::new(&own);
+        let mut seen: Vec<apps::AppRule> = vec![];
+        loop {
+            let st = app.state::<AppState>();
+            let rules: Vec<apps::AppRule> = st.cfg().app_rules.iter().filter(|r| r.on).cloned().collect();
+            if rules != seen {
+                auto.rearm();
+                seen = rules.clone();
+            }
+            if rules.is_empty() {
+                if auto.active() {
+                    let cur = current_curve(&st);
+                    run_step(&app, auto.release(cur.as_ref().map(|(d, c)| (d.as_str(), c))));
+                }
+                std::thread::park();
+                continue;
+            }
+            if let Some(exe) = apps::foreground_exe().filter(|e| !auto.seen(e)) {
+                let cur = current_curve(&st);
+                run_step(&app, auto.step(&exe, &rules, cur.as_ref().map(|(d, c)| (d.as_str(), c))));
+            }
+            std::thread::park_timeout(Duration::from_millis(500));
+        }
+    })
+    .thread()
+    .clone()
+}
+
+fn run_step(app: &AppHandle, step: apps::Step) {
+    match step {
+        apps::Step::Keep => {}
+        apps::Step::Apply(id) => {
+            apply_preset(app, &id);
+        }
+        apps::Step::Restore(dev, curve) => {
+            let mut cfg = app.state::<AppState>().cfg().clone();
+            cfg.curves.insert(dev, curve);
+            commit(app, cfg);
+        }
     }
 }
 
@@ -390,8 +642,17 @@ pub fn run() {
                 config: Mutex::new(cfg.clone()),
                 config_path,
                 start_hidden,
-                tray_labels: Mutex::new(TrayLabels { open: "Abrir PoxiEQ".into(), bypass: "Bypass".into(), quit: "Salir".into() }),
+                tray_labels: Mutex::new(TrayLabels {
+                    open: "Abrir PoxiEQ".into(),
+                    bypass: "Bypass".into(),
+                    quit: "Salir".into(),
+                    presets: "Presets".into(),
+                    eq_on: "EQ encendido".into(),
+                    eq_off: "EQ apagado".into(),
+                }),
                 compare: Mutex::new(None),
+                presets: Mutex::new(vec![]),
+                watcher: OnceLock::new(),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -404,9 +665,13 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, ev| match ev.id().as_ref() {
                     "open" => show_window(app),
-                    "bypass" => toggle_bypass(app),
+                    "bypass" => toggle_bypass(app, false),
                     "quit" => app.exit(0),
-                    _ => {}
+                    id => {
+                        if let Some(id) = id.strip_prefix("preset:") {
+                            apply_preset(app, id);
+                        }
+                    }
                 })
                 .on_tray_icon_event(|tray, ev| {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
@@ -415,7 +680,9 @@ pub fn run() {
                 })
                 .build(app)?;
             refresh_tray(app.handle());
-            register_hotkey(app.handle(), cfg.bypass_hotkey);
+            register_hotkeys(app.handle(), &cfg);
+            osd::init(app.handle());
+            let _ = app.state::<AppState>().watcher.set(watch_foreground(app.handle().clone()));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
             let _ = apply(&cfg, None);
             Ok(())
@@ -440,6 +707,9 @@ pub fn run() {
             autostart_get,
             autostart_set,
             tray_labels,
+            presets_sync,
+            apps_list,
+            preset_export,
             analyzer_start,
             compare_set,
             meter_reset,
@@ -448,4 +718,56 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("no se ha podido arrancar PoxiEQ");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_new_fields() {
+        let mut cfg: Config = serde_json::from_str(
+            r#"{"analyzerMode":"3d","device":"../../x","presetKeys":["b:bass",null,"z:mal","u:abc",null,null,null,null,null,"b:flat","b:music"],
+                "appRules":[{"exe":"Spotify.exe","name":"Spotify","preset":"b:music","on":true}]}"#,
+        )
+        .unwrap();
+        cfg.sanitize();
+        assert_eq!(cfg.analyzer_mode, "spectrum");
+        assert_eq!(cfg.device, None);
+        assert_eq!(cfg.preset_keys.len(), PRESET_KEYS);
+        assert_eq!(cfg.preset_keys[0].as_deref(), Some("b:bass"));
+        assert_eq!(cfg.preset_keys[2], None);
+        assert_eq!(cfg.preset_keys[3].as_deref(), Some("u:abc"));
+        assert_eq!(cfg.app_rules[0].exe, "spotify.exe");
+        // Una configuración de antes (sin los campos nuevos) carga con los valores por defecto
+        let mut old: Config = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
+        old.sanitize();
+        assert_eq!(old.preset_keys, vec![None; PRESET_KEYS]);
+        assert!(old.app_rules.is_empty());
+        assert_eq!(old.analyzer_mode, "spectrum");
+    }
+
+    #[test]
+    fn share_and_file_names() {
+        assert!(share_code_ok("PXEQ1.eyJuIjoiYSJ9"));
+        assert!(!share_code_ok("PXEQ1."));
+        assert!(!share_code_ok("PXEQ1.abc def"));
+        assert!(!share_code_ok("PXEQ2.abc"));
+        assert!(!share_code_ok(&format!("PXEQ1.{}", "a".repeat(9000))));
+        assert_eq!(file_stem("Mis DT 770: noche/peli?"), "Mis DT 770 nochepeli");
+        assert_eq!(file_stem(r"..\..\"), "preset");
+        assert_eq!(file_stem("con"), "preset");
+        assert_eq!(file_stem("COM1"), "preset");
+        assert_eq!(file_stem("Comedia"), "Comedia");
+        assert_eq!(file_stem("  "), "preset");
+    }
+
+    #[test]
+    fn hotkeys_parse() {
+        use tauri_plugin_global_shortcut::Shortcut;
+        assert!(BYPASS_HOTKEY.parse::<Shortcut>().is_ok());
+        for slot in 1..=PRESET_KEYS {
+            assert!(format!("Ctrl+Alt+{slot}").parse::<Shortcut>().is_ok(), "Ctrl+Alt+{slot}");
+        }
+    }
 }

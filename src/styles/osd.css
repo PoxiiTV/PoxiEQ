@@ -1,0 +1,95 @@
+/* Aviso en pantalla: pastilla glass de la suite sobre una ventana transparente */
+@import './tokens.css';
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.osd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 36px);
+  padding: 12px 20px 12px 14px;
+  border-radius: var(--r-lg);
+  /* Sin desenfoque posible (la ventana no ve lo que hay detrás): vidrio casi opaco */
+  background: var(--glass-strong);
+  border: 1px solid var(--border-strong);
+  box-shadow:
+    0 12px 32px -12px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(var(--accent-rgb), 0.08) inset;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition:
+    opacity 200ms ease,
+    transform 220ms var(--ease-out);
+}
+.osd.show {
+  opacity: 1;
+  transform: none;
+  transition-duration: 160ms, 260ms;
+}
+
+.osd-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.osd[data-kind='off'] .osd-icon {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--warning);
+}
+.osd .i-power,
+.osd[data-kind='on'] .i-preset,
+.osd[data-kind='off'] .i-preset {
+  display: none;
+}
+.osd[data-kind='on'] .i-power,
+.osd[data-kind='off'] .i-power {
+  display: block;
+}
+
+.osd-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.osd-text b {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.osd-text small {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osd,
+  .osd.show {
+    transform: none;
+  }
+}

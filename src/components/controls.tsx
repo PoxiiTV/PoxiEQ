@@ -23,6 +23,7 @@ export function Select<T extends string | number>({
   label?: string
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [up, setUp] = useState(false)
   const [hl, setHl] = useState(0)
   const root = useRef<HTMLDivElement>(null)
   const current = options.find((o) => o.value === value)
@@ -59,8 +60,18 @@ export function Select<T extends string | number>({
   }, [open, options, value, onChange])
 
   return (
-    <div ref={root} className={`dd ${open ? 'open' : ''} ${size ?? ''} ${block ? 'block' : ''}`}>
-      <button type="button" className="dd-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => setOpen(!open)}>
+    <div ref={root} className={`dd ${open ? 'open' : ''} ${up ? 'up' : ''} ${size ?? ''} ${block ? 'block' : ''}`}>
+      <button
+        type="button"
+        className="dd-btn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => {
+          if (!open && root.current) setUp(opensUp(root.current, options.length))
+          setOpen(!open)
+        }}
+      >
         <span>{current?.label ?? ''}</span>
         <ChevronDown size={15} />
       </button>
@@ -87,6 +98,23 @@ export function Select<T extends string | number>({
       )}
     </div>
   )
+}
+
+/** La lista se abre hacia arriba si abajo no cabe dentro de lo que la recortaría (un panel con scroll o la ventana) */
+function opensUp(el: HTMLElement, items: number): boolean {
+  const r = el.getBoundingClientRect()
+  let top = 0
+  let bottom = window.innerHeight
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowY)) {
+      const b = p.getBoundingClientRect()
+      top = Math.max(top, b.top)
+      bottom = Math.min(bottom, b.bottom)
+      break
+    }
+  }
+  const need = Math.min(260, items * 32 + 12) + 10
+  return bottom - r.bottom < need && r.top - top > bottom - r.bottom
 }
 
 /** Deslizador con la parte recorrida pintada del color de la app */

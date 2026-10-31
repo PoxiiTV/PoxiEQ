@@ -1,9 +1,19 @@
-import { Headphones, Save, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Headphones, Import, Save, Search, Share2, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { BUILTIN, builtinCurve } from '../lib/eq'
 import { applyPreset, currentCurve, deletePreset, getState, setState, toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 
 const NONE: never[] = []
+
+/** Nombre cortado con «…»: el completo va en el tooltip (solo entonces, para no repetir lo que ya se lee) */
+function tipIfCut(item: HTMLElement): void {
+  // Un fotograma después: con el ratón encima aparecen los botones de la fila y el nombre se acorta
+  requestAnimationFrame(() => {
+    const name = item.querySelector<HTMLElement>('.name')
+    if (name && name.scrollWidth > name.clientWidth) item.dataset.tip = name.textContent ?? ''
+    else delete item.dataset.tip
+  })
+}
 
 export function Sidebar(): React.JSX.Element {
   const t = useT()
@@ -20,27 +30,57 @@ export function Sidebar(): React.JSX.Element {
     <aside className="sidebar">
       <div className="nav-title">{t('presets.title')}</div>
       {BUILTIN.map((p) => (
-        <button key={p.id} className={`nav-item ${active === p.id ? 'active' : ''}`} onClick={() => applyPreset(builtinCurve(p.id), p.id)}>
+        <button
+          key={p.id}
+          className={`nav-item ${active === p.id ? 'active' : ''}`}
+          onPointerEnter={(e) => tipIfCut(e.currentTarget)}
+          onClick={() => applyPreset(builtinCurve(p.id), p.id)}
+        >
           <SlidersHorizontal size={16} />
           <span className="name">{t(`presets.builtin.${p.id}`)}</span>
         </button>
       ))}
-      <div className="nav-title">{t('presets.mine')}</div>
+      <div className="nav-title with-action">
+        {t('presets.mine')}
+        <button className="icon-btn tip-right" data-tip={t('share.importTitle')} aria-label={t('share.importTitle')} onClick={() => setState({ modal: 'import', importCode: '' })}>
+          <Import size={14} />
+        </button>
+      </div>
       {presets.length === 0 && <div className="nav-empty small muted">{t('presets.mineEmpty')}</div>}
       {presets.map((p) => (
-        <div key={p.id} className={`nav-item has-action ${active === p.id ? 'active' : ''}`} role="button" tabIndex={0} onClick={() => applyPreset(p.curve, p.id)} onKeyDown={(e) => e.key === 'Enter' && applyPreset(p.curve, p.id)}>
+        <div
+          key={p.id}
+          className={`nav-item has-action ${active === p.id ? 'active' : ''}`}
+          role="button"
+          tabIndex={0}
+          onPointerEnter={(e) => tipIfCut(e.currentTarget)}
+          onClick={() => applyPreset(p.curve, p.id)}
+          onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && applyPreset(p.curve, p.id)}
+        >
           <Headphones size={16} />
           <span className="name">{p.name}</span>
-          <button
-            className="icon-btn row-action"
-            aria-label={t('common.delete')}
-            onClick={(e) => {
-              e.stopPropagation()
-              remove(p.id)
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
+          <span className="row-actions">
+            <button
+              className="icon-btn row-action"
+              aria-label={t('share.title')}
+              onClick={(e) => {
+                e.stopPropagation()
+                setState({ sharing: p })
+              }}
+            >
+              <Share2 size={14} />
+            </button>
+            <button
+              className="icon-btn row-action"
+              aria-label={t('common.delete')}
+              onClick={(e) => {
+                e.stopPropagation()
+                remove(p.id)
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </span>
         </div>
       ))}
       <div className="spacer" />

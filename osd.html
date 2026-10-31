@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es" data-theme="dark" data-accent="cyan">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PoxiEQ</title>
+  </head>
+  <body>
+    <div id="osd" class="osd" aria-live="polite">
+      <span class="osd-icon">
+        <svg class="i-preset" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+        </svg>
+        <svg class="i-power" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04" />
+        </svg>
+      </span>
+      <span class="osd-text">
+        <b id="osd-title"></b>
+        <small id="osd-sub"></small>
+      </span>
+    </div>
+    <script type="module" src="/src/osd.ts"></script>
+  </body>
+</html>

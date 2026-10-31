@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { Download, Sparkles } from 'lucide-react'
+import { Copy, Download, FileDown, Sparkles } from 'lucide-react'
+import { api } from '../lib/api'
 import { changesFor } from '../lib/changelog'
-import { savePreset, setState, toast, updateConfig, useStore } from '../lib/store'
+import { cleanName, decodePreset, encodePreset, MAX_FILE, MAX_NAME } from '../lib/share'
+import { importPreset, savePreset, setState, toast, updateConfig, useStore } from '../lib/store'
 import { installUpdate, isPortable, RELEASES, useUpdate } from '../lib/update'
 import { currentLang, errorText, useT } from '../i18n'
+import { Preview } from './AutoEq'
 import { Logo, Modal } from './ui'
 
 const close = (): void => setState({ modal: null })
@@ -34,6 +37,111 @@ export function SavePresetModal(): React.JSX.Element | null {
         </button>
         <button className="btn btn-primary" disabled={!name.trim()} onClick={save}>
           {t('common.save')}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/** Compartir un preset: código para pegar en un chat o archivo `.poxieq` */
+export function ShareModal(): React.JSX.Element | null {
+  const t = useT()
+  const preset = useStore((s) => s.sharing)
+  const code = useMemo(() => (preset ? encodePreset(preset.name, preset.curve) : ''), [preset])
+  const [busy, setBusy] = useState(false)
+  if (!preset) return null
+  const hide = (): void => setState({ sharing: null })
+  const copy = (): void => void navigator.clipboard.writeText(code).then(() => toast(t('share.copied')))
+  const save = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      toast(t('share.saved', { f: await api.presetExport(preset.name, code) }))
+    } catch (e) {
+      toast(errorText(e), 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal onClose={hide}>
+      <h2>{t('share.title')}</h2>
+      <p className="share-name">{preset.name}</p>
+      <p className="hint">{t('share.text')}</p>
+      <textarea className="textarea mono share-code" readOnly value={code} spellCheck={false} aria-label={t('share.code')} onFocus={(e) => e.currentTarget.select()} />
+      <div className="modal-actions">
+        <button className="btn btn-ghost" disabled={busy} onClick={() => void save()}>
+          <FileDown size={16} /> {t('share.file')}
+        </button>
+        <button className="btn btn-primary" autoFocus onClick={copy}>
+          <Copy size={16} /> {t('share.copy')}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/** Importar un preset compartido: pegando el código o soltando el archivo `.poxieq` */
+export function ImportModal(): React.JSX.Element | null {
+  const t = useT()
+  const open = useStore((s) => s.modal === 'import')
+  const initial = useStore((s) => s.importCode)
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [over, setOver] = useState(false)
+  const parsed = useMemo(() => decodePreset(code), [code])
+  useEffect(() => {
+    if (open) setCode(initial)
+  }, [open, initial])
+  useEffect(() => setName(parsed?.name ?? ''), [parsed])
+  if (!open) return null
+  const hide = (): void => setState({ modal: null, importCode: '' })
+  const ok = !!parsed && !!cleanName(name)
+  const run = (): void => {
+    if (!parsed || !ok) return
+    importPreset(cleanName(name), parsed.curve)
+    toast(t('share.imported', { n: cleanName(name) }))
+    hide()
+  }
+  return (
+    <Modal onClose={hide}>
+      <h2>{t('share.importTitle')}</h2>
+      <p className="hint">{t('share.importText')}</p>
+      <textarea
+        autoFocus={!parsed}
+        className={`textarea mono share-code ${over ? 'over' : ''} ${code.trim() && !parsed ? 'bad' : ''}`}
+        value={code}
+        placeholder="PXEQ1.…"
+        spellCheck={false}
+        aria-label={t('share.code')}
+        onChange={(e) => setCode(e.target.value)}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setOver(true)
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setOver(false)
+          const f = e.dataTransfer.files[0]
+          if (f && f.size <= MAX_FILE) void f.text().then(setCode)
+        }}
+      />
+      {code.trim() && !parsed && <p className="hint danger-text">{t('share.bad')}</p>}
+      {parsed && (
+        <>
+          <Preview bands={parsed.curve.bands} />
+          <label className="label" htmlFor="import-name">
+            {t('presets.name')}
+          </label>
+          <input id="import-name" className="input" maxLength={MAX_NAME} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && run()} />
+        </>
+      )}
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={hide}>
+          {t('common.cancel')}
+        </button>
+        <button className="btn btn-primary" disabled={!ok} onClick={run}>
+          {t('share.import')}
         </button>
       </div>
     </Modal>

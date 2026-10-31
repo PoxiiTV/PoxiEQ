@@ -41,6 +41,7 @@ export function Graph(): React.JSX.Element {
   const selected = useStore((s) => s.selected)
   const bypass = useStore((s) => !!s.config?.bypass)
   const analyzer = useStore((s) => !!s.config?.analyzer)
+  const mode = useStore((s) => s.config?.analyzerMode ?? 'spectrum')
   const box = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 800, h: 360 })
   const [drag, setDrag] = useState<number | null>(null)
@@ -139,7 +140,7 @@ export function Graph(): React.JSX.Element {
         addBand(roundFreq(clamp(fx(px), MIN_F, MAX_F)), roundGain(clamp(dy(py), MIN_G, MAX_G)))
       }}
     >
-      {analyzer && !bypass && <Analyzer x={x} top={PAD.t} height={H} width={size.w} fullHeight={size.h} />}
+      {analyzer && !bypass && <Analyzer key={mode} mode={mode} x={x} top={PAD.t} height={H} width={size.w} fullHeight={size.h} />}
       <svg width={size.w} height={size.h}>
         <defs>
           <linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">

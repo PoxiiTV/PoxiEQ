@@ -58,16 +58,48 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Compartir y borrar: solo con el ratón encima o el foco dentro (así el nombre tiene todo el ancho) */
+.nav-item .row-actions {
+  display: none;
+  gap: 2px;
+  margin-right: -6px;
+}
+.nav-item:hover .row-actions,
+.nav-item:focus-within .row-actions {
+  display: flex;
+}
 .nav-item .row-action {
   width: 26px;
   height: 26px;
-  margin-right: -6px;
-  opacity: 0;
-  transition: opacity 120ms ease;
 }
-.nav-item:hover .row-action,
-.nav-item .row-action:focus-visible {
-  opacity: 1;
+/* Nombre completo de un preset cortado: debajo, del ancho de la fila y en varias líneas si hace falta
+   (la barra lateral tiene scroll y cortaría un tooltip más ancho que ella) */
+.sidebar .nav-item[data-tip]::after {
+  left: 4px;
+  right: 4px;
+  top: calc(100% + 4px);
+  transform: translateY(-3px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.35;
+}
+@media (hover: hover) {
+  .sidebar .nav-item[data-tip]:hover::after {
+    transform: none;
+  }
+}
+.nav-title.with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+  padding-top: 8px;
+  padding-bottom: 2px;
+}
+.nav-title .icon-btn {
+  width: 26px;
+  height: 26px;
 }
 .nav-title {
   font-size: 11px;
@@ -122,9 +154,38 @@
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px 6px;
   flex: none;
+}
+.history-btns {
+  display: flex;
+  gap: 2px;
+}
+/* La barra se adapta al ancho del editor: primero se queda en icono «Añadir banda», luego se estrecha el
+   preamp y, si aun así no cabe, pasa a dos líneas (nunca se corta nada) */
+.editor {
+  container-type: inline-size;
+}
+@container (min-width: 1001px) {
+  .toolbar .btn-add[data-tip]::after {
+    display: none;
+  }
+}
+@container (max-width: 1000px) {
+  .toolbar .btn-add {
+    width: 30px;
+    padding: 0;
+  }
+  .toolbar .btn-add .btn-label {
+    display: none;
+  }
+}
+@container (max-width: 880px) {
+  .preamp input[type='range'] {
+    width: 110px;
+  }
 }
 .preamp {
   display: flex;
@@ -1157,4 +1218,127 @@
 }
 .meter-read .line.gr b {
   color: var(--warning);
+}
+.nav-title [data-tip]::after {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ——— Ajustes: preset por app y atajos ——— */
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+.settings .set-intro {
+  margin: -6px 0 6px;
+}
+.set-empty {
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.set-add {
+  margin-top: 14px;
+}
+.app-pick {
+  margin-top: 14px;
+  padding: 6px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  max-height: 260px;
+  overflow-y: auto;
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+@starting-style {
+  .app-pick {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.app-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px 8px;
+  font-size: 13px;
+}
+.app-pick-empty {
+  padding: 6px 8px 10px;
+}
+.app-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 160ms var(--ease-out);
+}
+.app-pick-item:hover {
+  background: var(--surface-2);
+}
+.app-pick-item:active {
+  transform: scale(0.99);
+}
+.app-pick-item svg {
+  flex: none;
+  color: var(--accent);
+}
+.app-pick-item b {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-pick-item small {
+  margin-left: auto;
+  padding-left: 12px;
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.set-row .txt b,
+.set-row .txt small {
+  overflow-wrap: anywhere;
+}
+
+/* ——— Compartir presets ——— */
+.share-name {
+  margin: -4px 0 4px;
+  font-weight: 800;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.share-code {
+  min-height: 96px;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+  resize: none;
+}
+.share-code.over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.share-code.bad {
+  border-color: rgba(239, 68, 68, 0.55);
 }

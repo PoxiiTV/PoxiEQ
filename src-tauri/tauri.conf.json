@@ -25,6 +25,24 @@
         "dragDropEnabled": false,
         "backgroundColor": "#0a0e17",
         "create": false
+      },
+      {
+        "label": "osd",
+        "url": "osd.html",
+        "title": "PoxiEQ",
+        "width": 380,
+        "height": 120,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "focusable": false,
+        "visible": false,
+        "dragDropEnabled": false,
+        "create": false
       }
     ],
     "security": {

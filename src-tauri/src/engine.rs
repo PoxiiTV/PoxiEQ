@@ -148,6 +148,23 @@ fn is_enabled(id: &str) -> bool {
     })
 }
 
+/// `{guid}` de un dispositivo, sin nada más (es lo que acaba en rutas del registro y en el archivo del motor)
+pub fn is_device_id(id: &str) -> bool {
+    id.len() == 38 && id.starts_with('{') && id.ends_with('}') && id[1..37].chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
+
+/// La salida que se está editando: la elegida si está conectada y, si no, la predeterminada
+/// (lo mismo que `currentDevice` en la interfaz)
+pub fn active_device(preferred: Option<&str>) -> Option<String> {
+    let plugged = |id: &str| {
+        hklm()
+            .open_subkey(format!(r"{RENDER}\{id}"))
+            .and_then(|k| k.get_value::<u32, _>("DeviceState"))
+            .is_ok_and(|s| s & DEVICE_STATE_ACTIVE.0 != 0 && s & (DEVICE_STATE_DISABLED.0 | 0x1000_0000) == 0)
+    };
+    preferred.filter(|id| is_device_id(id) && plugged(id)).map(String::from).or_else(default_device)
+}
+
 fn default_device() -> Option<String> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);

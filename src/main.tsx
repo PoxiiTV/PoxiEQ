@@ -4,8 +4,10 @@ import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import '@fontsource-variable/nunito'
 import './styles/app.css'
-import { api } from './lib/api'
-import { getState, refreshEngine, setState } from './lib/store'
+import { api, type Config } from './lib/api'
+import { currentCurve, getState, grouper, redo, refreshEngine, setState, toast, undo } from './lib/store'
+import { MAX_FILE } from './lib/share'
+import { t } from './i18n'
 import { applyTheme, followSystem } from './lib/theme'
 import { startUpdateChecks } from './lib/update'
 import { App } from './App'
@@ -17,6 +19,32 @@ window.addEventListener('contextmenu', (e) => {
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase()
   if (e.key === 'F5' || e.key === 'F3' || e.key === 'F7' || (e.ctrlKey && ['r', 'p', 's', 'g', 'u', 'j', 'h', 'o', 'd', 'f'].includes(k))) e.preventDefault()
+  // Deshacer / rehacer la curva y la dinámica (en un campo de texto, el suyo; con una ventana abierta, nada)
+  if (!e.ctrlKey || e.altKey || (k !== 'z' && k !== 'y')) return
+  const el = e.target as HTMLElement
+  const typing = el.closest('textarea') || (el instanceof HTMLInputElement && el.type !== 'range')
+  if (typing || document.querySelector('.modal-backdrop')) return
+  e.preventDefault()
+  if (k === 'y' || e.shiftKey) redo()
+  else undo()
+})
+
+// Un arrastre (curva, deslizador) es un solo paso de deshacer: se agrupa mientras haya un botón pulsado
+window.addEventListener('pointerdown', () => grouper.down(), true)
+window.addEventListener('pointerup', () => grouper.up(), true)
+window.addEventListener('pointercancel', () => grouper.up(), true)
+
+// Arrastrar un `.poxieq` a la ventana lo importa; cualquier otro archivo se ignora (sin que el navegador lo abra)
+window.addEventListener('dragover', (e) => {
+  if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+})
+window.addEventListener('drop', (e) => {
+  if (e.defaultPrevented) return
+  e.preventDefault()
+  const f = e.dataTransfer?.files[0]
+  if (!f || !getState().config) return
+  if (!f.name.toLowerCase().endsWith('.poxieq') || f.size > MAX_FILE) return toast(t('share.dropBad'), 'info')
+  void f.text().then((importCode) => setState({ importCode, modal: 'import', settingsOpen: false }))
 })
 
 async function start(): Promise<void> {
@@ -29,10 +57,11 @@ async function start(): Promise<void> {
       <App />
     </StrictMode>
   )
-  // Bypass desde la bandeja o el atajo: Rust ya lo guardó, aquí solo se pinta
-  void listen<boolean>('bypass', (e) => {
-    const c = getState().config
-    if (c) setState({ config: { ...c, bypass: e.payload } })
+  // Cambios hechos desde Rust (bandeja, atajos, preset por app): ya están guardados, aquí solo se pintan
+  void listen<Config>('config', (e) => {
+    const s = getState()
+    const bands = currentCurve({ config: e.payload, engine: s.engine }).bands.length
+    setState({ config: e.payload, selected: s.selected !== null && s.selected < bands ? s.selected : null })
   })
   // Cascos enchufados o desenchufados mientras la app estaba escondida
   window.addEventListener('focus', () => void refreshEngine())

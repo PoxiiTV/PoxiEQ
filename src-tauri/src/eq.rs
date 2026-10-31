@@ -13,7 +13,7 @@ pub enum Kind {
     HighPass,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Band {
     pub kind: Kind,
@@ -23,7 +23,7 @@ pub struct Band {
     pub on: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Curve {
     pub preamp: f64,
@@ -43,7 +43,7 @@ pub struct Preset {
 
 pub const MAX_BANDS: usize = 32;
 
-fn clamp(v: f64, lo: f64, hi: f64, def: f64) -> f64 {
+pub fn clamp(v: f64, lo: f64, hi: f64, def: f64) -> f64 {
     if v.is_finite() {
         v.clamp(lo, hi)
     } else {

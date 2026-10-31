@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { api } from './lib/api'
-import { currentDevice, useStore } from './lib/store'
+import { autoPreamp } from './lib/eq'
+import { allPresets, currentDevice, useStore } from './lib/store'
 import { useT } from './i18n'
 import { TitleBar, Toasts } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
@@ -8,7 +9,7 @@ import { Editor } from './components/Editor'
 import { Meter } from './components/Meter'
 import { Setup } from './components/Setup'
 import { Settings } from './components/Settings'
-import { SavePresetModal, UpdateModal, WhatsNew } from './components/Overlays'
+import { ImportModal, SavePresetModal, ShareModal, UpdateModal, WhatsNew } from './components/Overlays'
 import { AutoEqModal } from './components/AutoEq'
 import { ContextMenu } from './components/ContextMenu'
 
@@ -17,6 +18,7 @@ export function App(): React.JSX.Element {
   const ready = useStore((s) => !!s.engine?.installed && !!currentDevice(s)?.enabled)
   const device = useStore((s) => (ready ? currentDevice(s)?.id : undefined))
   const lang = useStore((s) => s.config?.lang)
+  const presets = useStore((s) => s.config?.presets)
 
   // Captura de lo que suena (medidores y analizador): solo con la ventana a la vista, en la bandeja no gasta CPU
   useEffect(() => {
@@ -30,10 +32,15 @@ export function App(): React.JSX.Element {
     }
   }, [device])
 
-  // El menú de la bandeja, en el idioma de la app
+  // El menú de la bandeja y el aviso en pantalla, en el idioma de la app
   useEffect(() => {
-    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit') })
+    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff') })
   }, [lang, t])
+
+  // Rust aplica presets sin la interfaz (atajos, bandeja, preset por app): se le mandan ya resueltos
+  useEffect(() => {
+    void api.presetsSync(allPresets().map((p) => ({ id: p.id, name: p.name, curve: p.curve, autoGain: autoPreamp(p.curve.bands) })))
+  }, [lang, presets])
 
   return (
     <>
@@ -48,6 +55,8 @@ export function App(): React.JSX.Element {
       </div>
       <Settings />
       <SavePresetModal />
+      <ShareModal />
+      <ImportModal />
       <AutoEqModal />
       <UpdateModal />
       <WhatsNew />

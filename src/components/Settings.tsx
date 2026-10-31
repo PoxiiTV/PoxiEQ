@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { AudioLines, Info, LoaderCircle, Palette, X } from 'lucide-react'
+import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Trash2, WandSparkles, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { api, type Accent, type Config } from '../lib/api'
+import { api, type Accent, type AppRule, type Config, type OpenApp } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, currentCurve, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
-import { errorText, useT } from '../i18n'
-import { Range, Select } from './controls'
+import { errorText, t, useT } from '../i18n'
+import { Range, Select, type Option } from './controls'
 import { Logo, Modal, Switch } from './ui'
 
-type Cat = 'general' | 'engine' | 'about'
+type Cat = 'general' | 'auto' | 'keys' | 'engine' | 'about'
 const CATS: [Cat, LucideIcon][] = [
   ['general', Palette],
+  ['auto', WandSparkles],
+  ['keys', Keyboard],
   ['engine', AudioLines],
   ['about', Info]
 ]
@@ -61,6 +63,8 @@ export function Settings(): React.JSX.Element | null {
           <X size={17} />
         </button>
         {cat === 'general' && <General />}
+        {cat === 'auto' && <AutoRules />}
+        {cat === 'keys' && <Keys />}
         {cat === 'engine' && <Engine />}
         {cat === 'about' && <About />}
       </div>
@@ -127,9 +131,6 @@ function General(): React.JSX.Element {
       <Row title={t('settings.closeToTray')} hint={t('settings.closeToTrayHint')}>
         <Switch on={cfg.closeToTray} label={t('settings.closeToTray')} onChange={(closeToTray) => set({ closeToTray })} />
       </Row>
-      <Row title={t('settings.hotkey')} hint={t('settings.hotkeyHint')}>
-        <Switch on={cfg.bypassHotkey} label={t('settings.hotkey')} onChange={(bypassHotkey) => set({ bypassHotkey })} />
-      </Row>
       <h3 style={{ marginTop: 22 }}>{t('settings.sound')}</h3>
       <Row title={t('settings.loudness')} hint={t('settings.loudnessHint')}>
         <Switch on={cfg.loudness.on} label={t('settings.loudness')} onChange={(on) => set({ loudness: { ...cfg.loudness, on } })} />
@@ -153,6 +154,110 @@ function General(): React.JSX.Element {
       <Row title={t('settings.analyzer')} hint={t('settings.analyzerHint')}>
         <Switch on={cfg.analyzer} label={t('settings.analyzer')} onChange={(analyzer) => set({ analyzer })} />
       </Row>
+      {cfg.analyzer && (
+        <Row title={t('settings.analyzerMode')} hint={t(`settings.analyzerModes.${cfg.analyzerMode}Hint`)}>
+          <div className="segmented">
+            {(['spectrum', 'spectrogram'] as const).map((m) => (
+              <button key={m} className={cfg.analyzerMode === m ? 'on' : ''} onClick={() => set({ analyzerMode: m })}>
+                {t(`settings.analyzerModes.${m}`)}
+              </button>
+            ))}
+          </div>
+        </Row>
+      )}
+    </>
+  )
+}
+
+/** Presets para un desplegable; si el elegido ya no existe (se borró), se enseña como tal en vez de en blanco */
+function presetOptions(cfg: Config, value: string | null, none?: string): Option<string>[] {
+  const list: Option<string>[] = allPresets(cfg).map((p) => ({ value: p.id, label: p.name }))
+  if (value && !list.some((o) => o.value === value)) list.push({ value, label: t('auto.missing') })
+  return none === undefined ? list : [{ value: '', label: none }, ...list]
+}
+
+/** Preset automático por app: «cuando esta app está delante, este preset» */
+function AutoRules(): React.JSX.Element {
+  const t = useT()
+  const cfg = useStore((s) => s.config!)
+  const rules = cfg.appRules
+  const [apps, setApps] = useState<OpenApp[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const setRules = (appRules: AppRule[]): void => updateConfig({ appRules })
+  const edit = (i: number, patch: Partial<AppRule>): void => setRules(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const pick = async (): Promise<void> => {
+    setLoading(true)
+    try {
+      setApps(await api.appsList())
+    } finally {
+      setLoading(false)
+    }
+  }
+  const add = (a: OpenApp): void => {
+    setRules([...rules, { exe: a.exe, name: a.name, preset: currentCurve().preset ?? 'b:flat', on: true }])
+    setApps(null)
+  }
+  const free = apps?.filter((a) => !rules.some((r) => r.exe === a.exe)) ?? []
+  return (
+    <>
+      <h3>{t('auto.title')}</h3>
+      <p className="hint set-intro">{t('auto.hint')}</p>
+      {rules.length === 0 && <div className="set-empty">{t('auto.empty')}</div>}
+      {rules.map((r, i) => (
+        <Row key={r.exe} title={r.name} hint={r.exe}>
+          <Select size="sm" value={r.preset} options={presetOptions(cfg, r.preset)} label={t('auto.preset')} onChange={(preset) => edit(i, { preset })} />
+          <Switch on={r.on} label={t('auto.on')} onChange={(on) => edit(i, { on })} />
+          <button className="icon-btn" aria-label={t('common.delete')} onClick={() => setRules(rules.filter((_, j) => j !== i))}>
+            <Trash2 size={15} />
+          </button>
+        </Row>
+      ))}
+      {apps === null ? (
+        <button className="btn btn-sm set-add" disabled={loading} onClick={() => void pick()}>
+          {loading ? <LoaderCircle size={15} className="spin" /> : <Plus size={15} />}
+          {t('auto.add')}
+        </button>
+      ) : (
+        <div className="app-pick" role="group" aria-label={t('auto.pick')}>
+          <div className="app-pick-head">
+            <b>{t('auto.pick')}</b>
+            <button className="icon-btn" aria-label={t('common.close')} onClick={() => setApps(null)}>
+              <X size={15} />
+            </button>
+          </div>
+          {free.length === 0 && <div className="small muted app-pick-empty">{t('auto.none')}</div>}
+          {free.map((a) => (
+            <button key={a.exe} className="app-pick-item" onClick={() => add(a)}>
+              <AppWindow size={16} />
+              <b>{a.name}</b>
+              <small>{a.exe}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/** Atajos globales: bypass y un preset en cada Ctrl+Alt+1…9 */
+function Keys(): React.JSX.Element {
+  const t = useT()
+  const cfg = useStore((s) => s.config!)
+  const keys = Array.from({ length: 9 }, (_, i) => cfg.presetKeys[i] ?? null)
+  const assign = (i: number, id: string): void => updateConfig({ presetKeys: keys.map((k, j) => (j === i ? id || null : k)) })
+  return (
+    <>
+      <h3>{t('keys.title')}</h3>
+      <Row title={t('settings.hotkey')} hint={t('settings.hotkeyHint')}>
+        <Switch on={cfg.bypassHotkey} label={t('settings.hotkey')} onChange={(bypassHotkey) => updateConfig({ bypassHotkey })} />
+      </Row>
+      <h3 style={{ marginTop: 22 }}>{t('keys.presets')}</h3>
+      <p className="hint set-intro">{t('keys.hint')}</p>
+      {keys.map((id, i) => (
+        <Row key={i} title={`Ctrl+Alt+${i + 1}`}>
+          <Select size="sm" value={id ?? ''} options={presetOptions(cfg, id, t('keys.none'))} label={`Ctrl+Alt+${i + 1}`} onChange={(v) => assign(i, v)} />
+        </Row>
+      ))}
     </>
   )
 }

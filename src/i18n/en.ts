@@ -19,7 +19,10 @@ export default {
   tray: {
     open: 'Open PoxiEQ',
     bypass: 'EQ off (bypass)',
-    quit: 'Quit'
+    quit: 'Quit',
+    presets: 'Presets',
+    eqOn: 'EQ on',
+    eqOff: 'EQ off'
   },
   device: {
     default: 'Default',
@@ -59,6 +62,8 @@ export default {
     q: 'Width (Q)',
     on: 'Turn this band on or off',
     remove: 'Remove band',
+    undo: 'Undo · Ctrl+Z',
+    redo: 'Redo · Ctrl+Y',
     abTip: 'Hold to hear the original at the same volume (space bar works too)',
     abOriginal: 'Original',
     bypassBanner: "The EQ is off. You're hearing the original sound.",
@@ -81,7 +86,7 @@ export default {
     sound: 'Loudness',
     custom: 'Custom',
     sounds: {
-      natural: { name: 'Natural', meta: 'Unprocessed', text: 'As it comes: no volume or dynamics changes.' },
+      natural: { name: 'Natural', meta: 'Unprocessed', text: 'As it comes: turns off all dynamics and enhancers.' },
       streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Everything at the same volume, like Spotify or YouTube.' },
       loud: { name: 'Loud', meta: '−9 LUFS', text: 'More punch and presence, for noisy rooms or weak speakers.' },
       night: { name: 'Night', meta: '−23 LUFS', text: 'Heavy compression: quiet explosions and clear dialogue without disturbing anyone.' }
@@ -172,7 +177,7 @@ export default {
   },
   settings: {
     title: 'Settings',
-    cats: { general: 'General', engine: 'Audio engine', about: 'About' },
+    cats: { general: 'General', auto: 'Automatic', keys: 'Shortcuts', engine: 'Audio engine', about: 'About' },
     appearance: 'Appearance',
     theme: 'Theme',
     themes: { dark: 'Dark', light: 'Light', system: 'Like Windows' },
@@ -192,6 +197,13 @@ export default {
     loudnessRefHint: 'Raise it if you hear too much bass at your usual volume; lower it if you miss some.',
     analyzer: 'Spectrum analyzer',
     analyzerHint: 'Draws what is playing behind the curve. Only runs while the window is visible.',
+    analyzerMode: 'Analyzer view',
+    analyzerModes: {
+      spectrum: 'Spectrum',
+      spectrogram: 'Spectrogram',
+      spectrumHint: 'Level per frequency, with a peak line that holds for a moment and falls slowly.',
+      spectrogramHint: 'The last few seconds scrolling down: the brighter, the louder.'
+    },
     hotkey: 'Bypass shortcut',
     hotkeyHint: 'Ctrl+Alt+E turns the EQ on and off from anywhere, games included.',
     engineStatus: 'PoxiEQ engine',
@@ -219,6 +231,38 @@ export default {
     download: 'Download',
     portable: "You're using the portable version: download the new one and replace the .exe."
   },
+  auto: {
+    title: 'Preset per app',
+    hint: 'When an app comes to the foreground its preset plays; switching to one without a rule brings yours back. If you change the curve in the meantime, yours stays.',
+    empty: 'No rules yet.',
+    add: 'Add app',
+    pick: 'Pick an open app',
+    none: 'No other open apps with a window. Open the one you want and come back.',
+    preset: 'Preset',
+    on: 'Enable rule',
+    missing: 'Deleted preset'
+  },
+  keys: {
+    title: 'Keyboard shortcuts',
+    presets: 'Preset shortcuts',
+    hint: "They work from anywhere, games included, and show an on-screen notice. Note: on keyboards with AltGr, Ctrl+Alt+number is also a symbol (on Spanish layouts, 1 = |, 2 = @, 3 = #, 4 = ~, 5 = €); while that shortcut is assigned, the symbol can't be typed.",
+    none: 'Not assigned'
+  },
+  share: {
+    title: 'Share preset',
+    text: 'Copy the code and paste it in a chat, or save it as a .poxieq file. Whoever gets it imports it with one click.',
+    code: 'Preset code',
+    copy: 'Copy code',
+    copied: 'Code copied',
+    file: 'Save file',
+    saved: 'Saved to Downloads: {f}',
+    importTitle: 'Import preset',
+    importText: 'Paste a preset code or drop a .poxieq file here (dropping it anywhere on the window works too).',
+    import: 'Import and apply',
+    imported: '“{n}” added to My presets',
+    bad: "This code isn't a valid PoxiEQ preset.",
+    dropBad: 'Drop a .poxieq file to import a preset'
+  },
   whatsNew: { title: "What's new in PoxiEQ {v}" },
   ctx: { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select all' },
   err: {
@@ -231,6 +275,7 @@ export default {
     'engine.badDevice': 'Invalid device',
     'engine.uninstall': "Couldn't uninstall the engine: {d}",
     'autoeq.offline': "Can't reach AutoEq. Check your connection.",
-    'io.failed': "Couldn't save the change"
+    'io.failed': "Couldn't save the change",
+    'share.bad': "The preset code isn't valid"
   }
 }

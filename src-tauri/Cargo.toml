@@ -31,6 +31,7 @@ poxidsp = { path = "../dsp", features = ["serde"] }
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
   "Win32_Foundation",
+  "Win32_Graphics_Dwm",
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_Storage_FileSystem",

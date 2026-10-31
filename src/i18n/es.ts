@@ -19,7 +19,10 @@ export default {
   tray: {
     open: 'Abrir PoxiEQ',
     bypass: 'EQ apagado (bypass)',
-    quit: 'Salir'
+    quit: 'Salir',
+    presets: 'Presets',
+    eqOn: 'EQ encendido',
+    eqOff: 'EQ apagado'
   },
   device: {
     default: 'Predeterminado',
@@ -59,6 +62,8 @@ export default {
     q: 'Ancho (Q)',
     on: 'Encender o apagar esta banda',
     remove: 'Quitar banda',
+    undo: 'Deshacer · Ctrl+Z',
+    redo: 'Rehacer · Ctrl+Y',
     abTip: 'Mantén pulsado para oír el original al mismo volumen (también con la barra espaciadora)',
     abOriginal: 'Original',
     bypassBanner: 'El EQ está apagado. Lo que oyes es el sonido original.',
@@ -81,7 +86,7 @@ export default {
     sound: 'Sonoridad',
     custom: 'Personalizado',
     sounds: {
-      natural: { name: 'Natural', meta: 'Sin procesar', text: 'Tal cual llega: sin tocar el volumen ni la dinámica.' },
+      natural: { name: 'Natural', meta: 'Sin procesar', text: 'Tal cual llega: apaga toda la dinámica y los realces.' },
       streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Todo al mismo volumen, como en Spotify o YouTube.' },
       loud: { name: 'Fuerte', meta: '−9 LUFS', text: 'Más pegada y presencia, para ruido alrededor o altavoces flojos.' },
       night: { name: 'Noche', meta: '−23 LUFS', text: 'Compresión fuerte: explosiones bajas y diálogos claros sin molestar.' }
@@ -172,7 +177,7 @@ export default {
   },
   settings: {
     title: 'Ajustes',
-    cats: { general: 'General', engine: 'Motor de audio', about: 'Acerca de' },
+    cats: { general: 'General', auto: 'Automático', keys: 'Atajos', engine: 'Motor de audio', about: 'Acerca de' },
     appearance: 'Apariencia',
     theme: 'Tema',
     themes: { dark: 'Oscuro', light: 'Claro', system: 'Como Windows' },
@@ -192,6 +197,13 @@ export default {
     loudnessRefHint: 'Súbelo si notas demasiados graves a tu volumen habitual; bájalo si te faltan.',
     analyzer: 'Analizador de espectro',
     analyzerHint: 'Pinta lo que suena detrás de la curva. Solo trabaja con la ventana a la vista.',
+    analyzerMode: 'Vista del analizador',
+    analyzerModes: {
+      spectrum: 'Espectro',
+      spectrogram: 'Espectrograma',
+      spectrumHint: 'Nivel por frecuencia, con una línea de picos que se queda un momento y baja despacio.',
+      spectrogramHint: 'Los últimos segundos cayendo hacia abajo: cuanto más brillo, más nivel.'
+    },
     hotkey: 'Atajo de bypass',
     hotkeyHint: 'Ctrl+Alt+E enciende y apaga el EQ desde cualquier sitio, también en juegos.',
     engineStatus: 'Motor de PoxiEQ',
@@ -219,6 +231,38 @@ export default {
     download: 'Descargar',
     portable: 'Usas la versión portable: descarga la nueva y sustituye el .exe.'
   },
+  auto: {
+    title: 'Preset por aplicación',
+    hint: 'Cuando una app pasa a primer plano suena su preset; al cambiar a otra sin regla vuelve el que tenías. Si tocas la curva mientras tanto, se queda la tuya.',
+    empty: 'Aún no hay ninguna regla.',
+    add: 'Añadir aplicación',
+    pick: 'Elige una app abierta',
+    none: 'No hay más apps abiertas con ventana. Abre la que quieras y vuelve aquí.',
+    preset: 'Preset',
+    on: 'Activar regla',
+    missing: 'Preset borrado'
+  },
+  keys: {
+    title: 'Atajos de teclado',
+    presets: 'Atajos de presets',
+    hint: 'Funcionan desde cualquier sitio, también en juegos, y enseñan un aviso en pantalla. Ojo: en teclados con AltGr, Ctrl+Alt+número es también un símbolo (en español, 1 = |, 2 = @, 3 = #, 4 = ~, 5 = €); mientras ese atajo esté asignado, el símbolo no se escribe.',
+    none: 'Sin asignar'
+  },
+  share: {
+    title: 'Compartir preset',
+    text: 'Copia el código y pégalo en un chat, o guárdalo como archivo .poxieq. Quien lo reciba lo importa con un clic.',
+    code: 'Código del preset',
+    copy: 'Copiar código',
+    copied: 'Código copiado',
+    file: 'Guardar archivo',
+    saved: 'Guardado en Descargas: {f}',
+    importTitle: 'Importar preset',
+    importText: 'Pega el código de un preset o suelta aquí un archivo .poxieq (también vale soltarlo en cualquier parte de la ventana).',
+    import: 'Importar y aplicar',
+    imported: '«{n}» añadido a Mis presets',
+    bad: 'Este código no es un preset de PoxiEQ válido.',
+    dropBad: 'Suelta un archivo .poxieq para importar un preset'
+  },
   whatsNew: { title: 'Novedades de PoxiEQ {v}' },
   ctx: { cut: 'Cortar', copy: 'Copiar', paste: 'Pegar', selectAll: 'Seleccionar todo' },
   err: {
@@ -231,6 +275,7 @@ export default {
     'engine.badDevice': 'Dispositivo no válido',
     'engine.uninstall': 'No se ha podido desinstalar el motor: {d}',
     'autoeq.offline': 'No se puede conectar con AutoEq. Revisa la conexión.',
-    'io.failed': 'No se ha podido guardar el cambio'
+    'io.failed': 'No se ha podido guardar el cambio',
+    'share.bad': 'El código del preset no es válido'
   }
 }

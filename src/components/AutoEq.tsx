@@ -222,7 +222,7 @@ const PW = 600
 const PH = 150
 
 /** Mini curva para ver la corrección antes de aplicarla */
-function Preview({ bands }: { bands: Band[] }): React.JSX.Element {
+export function Preview({ bands }: { bands: Band[] }): React.JSX.Element {
   const x = (i: number): number => (i / (FREQS.length - 1)) * PW
   const y = (db: number): number => PH / 2 - Math.max(-15, Math.min(15, db)) * (PH / 30)
   const d = FREQS.map((f, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(curveDb(bands, f)).toFixed(1)}`).join('')

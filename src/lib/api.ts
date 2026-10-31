@@ -25,6 +25,21 @@ export interface Dsp {
   crossfeed: { on: boolean; freq: number; feed: number }
 }
 
+/** Cuando `exe` está en primer plano suena `preset` (validado en Rust: `apps::sanitize_rules`) */
+export interface AppRule {
+  exe: string
+  name: string
+  preset: string
+  on: boolean
+}
+
+export interface OpenApp {
+  exe: string
+  name: string
+}
+
+export type AnalyzerMode = 'spectrum' | 'spectrogram'
+
 export interface Config {
   lang: 'es' | 'en' | null
   theme: 'dark' | 'light' | 'system'
@@ -33,6 +48,7 @@ export interface Config {
   bypass: boolean
   bypassHotkey: boolean
   analyzer: boolean
+  analyzerMode: AnalyzerMode
   seenVersion: string
   device: string | null
   curves: Record<string, Curve>
@@ -40,6 +56,27 @@ export interface Config {
   loudness: Loudness
   meterCollapsed: boolean
   dsp: Dsp
+  appRules: AppRule[]
+  /** Ctrl+Alt+1…9: id del preset de cada atajo */
+  presetKeys: (string | null)[]
+}
+
+/** Lo que Rust necesita para aplicar un preset sin la interfaz (atajos, bandeja, reglas por app) */
+export interface PresetEntry {
+  id: string
+  name: string
+  curve: Curve
+  /** Preamp automático de la curva */
+  autoGain: number
+}
+
+export interface TrayLabels {
+  open: string
+  bypass: string
+  quit: string
+  presets: string
+  eqOn: string
+  eqOff: string
 }
 
 export interface Device {
@@ -99,7 +136,10 @@ export const api = {
   autoeqFetch: (path: string) => invoke<string>('autoeq_fetch', { path }),
   autostartGet: () => invoke<boolean>('autostart_get'),
   autostartSet: (on: boolean) => invoke<void>('autostart_set', { on }),
-  trayLabels: (labels: { open: string; bypass: string; quit: string }) => invoke<void>('tray_labels', { labels }),
+  trayLabels: (labels: TrayLabels) => invoke<void>('tray_labels', { labels }),
+  presetsSync: (presets: PresetEntry[]) => invoke<void>('presets_sync', { presets }),
+  appsList: () => invoke<OpenApp[]>('apps_list'),
+  presetExport: (name: string, code: string) => invoke<string>('preset_export', { name, code }),
   analyzerStart: (device: string) => invoke<void>('analyzer_start', { device }),
   analyzerStop: () => invoke<void>('analyzer_stop'),
   compareSet: (gain: number | null) => invoke<void>('compare_set', { gain }),
