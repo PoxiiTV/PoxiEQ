@@ -188,6 +188,12 @@ pub fn active_device(preferred: Option<&str>) -> Option<String> {
 
 /// Salida (`input` = false) o entrada predeterminada de Windows (rol consola)
 pub fn default_device(input: bool) -> Option<String> {
+    // En un hilo propio: COM en modo multihilo en el hilo de la ventana impide crearla (la interfaz necesita
+    // ese hilo en modo apartamento para arrastrar y soltar), y esto también se llama al arrancar
+    std::thread::spawn(move || default_device_mta(input)).join().ok().flatten()
+}
+
+fn default_device_mta(input: bool) -> Option<String> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
