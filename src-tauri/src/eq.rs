@@ -161,7 +161,7 @@ pub struct Loudness {
 
 impl Default for Loudness {
     fn default() -> Self {
-        Self { on: false, offset: 0.0, strength: 1.0 }
+        Self { on: false, offset: 0.0, strength: 0.4 }
     }
 }
 
@@ -389,8 +389,10 @@ fn render_outputs(out: &mut String, curves: &HashMap<String, Curve>, ids: &[&Str
         }
         out.push_str(&format!("\r\nDevice: {id}\r\n"));
         if loudness.on {
+            // El motor compara la referencia con el volumen de Windows en dB (100 % = 0 dB, el resto
+            // negativo): la referencia es el volumen máximo. Con 75 (dB SPL) metía +100 dB y silenciaba todo.
             out.push_str(&format!(
-                "LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset {} Attenuation {:.2}\r\n",
+                "LoudnessCorrection: State 1 ReferenceLevel 0 ReferenceOffset {} Attenuation {:.2}\r\n",
                 loudness.offset as i32, loudness.strength
             ));
         }
@@ -492,7 +494,7 @@ mod tests {
         assert!(!text.contains("Loudness"));
         assert!(!text.contains("VSTPlugin"), "con la dinámica apagada el plugin ni se carga");
         let on = Loudness { on: true, offset: -6.0, strength: 0.5 };
-        assert!(out(&curves, false, &on, &none, &live).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
+        assert!(out(&curves, false, &on, &none, &live).contains("LoudnessCorrection: State 1 ReferenceLevel 0 ReferenceOffset -6 Attenuation 0.50"));
         let mut dsp = none;
         dsp.limiter.on = true;
         let text = out(&curves, false, &on, &dsp, &live);
