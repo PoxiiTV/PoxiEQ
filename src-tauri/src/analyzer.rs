@@ -137,8 +137,8 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
         let (mut peak, mut tp) = ([FLOOR; 2], FLOOR);
         if let Some(m) = meter.as_mut() {
             if !stereo.is_empty() && m.add_frames_f32(&stereo).is_ok() {
-                for c in 0..st {
-                    peak[c] = db(m.prev_sample_peak(c as u32).unwrap_or(0.0));
+                for (c, p) in peak.iter_mut().enumerate().take(st) {
+                    *p = db(m.prev_sample_peak(c as u32).unwrap_or(0.0));
                     tp = tp.max(db(m.prev_true_peak(c as u32).unwrap_or(0.0)));
                 }
                 if st == 1 {
