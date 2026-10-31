@@ -1,6 +1,6 @@
 //! Analizador y medidores: escucha la salida en modo loopback (lo que suena, ya ecualizado) y manda a la
 //! interfaz ~30 veces por segundo el espectro por bandas y los niveles (pico, RMS, LUFS, true peak y
-//! correlación de fase).
+//! correlación de fase), más la reducción de ganancia que publica PoxiDSP en su memoria compartida.
 
 use ebur128::{EbuR128, Mode};
 use serde::Serialize;
@@ -38,6 +38,9 @@ pub struct Levels {
     true_peak_max: f32,
     /// -1 (fase invertida) … +1 (mono)
     correlation: f32,
+    /// Reducción de ganancia de PoxiDSP en dB (0 si no está sonando)
+    gr_comp: f32,
+    gr_limit: f32,
 }
 
 const FLOOR: f32 = -120.0;
@@ -94,6 +97,11 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
     let mut sums = [0f64; 3];
     let mut stereo: Vec<f32> = Vec::with_capacity(8192);
     let mut tp_max = FLOOR;
+    // Medidas de PoxiDSP: la memoria compartida la crea el plugin al sonar, se reintenta cada segundo
+    let key = poxidsp::device_key(id);
+    let mut dsp: Option<poxidsp::shm::Map> = None;
+    let mut dsp_try = Instant::now();
+    let mut dsp_beat = None;
 
     while GENERATION.load(Ordering::SeqCst) == gen {
         std::thread::sleep(Duration::from_millis(10));
@@ -149,6 +157,17 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
         }
         if last.elapsed() >= Duration::from_millis(33) {
             last = Instant::now();
+            if dsp.is_none() && dsp_try <= last {
+                dsp = poxidsp::shm::Map::open(poxidsp::shm::NAME);
+                dsp_try = last + Duration::from_secs(1);
+            }
+            let reading = dsp.as_ref().and_then(|m| poxidsp::shm::find(m.slots(), key, false)).map(|s| s.read());
+            // Si el contador no se mueve, el plugin no está procesando: sin reducción
+            let (gr_comp, gr_limit) = match reading {
+                Some(r) if dsp_beat != Some(r.beat) => (r.gr_comp, r.gr_limit),
+                _ => (0.0, 0.0),
+            };
+            dsp_beat = reading.map(|r| r.beat);
             let mut re: Vec<f32> = (0..N).map(|i| ring[(pos + i) % N] * window[i]).collect();
             let mut im = vec![0f32; N];
             fft(&mut re, &mut im);
@@ -164,6 +183,8 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
                 true_peak: tp,
                 true_peak_max: tp_max,
                 correlation: if ll * rr > 1e-12 { (lr / (ll * rr).sqrt()).clamp(-1.0, 1.0) as f32 } else { 1.0 },
+                gr_comp,
+                gr_limit,
             };
             let _ = app.emit("levels", level);
         }

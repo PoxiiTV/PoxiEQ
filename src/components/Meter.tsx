@@ -14,21 +14,29 @@ interface Levels {
   truePeak: number
   truePeakMax: number
   correlation: number
+  /** Reducción de ganancia de la dinámica (dB, 0 si no actúa) */
+  grComp: number
+  grLimit: number
 }
 
 const MIN = -60
 const TICKS = [0, -6, -12, -18, -24, -36, -48, -60]
 const HOLD_MS = 1500
+/** Escala de la barra de reducción (de arriba abajo) y cuánto se queda a la vista después de actuar */
+const GR_MAX = 24
+const GR_HOLD_MS = 2000
 const frac = (db: number): number => Math.min(1, Math.max(0, (db - MIN) / -MIN))
 const fmt = (v: number): string => (v <= -119 ? '−∞' : v.toFixed(1).replace('-', '−'))
 
-/** Columna fija de medidores de lo que sale de verdad (después del EQ): pico, RMS, LUFS, true peak y fase */
+/** Columna fija de medidores de lo que sale de verdad (después del EQ): pico, RMS, LUFS, true peak, fase y,
+ *  cuando la dinámica actúa, su reducción de ganancia */
 export function Meter(): React.JSX.Element {
   const t = useT()
   const collapsed = useStore((s) => !!s.config?.meterCollapsed)
   const [lv, setLv] = useState<Levels | null>(null)
   const [clip, setClip] = useState(false)
   const hold = useRef([{ v: MIN, at: 0 }, { v: MIN, at: 0 }])
+  const grSeen = useRef(-GR_HOLD_MS)
 
   useEffect(() => {
     const off = listen<Levels>('levels', (e) => {
@@ -39,6 +47,7 @@ export function Meter(): React.JSX.Element {
       })
       // Saturación: el piloto se queda encendido hasta que lo pulses
       if (e.payload.truePeak > -0.1 || e.payload.peak.some((p) => p > -0.1)) setClip(true)
+      if (e.payload.grComp + e.payload.grLimit > 0.05) grSeen.current = now
       setLv(e.payload)
     })
     return () => void off.then((f) => f())
@@ -49,6 +58,10 @@ export function Meter(): React.JSX.Element {
     hold.current = [{ v: MIN, at: 0 }, { v: MIN, at: 0 }]
     void api.meterReset()
   }
+
+  const gr = (lv?.grComp ?? 0) + (lv?.grLimit ?? 0)
+  const showGr = performance.now() - grSeen.current < GR_HOLD_MS
+  const grTip = t('meter.grTip', { c: fmt(-(lv?.grComp ?? 0)), l: fmt(-(lv?.grLimit ?? 0)) })
 
   const bars = (
     <div className="meter-bars">
@@ -68,6 +81,12 @@ export function Meter(): React.JSX.Element {
           <em>{i ? 'R' : 'L'}</em>
         </div>
       ))}
+      {showGr && (
+        <div className="meter-bar gr" data-tip={grTip}>
+          <i style={{ height: `${Math.min(1, gr / GR_MAX) * 100}%` }} />
+          <em>GR</em>
+        </div>
+      )}
     </div>
   )
 
@@ -109,6 +128,12 @@ export function Meter(): React.JSX.Element {
           <span>TP</span>
           <b>{fmt(lv?.truePeakMax ?? MIN * 2)}</b>
         </div>
+        {showGr && (
+          <div className="line num gr" data-tip={grTip}>
+            <span>GR</span>
+            <b>{fmt(-gr)}</b>
+          </div>
+        )}
         <div className="corr" data-tip={t('meter.corrTip')}>
           <div className="corr-track">
             <i style={{ left: `${(((lv?.correlation ?? 1) + 1) / 2) * 100}%` }} className={(lv?.correlation ?? 1) < 0 ? 'neg' : ''} />

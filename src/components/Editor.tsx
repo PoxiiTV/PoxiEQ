@@ -2,16 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { Copy, Plus, Power, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
+import { dspActive } from '../lib/dsp'
 import { currentCurve, setCurve, setState, toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
 import { addBand, bandColor, Graph, KINDS, removeBand, updateBand } from './Graph'
+import { Dynamics } from './Dynamics'
 
 export function Editor(): React.JSX.Element {
   const t = useT()
   const curve = useStore((s) => currentCurve(s))
   const bypass = useStore((s) => !!s.config?.bypass)
+  const tab = useStore((s) => s.tab)
+  const dspOn = useStore((s) => !!s.config && dspActive(s.config.dsp))
   const clips = headroom(curve) > 0.05
 
   return (
@@ -27,51 +31,71 @@ export function Editor(): React.JSX.Element {
         </div>
       )}
       <div className="toolbar">
-        <div className="preamp">
-          <span className="label">{t('eq.preamp')}</span>
-          <input
-            type="range"
-            min={-30}
-            max={12}
-            step={0.1}
-            value={curve.preamp}
-            disabled={curve.autoPreamp}
-            aria-label={t('eq.preamp')}
-            style={{ '--p': `${((curve.preamp + 30) / 42) * 100}%` } as React.CSSProperties}
-            onChange={(e) => setCurve({ ...curve, preamp: +e.target.value, autoPreamp: false }, true)}
-          />
-          <b className="num">{fmtDb(curve.preamp)} dB</b>
-          <label className="auto" data-tip={t('eq.autoTip')}>
-            <Switch on={curve.autoPreamp} onChange={(on) => setCurve({ ...curve, autoPreamp: on }, true)} label={t('eq.auto')} />
-            {t('eq.auto')}
-          </label>
-          {clips && (
-            <span className="clip" data-tip={t('eq.clip')}>
-              <TriangleAlert size={16} />
-            </span>
-          )}
+        <div className="segmented tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'eq'} className={tab === 'eq' ? 'on' : ''} onClick={() => setState({ tab: 'eq' })}>
+            {t('tabs.eq')}
+          </button>
+          <button role="tab" aria-selected={tab === 'dsp'} className={tab === 'dsp' ? 'on' : ''} onClick={() => setState({ tab: 'dsp' })}>
+            {t('tabs.dsp')}
+            {dspOn && <i className="tab-dot" aria-hidden />}
+          </button>
         </div>
-        <div className="spacer" />
-        {!bypass && <AbButton curve={curve} />}
-        <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand() })}>
-          <RotateCcw size={16} />
-        </button>
-        <button
-          className="icon-btn"
-          data-tip={t('eq.copy')}
-          aria-label={t('eq.copy')}
-          onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}
-        >
-          <Copy size={16} />
-        </button>
-        <button className="btn btn-sm" onClick={() => addBand()}>
-          <Plus size={15} /> {t('eq.add')}
-        </button>
+        {tab === 'eq' && <EqTools curve={curve} clips={clips} bypass={bypass} />}
       </div>
-      <Graph />
-      <div className="hint-line small muted">{t('eq.hint')}</div>
-      <Bands />
+      {tab === 'eq' ? (
+        <>
+          <Graph />
+          <div className="hint-line small muted">{t('eq.hint')}</div>
+          <Bands />
+        </>
+      ) : (
+        <Dynamics />
+      )}
     </div>
+  )
+}
+
+/** Preamp, A/B y acciones de la curva (barra de la pestaña EQ) */
+function EqTools({ curve, clips, bypass }: { curve: Curve; clips: boolean; bypass: boolean }): React.JSX.Element {
+  const t = useT()
+  return (
+    <>
+      <div className="preamp">
+        <span className="label">{t('eq.preamp')}</span>
+        <input
+          type="range"
+          min={-30}
+          max={12}
+          step={0.1}
+          value={curve.preamp}
+          disabled={curve.autoPreamp}
+          aria-label={t('eq.preamp')}
+          style={{ '--p': `${((curve.preamp + 30) / 42) * 100}%` } as React.CSSProperties}
+          onChange={(e) => setCurve({ ...curve, preamp: +e.target.value, autoPreamp: false }, true)}
+        />
+        <b className="num">{fmtDb(curve.preamp)} dB</b>
+        <label className="auto" data-tip={t('eq.autoTip')}>
+          <Switch on={curve.autoPreamp} onChange={(on) => setCurve({ ...curve, autoPreamp: on }, true)} label={t('eq.auto')} />
+          {t('eq.auto')}
+        </label>
+        {clips && (
+          <span className="clip" data-tip={t('eq.clip')}>
+            <TriangleAlert size={16} />
+          </span>
+        )}
+      </div>
+      <div className="spacer" />
+      {!bypass && <AbButton curve={curve} />}
+      <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand() })}>
+        <RotateCcw size={16} />
+      </button>
+      <button className="icon-btn" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>
+        <Copy size={16} />
+      </button>
+      <button className="btn btn-sm" onClick={() => addBand()}>
+        <Plus size={15} /> {t('eq.add')}
+      </button>
+    </>
   )
 }
 

@@ -90,13 +90,28 @@ export function Select<T extends string | number>({
 }
 
 /** Deslizador con la parte recorrida pintada del color de la app */
-export function Range({ value, min, max, onChange, label }: { value: number; min: number; max: number; onChange: (v: number) => void; label?: string }): React.JSX.Element {
+export function Range({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  label
+}: {
+  value: number
+  min: number
+  max: number
+  step?: number
+  onChange: (v: number) => void
+  label?: string
+}): React.JSX.Element {
   const p = `${((value - min) / (max - min)) * 100}%`
   return (
     <input
       type="range"
       min={min}
       max={max}
+      step={step}
       value={value}
       aria-label={label}
       style={{ '--p': p } as React.CSSProperties}

@@ -39,6 +39,8 @@ pub struct Config {
     pub presets: Vec<Preset>,
     pub loudness: Loudness,
     pub meter_collapsed: bool,
+    /// Dinámica y realces (PoxiDSP), los mismos en todas las salidas
+    pub dsp: poxidsp::Settings,
 }
 
 impl Default for Config {
@@ -57,6 +59,7 @@ impl Default for Config {
             presets: vec![],
             loudness: Loudness::default(),
             meter_collapsed: false,
+            dsp: poxidsp::Settings::default(),
         }
     }
 }
@@ -80,6 +83,7 @@ impl Config {
         self.curves.values_mut().for_each(Curve::sanitize);
         eq::sanitize_presets(&mut self.presets);
         self.loudness.sanitize();
+        self.dsp.sanitize();
     }
 }
 
@@ -161,7 +165,7 @@ fn apply(cfg: &Config, compare: Option<f64>) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, compare)).map_err(|e| problem("engine.write", e))
+    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, compare)).map_err(|e| problem("engine.write", e))
 }
 
 /// A/B igualado: mientras se mantiene pulsado suena el original con `gain` dB para compararlo al mismo volumen
@@ -180,18 +184,31 @@ fn meter_reset() {
 
 #[tauri::command]
 async fn engine_status() -> engine::Status {
-    tauri::async_runtime::spawn_blocking(engine::status).await.unwrap_or(engine::Status { installed: false, config_dir: None, devices: vec![] })
+    let status = || engine::Status { dsp: engine::dsp_state(), ..engine::status() };
+    tauri::async_runtime::spawn_blocking(status).await.unwrap_or(engine::Status {
+        installed: false,
+        config_dir: None,
+        devices: vec![],
+        dsp: engine::DspState::Missing,
+    })
 }
 
-/// Instala el motor si falta (descarga + hash), activa/quita dispositivos, reinicia el audio y
-/// comprueba. Un solo aviso de UAC.
+/// Instala el motor si falta (descarga + hash) y PoxiDSP si falta o es de otra versión, activa/quita
+/// dispositivos, reinicia el audio y comprueba. Un solo aviso de UAC.
 #[tauri::command]
 async fn engine_setup(app: AppHandle, enable: Vec<String>, disable: Vec<String>) -> Res<engine::SetupReport> {
     let valid = |id: &String| id.len() == 38 && id.starts_with('{') && id.ends_with('}') && id[1..37].chars().all(|c| c.is_ascii_hexdigit() || c == '-');
     if !enable.iter().chain(&disable).all(valid) {
         return Err(problem("engine.badDevice", None));
     }
+    let dsp = engine::dsp_state() != engine::DspState::Current;
+    if enable.is_empty() && disable.is_empty() && !dsp {
+        return Ok(engine::SetupReport::default());
+    }
     let mut args = vec!["setup".to_string()];
+    if dsp {
+        args.push("--dsp".into());
+    }
     if !engine::status().installed {
         let _ = app.emit("engine-progress", "download");
         let path = download_apo().await?;

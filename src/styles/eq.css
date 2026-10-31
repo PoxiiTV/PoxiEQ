@@ -929,3 +929,232 @@
   min-width: 52px;
   text-align: right;
 }
+
+/* ——— Pestañas EQ · Dinámica ——— */
+.tabs {
+  flex: none;
+}
+.tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ——— Dinámica ——— */
+.dyn {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 2px 2px 8px;
+}
+.dyn section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dyn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+}
+.dyn-head .label {
+  margin: 0;
+}
+.sounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.sound {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 160ms var(--ease-out);
+}
+@media (hover: hover) {
+  .sound:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+}
+.sound:active {
+  transform: scale(0.97);
+}
+.sound.on {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  background: var(--accent-soft);
+  box-shadow: 0 10px 26px -16px var(--accent-glow);
+}
+.sound-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  color: var(--muted);
+}
+.sound.on .sound-top svg {
+  color: var(--accent-2);
+}
+.sound-top em {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.sound b {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+.sound small {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.dyn-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+.dyn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: border-color 150ms ease;
+}
+.dyn-card.on {
+  border-color: rgba(var(--accent-rgb), 0.45);
+}
+.dyn-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dyn-card-head svg {
+  flex: none;
+  color: var(--muted);
+  transition: color 150ms ease;
+}
+.dyn-card.on .dyn-card-head svg {
+  color: var(--accent-2);
+}
+.dyn-card-head b {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+}
+.dyn-card > small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.dyn-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+  transition: opacity 150ms ease;
+}
+.dyn-card:not(.on) .dyn-sliders {
+  opacity: 0.55;
+}
+.dyn-slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'label value' 'range range';
+  align-items: center;
+  column-gap: 10px;
+  font-size: 12.5px;
+}
+.dyn-slider span {
+  grid-area: label;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-weight: 700;
+}
+.dyn-slider b {
+  grid-area: value;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.dyn-slider input {
+  grid-area: range;
+}
+.dyn-more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  margin-left: -10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+@media (hover: hover) {
+  .dyn-more:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+.dyn-more svg {
+  transition: transform 200ms var(--ease-out);
+}
+.dyn-more[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+/* Reducción de ganancia (solo cuando actúa): de arriba abajo, 0…24 dB */
+.meter-bar.gr i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-radius: 4px;
+  background: linear-gradient(to bottom, #f59e0b, #f97316);
+}
+.meter-read .line.gr b {
+  color: var(--warning);
+}

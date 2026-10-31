@@ -21,6 +21,8 @@ interface State {
   setup: SetupStep
   /** Banda elegida en la curva (índice) */
   selected: number | null
+  /** Pestaña del editor: curva o dinámica */
+  tab: 'eq' | 'dsp'
   settingsOpen: boolean
   modal: 'autoeq' | 'savePreset' | null
   toasts: Toast[]
@@ -32,6 +34,7 @@ export const useStore = create<State>(() => ({
   engine: null,
   setup: null,
   selected: null,
+  tab: 'eq',
   settingsOpen: false,
   modal: null,
   toasts: []

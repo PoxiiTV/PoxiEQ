@@ -71,6 +71,50 @@ export default {
       highPass: 'Paso alto'
     }
   },
+  tabs: { eq: 'EQ', dsp: 'Dinámica' },
+  dsp: {
+    install: 'La dinámica necesita el procesador de PoxiEQ. Windows te pedirá permiso de administrador una vez.',
+    installBtn: 'Instalar',
+    update: 'Hay una versión nueva del procesador de PoxiEQ. Al actualizar se corta el sonido un par de segundos.',
+    updateBtn: 'Actualizar',
+    ready: 'Procesador de PoxiEQ listo',
+    sound: 'Sonoridad',
+    custom: 'Personalizado',
+    sounds: {
+      natural: { name: 'Natural', meta: 'Sin procesar', text: 'Tal cual llega: sin tocar el volumen ni la dinámica.' },
+      streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Todo al mismo volumen, como en Spotify o YouTube.' },
+      loud: { name: 'Fuerte', meta: '−9 LUFS', text: 'Más pegada y presencia, para ruido alrededor o altavoces flojos.' },
+      night: { name: 'Noche', meta: '−23 LUFS', text: 'Compresión fuerte: explosiones bajas y diálogos claros sin molestar.' }
+    },
+    extras: 'Realces',
+    bass: 'Graves psicoacústicos',
+    bassHint: 'Añade armónicos de los graves: se notan más en cascos o altavoces pequeños sin subir el volumen.',
+    amount: 'Cantidad',
+    below: 'Por debajo de',
+    dialog: 'Diálogos',
+    dialogHint: 'Realza la voz del centro (1–4 kHz) sin tocar el ambiente estéreo.',
+    boost: 'Realce',
+    crossfeed: 'Crossfeed',
+    crossfeedHint: 'Para cascos: pasa un poco de cada canal al otro oído, como con altavoces. Menos fatiga.',
+    intensity: 'Intensidad',
+    cutoff: 'Corte',
+    advanced: 'Ajustes avanzados',
+    leveler: 'Nivelador',
+    levelerHint: 'Lleva el volumen poco a poco (segundos) hacia la sonoridad objetivo. No sube los silencios.',
+    target: 'Objetivo',
+    maxGain: 'Subida máxima',
+    comp: 'Compresor',
+    compHint: 'Baja los picos que pasan del umbral. Con el nivelador encendido, el volumen que quita se recupera después.',
+    threshold: 'Umbral',
+    ratio: 'Ratio',
+    attack: 'Ataque',
+    release: 'Relajación',
+    knee: 'Rodilla',
+    makeup: 'Ganancia',
+    limiter: 'Limitador',
+    limiterHint: 'Techo infranqueable: nada lo pasa, ni entre muestras. Añade 1,5 ms de retardo.',
+    ceiling: 'Techo'
+  },
   meter: {
     title: 'Salida',
     clip: 'Saturación (pulsa para borrar)',
@@ -80,6 +124,7 @@ export default {
     intTip: 'LUFS integrado desde el último reinicio',
     tpTip: 'True peak máximo (dBTP). En rojo por encima de −1',
     corrTip: 'Correlación de fase: +1 mono, 0 estéreo ancho, negativo = problemas de fase',
+    grTip: 'Reducción de ganancia de la dinámica · compresor {c} dB · limitador {l} dB',
     reset: 'Reiniciar'
   },
   presets: {

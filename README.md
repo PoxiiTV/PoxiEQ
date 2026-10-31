@@ -33,6 +33,7 @@ PoxiEQ lo instala y lo activa por ti con un clic, **sin reiniciar el PC**.
 - 📊 **Analizador en tiempo real** detrás de la curva: ves lo que suena mientras ecualizas.
 - 🎧 **AutoEq**: pega la corrección de tu modelo de cascos (miles en [autoeq.app](https://autoeq.app)) y listo.
 - 🛡️ **Preamp automático**: baja lo justo para que la curva nunca sature.
+- 🔊 **Dinámica**: sonoridad igualada con un clic (Streaming −14 LUFS, Fuerte −9, Noche −23 para pelis sin molestar), limitador que nunca pasa de −1 dBTP, compresor, graves psicoacústicos, realce de diálogos y crossfeed para cascos. Con todo apagado no toca ni un bit.
 - 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos.
 - 🔌 **Un EQ por salida**: cada dispositivo guarda su propia curva.
 - ⏯️ **Bypass** con **Ctrl+Alt+E** desde cualquier sitio (también en juegos) y desde la bandeja.
@@ -65,7 +66,7 @@ Tauri 2 + Rust (motor, registro de Windows, analizador) y React + TypeScript (la
 
 - `start.bat`: modo desarrollo.
 - `deploy.bat`: instalador firmado + portable + `latest.json` en `deploy-hosting\`.
-- `cd src-tauri && cargo test` y `npm test`: tests del núcleo y de la matemática del EQ.
+- `cd src-tauri && cargo test`, `cd dsp && cargo test` y `npm test`: tests del núcleo, de la dinámica (PoxiDSP, el plugin propio que carga el motor) y de la matemática del EQ.
 
 ## 📄 Licencia
 
@@ -89,6 +90,7 @@ and enables it for you with one click, **without restarting your PC**.
 - 📊 **Real-time analyzer** behind the curve.
 - 🎧 **AutoEq**: paste the correction for your headphone model (thousands at [autoeq.app](https://autoeq.app)).
 - 🛡️ **Automatic preamp** so the curve never clips.
+- 🔊 **Dynamics**: one-click loudness matching (Streaming −14 LUFS, Loud −9, Night −23 for movies without disturbing anyone), a limiter that never goes above −1 dBTP, compressor, psychoacoustic bass, dialogue enhancer and headphone crossfeed. With everything off it doesn't touch a single bit.
 - 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own.
 - 🔌 **One EQ per output**: each device keeps its own curve.
 - ⏯️ **Bypass** with **Ctrl+Alt+E** from anywhere (games included) and from the tray.

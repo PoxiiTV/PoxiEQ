@@ -71,6 +71,50 @@ export default {
       highPass: 'High pass'
     }
   },
+  tabs: { eq: 'EQ', dsp: 'Dynamics' },
+  dsp: {
+    install: "Dynamics needs PoxiEQ's processor. Windows will ask for administrator permission once.",
+    installBtn: 'Install',
+    update: "There's a new version of PoxiEQ's processor. Updating cuts the sound for a couple of seconds.",
+    updateBtn: 'Update',
+    ready: "PoxiEQ's processor is ready",
+    sound: 'Loudness',
+    custom: 'Custom',
+    sounds: {
+      natural: { name: 'Natural', meta: 'Unprocessed', text: 'As it comes: no volume or dynamics changes.' },
+      streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Everything at the same volume, like Spotify or YouTube.' },
+      loud: { name: 'Loud', meta: '−9 LUFS', text: 'More punch and presence, for noisy rooms or weak speakers.' },
+      night: { name: 'Night', meta: '−23 LUFS', text: 'Heavy compression: quiet explosions and clear dialogue without disturbing anyone.' }
+    },
+    extras: 'Enhancers',
+    bass: 'Psychoacoustic bass',
+    bassHint: 'Adds bass harmonics: you hear more low end on headphones or small speakers without raising the volume.',
+    amount: 'Amount',
+    below: 'Below',
+    dialog: 'Dialogue',
+    dialogHint: 'Lifts the centre voice (1–4 kHz) without touching the stereo ambience.',
+    boost: 'Boost',
+    crossfeed: 'Crossfeed',
+    crossfeedHint: 'For headphones: blends a little of each channel into the other ear, like speakers. Less fatigue.',
+    intensity: 'Intensity',
+    cutoff: 'Cutoff',
+    advanced: 'Advanced settings',
+    leveler: 'Leveler',
+    levelerHint: "Slowly (over seconds) brings the volume to the target loudness. It doesn't lift silence.",
+    target: 'Target',
+    maxGain: 'Max boost',
+    comp: 'Compressor',
+    compHint: 'Turns down peaks above the threshold. With the leveler on, the volume it takes is made up afterwards.',
+    threshold: 'Threshold',
+    ratio: 'Ratio',
+    attack: 'Attack',
+    release: 'Release',
+    knee: 'Knee',
+    makeup: 'Makeup',
+    limiter: 'Limiter',
+    limiterHint: 'Hard ceiling: nothing goes over it, not even between samples. Adds 1.5 ms of delay.',
+    ceiling: 'Ceiling'
+  },
   meter: {
     title: 'Output',
     clip: 'Clipping (click to clear)',
@@ -80,6 +124,7 @@ export default {
     intTip: 'Integrated LUFS since the last reset',
     tpTip: 'Maximum true peak (dBTP). Red above −1',
     corrTip: 'Phase correlation: +1 mono, 0 wide stereo, negative = phase issues',
+    grTip: 'Dynamics gain reduction · compressor {c} dB · limiter {l} dB',
     reset: 'Reset'
   },
   presets: {

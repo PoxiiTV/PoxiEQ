@@ -15,6 +15,16 @@ export interface Loudness {
   strength: number
 }
 
+/** Dinámica y realces (PoxiDSP). Rangos: los de `Settings::sanitize` en `dsp/src/lib.rs` */
+export interface Dsp {
+  limiter: { on: boolean; ceiling: number }
+  comp: { on: boolean; threshold: number; ratio: number; attack: number; release: number; knee: number; makeup: number }
+  leveler: { on: boolean; target: number; maxGain: number }
+  bass: { on: boolean; freq: number; amount: number }
+  dialog: { on: boolean; amount: number }
+  crossfeed: { on: boolean; freq: number; feed: number }
+}
+
 export interface Config {
   lang: 'es' | 'en' | null
   theme: 'dark' | 'light' | 'system'
@@ -29,6 +39,7 @@ export interface Config {
   presets: Preset[]
   loudness: Loudness
   meterCollapsed: boolean
+  dsp: Dsp
 }
 
 export interface Device {
@@ -44,6 +55,8 @@ export interface EngineStatus {
   installed: boolean
   configDir: string | null
   devices: Device[]
+  /** PoxiDSP instalado en la carpeta del motor: falta, de otra versión o el de esta */
+  dsp: 'missing' | 'old' | 'current'
 }
 
 export interface Check {

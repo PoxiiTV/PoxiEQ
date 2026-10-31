@@ -103,7 +103,8 @@ impl Loudness {
 
 /// Texto de `poxieq.txt`: una sección `Device:` por dispositivo, nada si está en bypass.
 /// `compare` (A/B): solo el preamp indicado, el original igualado en volumen a la curva.
-pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, compare: Option<f64>) -> String {
+/// La dinámica (PoxiDSP) va al final, después del EQ, solo en L/R y solo si hay algo encendido.
+pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, compare: Option<f64>) -> String {
     let mut out = String::from("# PoxiEQ: archivo generado automáticamente, los cambios a mano se pierden\r\n");
     if bypass {
         out.push_str("# Bypass activado\r\n");
@@ -139,6 +140,10 @@ pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness
             };
             out.push_str(&format!("Filter: ON {line}\r\n"));
         }
+        if dsp.active() {
+            let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
+            out.push_str(&format!("Channel: L R\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
+        }
     }
     out
 }
@@ -167,19 +172,26 @@ mod tests {
         let id = "{6af377fe-6370-495b-afe3-95fac2e918f7}".to_string();
         let mut curves = HashMap::from([(id.clone(), c), ("Device: all\r\nPreamp: 20 dB".into(), Curve::default())]);
         let off = Loudness::default();
-        let text = render(&curves, false, &off, None);
+        let none = poxidsp::Settings::default();
+        let text = render(&curves, false, &off, &none, None);
         assert!(text.contains(&format!("Device: {id}\r\nPreamp: -30.0 dB")));
         assert!(text.contains("Filter: ON PK Fc 20.0 Hz Gain 3.0 dB Q 1.410"));
         assert!(text.contains("Filter: ON HPQ Fc 30.0 Hz Q 1.000"));
         assert!(!text.contains("LSC"), "las bandas apagadas no se escriben");
         assert!(!text.contains("20 dB"), "un id que no es GUID no se cuela en el archivo");
         assert!(!text.contains("Loudness"));
+        assert!(!text.contains("VSTPlugin"), "con la dinámica apagada el plugin ni se carga");
         let on = Loudness { on: true, offset: -6.0, strength: 0.5 };
-        assert!(render(&curves, false, &on, None).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
-        let ab = render(&curves, false, &on, Some(-2.5));
-        assert!(ab.contains("Preamp: -2.5 dB") && !ab.contains("Filter") && !ab.contains("Loudness"));
+        assert!(render(&curves, false, &on, &none, None).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
+        let mut dsp = none;
+        dsp.limiter.on = true;
+        let text = render(&curves, false, &on, &dsp, None);
+        let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(&id)));
+        assert!(text.ends_with(&format!("Filter: ON HPQ Fc 30.0 Hz Q 1.000\r\nChannel: L R\r\nVSTPlugin: Library \"PoxiDSP.dll\" ChunkData \"{chunk}\"\r\nChannel: all\r\n")));
+        let ab = render(&curves, false, &on, &dsp, Some(-2.5));
+        assert!(ab.contains("Preamp: -2.5 dB") && !ab.contains("Filter") && !ab.contains("Loudness") && !ab.contains("VSTPlugin"));
 
         curves.clear();
-        assert!(!render(&curves, true, &off, None).contains("Device"));
+        assert!(!render(&curves, true, &off, &dsp, None).contains("Device"));
     }
 }

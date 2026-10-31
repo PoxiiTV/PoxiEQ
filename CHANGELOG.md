@@ -9,6 +9,7 @@
 - 🖱️ **Curva en vivo**: arrastra los puntos, la rueda cambia el ancho y el sonido cambia al instante.
 - 🎧 **AutoEq**: pega la corrección de tus cascos y listo.
 - 🛡️ **Preamp automático** para que nunca sature, **bypass** con `Ctrl+Alt+E` y desde la bandeja.
+- 🔊 **Dinámica**: presets de sonoridad (Natural, Streaming, Fuerte, Noche), limitador de true peak, compresor, nivelador por LUFS, graves psicoacústicos, realce de diálogos y crossfeed.
 
 ### 🇬🇧 English
 
@@ -17,3 +18,4 @@
 - 🖱️ **Live curve**: drag the points, the wheel changes the width and the sound changes instantly.
 - 🎧 **AutoEq**: paste your headphone correction and you're done.
 - 🛡️ **Automatic preamp** so it never clips, **bypass** with `Ctrl+Alt+E` and from the tray.
+- 🔊 **Dynamics**: loudness presets (Natural, Streaming, Loud, Night), true-peak limiter, compressor, LUFS leveler, psychoacoustic bass, dialogue enhancer and crossfeed.

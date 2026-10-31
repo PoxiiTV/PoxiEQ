@@ -95,6 +95,8 @@ pub struct Status {
     pub installed: bool,
     pub config_dir: Option<String>,
     pub devices: Vec<Device>,
+    /// Lo rellena el comando `engine_status` (leer la DLL no hace falta en cada cambio de la curva)
+    pub dsp: DspState,
 }
 
 pub fn status() -> Status {
@@ -104,6 +106,7 @@ pub fn status() -> Status {
         installed,
         config_dir: app.and_then(|k| k.get_value("ConfigPath").ok()),
         devices: devices(),
+        dsp: DspState::Missing,
     }
 }
 
@@ -385,6 +388,67 @@ fn hide_engine() {
 
 const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EqualizerAPO";
 
+// ------------------------------------------------------------------ PoxiDSP
+
+/// `PoxiDSP.dll`, compilado por `build.rs` y metido en el exe (así llega también con el portable)
+pub const DSP_DLL: &[u8] = include_bytes!(env!("POXIDSP_DLL"));
+
+#[derive(Serialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum DspState {
+    Missing,
+    /// Instalado, pero no es el de esta versión de PoxiEQ
+    Old,
+    Current,
+}
+
+/// Dentro de la carpeta del motor (Archivos de programa): solo un administrador puede cambiarlo, y lo
+/// carga audiodg.exe
+fn dsp_path() -> Option<PathBuf> {
+    install_dir().map(|d| d.join("VSTPlugins").join(poxidsp::DLL_NAME))
+}
+
+pub fn dsp_state() -> DspState {
+    match dsp_path().and_then(|p| std::fs::read(p).ok()) {
+        None => DspState::Missing,
+        Some(b) if b == DSP_DLL => DspState::Current,
+        Some(_) => DspState::Old,
+    }
+}
+
+/// Borra las copias viejas que dejó una actualización (las que sigan cargadas no se pueden: otra vez será)
+fn clean_old_dsp() {
+    let Some(dir) = dsp_path().and_then(|p| p.parent().map(PathBuf::from)) else { return };
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if e.file_name().to_string_lossy().ends_with(".old") {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+/// Instala (o actualiza) PoxiDSP.dll. Requiere administrador. Devuelve `true` si la versión anterior
+/// estaba cargada y hay que reiniciar el audio para que entre la nueva.
+pub fn install_dsp() -> Result<bool> {
+    let path = dsp_path().ok_or("el motor no está instalado")?;
+    if std::fs::read(&path).is_ok_and(|b| b == DSP_DLL) {
+        return Ok(false);
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err("VSTPlugins"))?;
+    }
+    clean_old_dsp();
+    let mut loaded = false;
+    if path.exists() {
+        // Una DLL cargada no se puede sobrescribir, pero sí renombrar: sigue sonando hasta reiniciar el audio
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+        let old = path.with_extension(format!("{stamp}.old"));
+        std::fs::rename(&path, &old).map_err(err(poxidsp::DLL_NAME))?;
+        loaded = std::fs::remove_file(&old).is_err();
+    }
+    std::fs::write(&path, DSP_DLL).map_err(err(poxidsp::DLL_NAME))?;
+    Ok(loaded)
+}
+
 fn install_dir() -> Option<PathBuf> {
     hklm().open_subkey(APP).ok()?.get_value::<String, _>("InstallPath").ok().map(PathBuf::from)
 }
@@ -398,6 +462,11 @@ pub fn uninstall() -> Result<()> {
         disable(id)?;
     }
     restart_audio()?;
+    // Su desinstalador no sabe nada de nuestro plugin
+    if let Some(p) = dsp_path() {
+        let _ = std::fs::remove_file(p);
+        clean_old_dsp();
+    }
     hidden(&dir.join("Uninstall.exe").to_string_lossy(), &["/S"]);
     // El desinstalador de NSIS se copia a TEMP y vuelve al momento: se espera a que borre su registro
     let deadline = Instant::now() + Duration::from_secs(60);
@@ -589,9 +658,9 @@ pub struct SetupReport {
     pub checks: Vec<Check>,
 }
 
-/// Todo lo que necesita admin, de una vez: instalar (si hace falta), activar/quitar,
-/// reiniciar el audio y comprobar.
-pub fn setup(installer: Option<&str>, enable_ids: &[String], disable_ids: &[String]) -> SetupReport {
+/// Todo lo que necesita admin, de una vez: instalar (si hace falta), instalar/actualizar PoxiDSP
+/// (`dsp`), activar/quitar, reiniciar el audio y comprobar.
+pub fn setup(installer: Option<&str>, enable_ids: &[String], disable_ids: &[String], dsp: bool) -> SetupReport {
     let run = || -> Result<Vec<Check>> {
         if let Some(path) = installer {
             if !status().installed {
@@ -599,6 +668,7 @@ pub fn setup(installer: Option<&str>, enable_ids: &[String], disable_ids: &[Stri
             }
         }
         hide_engine();
+        let reload = dsp && install_dsp()?;
         for id in disable_ids {
             disable(id)?;
         }
@@ -606,13 +676,99 @@ pub fn setup(installer: Option<&str>, enable_ids: &[String], disable_ids: &[Stri
             enable(id)?;
         }
         if enable_ids.is_empty() && disable_ids.is_empty() {
+            if reload {
+                restart_audio()?;
+                clean_old_dsp();
+            }
             return Ok(vec![]);
         }
         restart_audio()?;
+        clean_old_dsp();
         check(enable_ids)
     };
     match run() {
         Ok(checks) => SetupReport { error: None, checks },
         Err(e) => SetupReport { error: Some(e), checks: vec![] },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::c_void;
+    use windows::core::s;
+    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+
+    type Dispatcher = extern "C" fn(*mut AEffect, i32, i32, isize, *mut c_void, f32) -> isize;
+    type Process = extern "C" fn(*mut AEffect, *const *const f64, *mut *mut f64, i32);
+
+    /// `AEffect` de VST 2.4 tal como lo lee el motor (`aeffectx.h`)
+    #[repr(C)]
+    struct AEffect {
+        magic: i32,
+        dispatcher: Dispatcher,
+        process: usize,
+        set_parameter: usize,
+        get_parameter: usize,
+        num_programs: i32,
+        num_params: i32,
+        num_inputs: i32,
+        num_outputs: i32,
+        flags: i32,
+        reserved: [isize; 2],
+        initial_delay: i32,
+        qualities: [i32; 2],
+        io_ratio: f32,
+        object: usize,
+        user: usize,
+        unique_id: i32,
+        version: i32,
+        process_replacing: usize,
+        process_double_replacing: Process,
+        future: [u8; 56],
+    }
+
+    /// La DLL que va dentro del exe, cargada de verdad y llamada en el mismo orden que el motor
+    #[test]
+    fn la_dll_empaquetada_responde_como_espera_el_motor() {
+        let path = std::env::temp_dir().join(format!("PoxiDSP-test-{}.dll", std::process::id()));
+        std::fs::write(&path, DSP_DLL).unwrap();
+        let null = std::ptr::null_mut();
+        unsafe {
+            let lib = LoadLibraryW(&HSTRING::from(path.as_os_str())).expect("cargar la DLL");
+            let main = GetProcAddress(lib, s!("VSTPluginMain")).expect("VSTPluginMain exportada");
+            let main: extern "C" fn(*const c_void) -> *mut AEffect = std::mem::transmute(main);
+            let fx = main(std::ptr::null());
+            assert!(!fx.is_null());
+            let e = &*fx;
+            assert_eq!(e.magic, i32::from_be_bytes(*b"VstP"));
+            assert_eq!((e.num_inputs, e.num_outputs, e.num_params, e.initial_delay), (2, 2, 0, 0));
+            assert_eq!(e.flags & (1 << 4 | 1 << 5 | 1 << 12), 1 << 4 | 1 << 5 | 1 << 12);
+            let d = e.dispatcher;
+            d(fx, 0, 0, 0, null, 0.0);
+            d(fx, 10, 0, 0, null, 48000.0);
+            d(fx, 11, 0, 480, null, 0.0);
+            let mut s = poxidsp::Settings::default();
+            (s.limiter.on, s.comp.on, s.leveler.on, s.bass.on, s.dialog.on, s.crossfeed.on) = (true, true, true, true, true, true);
+            let chunk = s.chunk(1);
+            assert_eq!(d(fx, 24, 1, chunk.len() as isize, chunk.as_ptr() as *mut c_void, 0.0), 1);
+            d(fx, 12, 0, 1, null, 0.0);
+            d(fx, 71, 0, 0, null, 0.0);
+            // Ruido a +12 dB en bloques de 480: nada por encima del techo de −1 dBTP
+            let ceil = 10f64.powf(-1.0 / 20.0);
+            for block in 0..100 {
+                let mut l: Vec<f64> = (0..480).map(|i| (((block * 480 + i) * 7919 % 2003) as f64 / 1001.5 - 1.0) * 4.0).collect();
+                let mut r: Vec<f64> = l.iter().rev().copied().collect();
+                let inputs = [l.as_ptr(), r.as_ptr()];
+                let mut outputs = [l.as_mut_ptr(), r.as_mut_ptr()];
+                (e.process_double_replacing)(fx, inputs.as_ptr(), outputs.as_mut_ptr(), 480);
+                assert!(l.iter().chain(&r).all(|v| v.is_finite() && v.abs() <= ceil));
+            }
+            d(fx, 72, 0, 0, null, 0.0);
+            d(fx, 12, 0, 0, null, 0.0);
+            assert_eq!(d(fx, 1, 0, 0, null, 0.0), 1);
+            FreeLibrary(lib).unwrap();
+        }
+        let _ = std::fs::remove_file(path);
     }
 }

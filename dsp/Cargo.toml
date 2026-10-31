@@ -1,0 +1,32 @@
+[package]
+name = "poxidsp"
+version = "0.1.0"
+description = "PoxiDSP - dinámica y realces de PoxiEQ (plugin VST2 que carga el motor)"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[lib]
+name = "poxidsp"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# La app usa los ajustes con serde; el plugin se compila sin dependencias
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+ebur128 = "0.1"
+
+# Corre dentro de audiodg.exe: un panic se captura en la frontera FFI (catch_unwind) y nunca la cruza
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"
+strip = true
+
+[profile.dev]
+panic = "unwind"

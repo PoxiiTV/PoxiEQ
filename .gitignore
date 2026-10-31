@@ -5,3 +5,4 @@ src-tauri/gen/
 deploy-hosting/
 *.log
 .env
+dsp/target/

@@ -20,9 +20,10 @@ fn main() {
     poxieq_lib::run()
 }
 
-/// `setup [--installer RUTA] ID... [--disable ID...]`
+/// `setup [--installer RUTA] [--dsp] ID... [--disable ID...]`
 fn setup(args: &[String]) -> engine::SetupReport {
     let mut installer = None;
+    let mut dsp = false;
     let (mut enable, mut disable) = (vec![], vec![]);
     let mut it = args.iter().skip(1);
     let mut disabling = false;
@@ -30,9 +31,10 @@ fn setup(args: &[String]) -> engine::SetupReport {
         match a.as_str() {
             "--installer" => installer = it.next().cloned(),
             "--disable" => disabling = true,
+            "--dsp" => dsp = true,
             id if disabling => disable.push(id.to_string()),
             id => enable.push(id.to_string()),
         }
     }
-    engine::setup(installer.as_deref(), &enable, &disable)
+    engine::setup(installer.as_deref(), &enable, &disable, dsp)
 }

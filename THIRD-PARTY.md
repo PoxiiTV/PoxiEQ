@@ -9,6 +9,13 @@
   configuración. / PoxiEQ does not bundle or modify Equalizer APO: it downloads the official installer (checked by
   SHA-256), runs it and writes to its configuration folder.
 
+## bs2b
+
+- Autor / Author: Boris Mikhaylov — https://bs2b.sourceforge.net/
+- Licencia / License: MIT
+- El crossfeed de PoxiDSP usa los filtros de bs2b reescritos en Rust. / PoxiDSP's crossfeed uses bs2b's filters,
+  rewritten in Rust.
+
 ## Otras / Others
 
 Tauri, React, Zustand, lucide-react, Nunito (Fontsource), winreg, windows-rs, reqwest, sha2 y serde, cada una con su
