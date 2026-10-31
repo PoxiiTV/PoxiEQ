@@ -66,7 +66,7 @@ async function start(): Promise<void> {
   })
   // Al esconder la ventana Rust quita lo momentáneo (monitorización, simulación, test de audición, medición de
   // sala): aquí se refleja
-  void listen('live-reset', () => setState((s) => ({ studio: STUDIO_OFF, modal: s.modal === 'hearing' || s.modal === 'room' ? null : s.modal })))
+  void listen('live-reset', () => setState((s) => ({ studio: STUDIO_OFF, studioPreset: null, modal: s.modal === 'hearing' || s.modal === 'room' ? null : s.modal })))
   // Atajos que tiene otro programa: se avisa de los nuevos (y Ajustes los marca)
   const failedHotkeys = (list: string[]): void => {
     const fresh = list.filter((k) => !getState().hotkeysFailed.includes(k))

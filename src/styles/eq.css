@@ -1387,6 +1387,20 @@
 .share-code.bad {
   border-color: rgba(239, 68, 68, 0.55);
 }
+/* De qué sección es el preset que se importa y qué trae encendido */
+.share-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  margin: 12px 0 2px;
+}
+.share-kind .small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
 
 /* ——— Estudio: monitorización, simulaciones y test de audición ——— */
 .studio-banner b {
@@ -1873,10 +1887,10 @@
   flex-wrap: wrap;
 }
 
-/* ——— Menú de presets (cabecera del ecualizador) ——— */
+/* ——— Menú de presets (cabecera del ecualizador y de cada sección) ——— */
 /* La cabecera no pasa a dos líneas: lo que cede es el nombre del preset (con «…») */
 .editor > .toolbar,
-.mic-page > .toolbar {
+.page > .toolbar {
   flex-wrap: nowrap;
 }
 .pm {
@@ -1976,6 +1990,10 @@
 }
 
 /* ——— Micrófono ——— */
+/* Selector arriba y presets debajo: dos filas de cabecera, más juntas que dos apartados */
+.mic-page > .section-bar {
+  margin-top: -10px;
+}
 .mic-page .device-pick {
   flex: 0 1 auto;
 }

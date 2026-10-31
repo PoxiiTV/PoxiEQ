@@ -3,8 +3,9 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { Copy, Download, FileDown, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { changesFor } from '../lib/changelog'
-import { cleanName, decodePreset, encodePreset, MAX_FILE, MAX_NAME } from '../lib/share'
-import { importPreset, savePreset, setState, toast, updateConfig, useStore } from '../lib/store'
+import { SECTION_PARTS, type Part } from '../lib/dsp'
+import { cleanName, decodeShare, MAX_FILE, MAX_NAME, type Shared } from '../lib/share'
+import { importShared, savePreset, saveSectionPreset, setState, toast, updateConfig, useStore } from '../lib/store'
 import { installUpdate, isPortable, RELEASES, useUpdate } from '../lib/update'
 import { currentLang, errorText, useT } from '../i18n'
 import { Preview } from './AutoEq'
@@ -15,27 +16,31 @@ const close = (): void => setState({ modal: null })
 export function SavePresetModal(): React.JSX.Element | null {
   const t = useT()
   const open = useStore((s) => s.modal === 'savePreset')
+  const section = useStore((s) => s.saveFor)
   const [name, setName] = useState('')
   useEffect(() => setName(''), [open])
   if (!open) return null
   const save = (): void => {
-    if (!name.trim()) return
-    savePreset(name.trim())
+    const clean = cleanName(name)
+    if (!clean) return
+    if (section === 'eq') savePreset(clean)
+    else if (!saveSectionPreset(section, clean)) return
     toast(t('presets.saved'))
     close()
   }
   return (
     <Modal onClose={close}>
       <h2>{t('presets.saveTitle')}</h2>
+      <p className="hint">{t(`sections.${section}.saves`)}</p>
       <label className="label" htmlFor="preset-name">
         {t('presets.name')}
       </label>
-      <input id="preset-name" className="input" autoFocus maxLength={48} value={name} placeholder={t('presets.namePh')} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+      <input id="preset-name" className="input" autoFocus maxLength={MAX_NAME} value={name} placeholder={t(`sections.${section}.namePh`)} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={close}>
           {t('common.cancel')}
         </button>
-        <button className="btn btn-primary" disabled={!name.trim()} onClick={save}>
+        <button className="btn btn-primary" disabled={!cleanName(name)} onClick={save}>
           {t('common.save')}
         </button>
       </div>
@@ -46,16 +51,16 @@ export function SavePresetModal(): React.JSX.Element | null {
 /** Compartir un preset: código para pegar en un chat o archivo `.poxieq` */
 export function ShareModal(): React.JSX.Element | null {
   const t = useT()
-  const preset = useStore((s) => s.sharing)
-  const code = useMemo(() => (preset ? encodePreset(preset.name, preset.curve) : ''), [preset])
+  const sharing = useStore((s) => s.sharing)
   const [busy, setBusy] = useState(false)
-  if (!preset) return null
+  if (!sharing) return null
+  const { name, code } = sharing
   const hide = (): void => setState({ sharing: null })
   const copy = (): void => void navigator.clipboard.writeText(code).then(() => toast(t('share.copied')))
   const save = async (): Promise<void> => {
     setBusy(true)
     try {
-      toast(t('share.saved', { f: await api.presetExport(preset.name, code) }))
+      toast(t('share.saved', { f: await api.presetExport(name, code) }))
     } catch (e) {
       toast(errorText(e), 'err')
     } finally {
@@ -65,7 +70,7 @@ export function ShareModal(): React.JSX.Element | null {
   return (
     <Modal onClose={hide}>
       <h2>{t('share.title')}</h2>
-      <p className="share-name">{preset.name}</p>
+      <p className="share-name">{name}</p>
       <p className="hint">{t('share.text')}</p>
       <textarea className="textarea mono share-code" readOnly value={code} spellCheck={false} aria-label={t('share.code')} onFocus={(e) => e.currentTarget.select()} />
       <div className="modal-actions">
@@ -80,7 +85,36 @@ export function ShareModal(): React.JSX.Element | null {
   )
 }
 
-/** Importar un preset compartido: pegando el código o soltando el archivo `.poxieq` */
+/** Qué trae un preset que no es una curva: lo que va encendido (o «todo apagado») */
+function useSummary(): (sh: Shared) => string {
+  const t = useT()
+  const labels: Partial<Record<Part, string>> = {
+    leveler: t('dsp.leveler'),
+    comp: t('dsp.comp'),
+    limiter: t('dsp.limiter'),
+    bassBoost: t('dsp.lows'),
+    bass: t('dsp.bass'),
+    dialog: t('dsp.dialog'),
+    crossfeed: t('dsp.crossfeed'),
+    speakers: t('dsp.speakers'),
+    gate: t('mic.gate')
+  }
+  return (sh) => {
+    let on: string[] = []
+    if (sh.section === 'studio') {
+      const s = sh.studio
+      on = [s.listen !== 'stereo' && t(`studio.listen.${s.listen}`), s.flipL && 'Ø L', s.flipR && 'Ø R', s.swap && t('studio.swap'), s.sim && t('studio.simulating', { s: t(`studio.sims.${s.sim}.name`) })].filter(
+        (x): x is string => !!x
+      )
+    } else if (sh.section !== 'eq') {
+      on = SECTION_PARTS[sh.section].filter((k) => sh.dsp[k].on).map((k) => labels[k] ?? k)
+    }
+    return on.length ? on.join(' · ') : t('share.allOff')
+  }
+}
+
+/** Importar un preset compartido: pegando el código o soltando el archivo `.poxieq`. Va a la sección que dice
+ *  el código (y se enseña esa sección). */
 export function ImportModal(): React.JSX.Element | null {
   const t = useT()
   const open = useStore((s) => s.modal === 'import')
@@ -88,7 +122,8 @@ export function ImportModal(): React.JSX.Element | null {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [over, setOver] = useState(false)
-  const parsed = useMemo(() => decodePreset(code), [code])
+  const parsed = useMemo(() => decodeShare(code), [code])
+  const summary = useSummary()
   useEffect(() => {
     if (open) setCode(initial)
   }, [open, initial])
@@ -97,9 +132,8 @@ export function ImportModal(): React.JSX.Element | null {
   const hide = (): void => setState({ modal: null, importCode: '' })
   const ok = !!parsed && !!cleanName(name)
   const run = (): void => {
-    if (!parsed || !ok) return
-    importPreset(cleanName(name), parsed.curve)
-    toast(t('share.imported', { n: cleanName(name) }))
+    if (!parsed || !ok || !importShared(parsed, cleanName(name))) return
+    toast(t('share.imported', { n: cleanName(name), s: t(`nav.${parsed.section}`) }))
     hide()
   }
   return (
@@ -110,7 +144,7 @@ export function ImportModal(): React.JSX.Element | null {
         autoFocus={!parsed}
         className={`textarea mono share-code ${over ? 'over' : ''} ${code.trim() && !parsed ? 'bad' : ''}`}
         value={code}
-        placeholder="PXEQ1.…"
+        placeholder="PXEQ2.…"
         spellCheck={false}
         aria-label={t('share.code')}
         onChange={(e) => setCode(e.target.value)}
@@ -129,7 +163,11 @@ export function ImportModal(): React.JSX.Element | null {
       {code.trim() && !parsed && <p className="hint danger-text">{t('share.bad')}</p>}
       {parsed && (
         <>
-          <Preview bands={parsed.curve.bands} />
+          <p className="share-kind">
+            <span className="chip">{t('share.kind', { s: t(`nav.${parsed.section}`) })}</span>
+            {parsed.section !== 'eq' && <span className="small muted">{summary(parsed)}</span>}
+          </p>
+          {(parsed.section === 'eq' || parsed.section === 'mic') && <Preview bands={parsed.curve.bands} />}
           <label className="label" htmlFor="import-name">
             {t('presets.name')}
           </label>

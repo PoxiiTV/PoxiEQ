@@ -4,6 +4,7 @@ import { applyPreset, currentCurve, setState, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { AutoEqPanel, Preview } from './AutoEq'
 import { HeadphoneCards, Install, SectionHead } from './Dynamics'
+import { SectionPresets } from './Presets'
 
 const NONE: Preset[] = []
 
@@ -12,6 +13,7 @@ export function PhonesPage(): React.JSX.Element {
   const t = useT()
   return (
     <div className="page">
+      <SectionPresets section="phones" />
       <section>
         <SectionHead n={1} label={t('autoeq.title')} />
         <AutoEqPanel />

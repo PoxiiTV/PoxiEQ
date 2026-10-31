@@ -7,7 +7,7 @@ import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
 import { addBand, bandColor, Graph, KINDS, removeBand, updateBand } from './Graph'
-import { PresetMenu } from './Presets'
+import { EqPresetMenu } from './Presets'
 
 /** El buscador de AutoEq vive en «Cascos»: se va allí con el cursor ya en la búsqueda */
 function findHeadphones(): void {
@@ -22,8 +22,8 @@ export function EqPage(): React.JSX.Element {
   return (
     <div className="editor">
       <div className="toolbar">
-        <PresetMenu />
-        <button className="btn btn-sm hb" data-tip={t('presets.save')} aria-label={t('presets.save')} onClick={() => setState({ modal: 'savePreset' })}>
+        <EqPresetMenu />
+        <button className="btn btn-sm hb" data-tip={t('presets.save')} aria-label={t('presets.save')} onClick={() => setState({ modal: 'savePreset', saveFor: 'eq' })}>
           <Save size={15} />
           <span className="btn-label">{t('presets.saveShort')}</span>
         </button>

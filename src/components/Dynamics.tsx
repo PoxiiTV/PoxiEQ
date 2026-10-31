@@ -3,9 +3,10 @@ import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
 import { soundOf, SOUNDS, withHeadphones, withSound, type Sound } from '../lib/dsp'
-import { toast, updateConfig, useStore } from '../lib/store'
+import { micSettings, outputSettings, setMicDsp, setOutputDsp, toast, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Knob, Range } from './controls'
+import { SectionPresets } from './Presets'
 import { Switch } from './ui'
 
 const SOUND_ICONS: Record<Sound, LucideIcon> = { natural: Leaf, streaming: Radio, loud: Volume2, night: Moon }
@@ -13,12 +14,12 @@ const SOUND_ICONS: Record<Sound, LucideIcon> = { natural: Leaf, streaming: Radio
 const num = (v: number, digits = 1): string => v.toFixed(digits).replace('-', '−')
 const db = (v: number): string => `${v > 0 ? '+' : ''}${num(v)} dB`
 
-/** Cambia una parte de la dinámica de las salidas */
-function useDsp(): [Dsp | undefined, <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>) => void] {
-  const dsp = useStore((s) => s.config?.dsp)
+/** PoxiDSP de la salida que se edita y cómo cambiar una de sus partes */
+function useDsp(): [Dsp, <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>) => void] {
+  const dsp = useStore((s) => outputSettings(s).dsp)
   const set = <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>): void => {
-    const cur = useStore.getState().config?.dsp
-    if (cur) updateConfig({ dsp: { ...cur, [key]: { ...cur[key], ...patch } } })
+    const cur = outputSettings().dsp
+    setOutputDsp({ ...cur, [key]: { ...cur[key], ...patch } })
   }
   return [dsp, set]
 }
@@ -34,14 +35,14 @@ export function SectionHead({ n, label, children }: { n?: number; label: string;
 }
 
 /** Página «Sonido»: sonoridad, la cadena de dinámica en el orden de la señal y los realces. Todo a la vista. */
-export function SoundPage(): React.JSX.Element | null {
+export function SoundPage(): React.JSX.Element {
   const t = useT()
   const [dsp, set] = useDsp()
-  if (!dsp) return null
   const sound = soundOf(dsp)
 
   return (
     <div className="page">
+      <SectionPresets section="sound" />
       <Install />
       <section>
         <SectionHead n={1} label={t('dsp.sound')}>
@@ -51,7 +52,7 @@ export function SoundPage(): React.JSX.Element | null {
           {SOUNDS.map((s) => {
             const Icon = SOUND_ICONS[s]
             return (
-              <button key={s} className={`sound ${sound === s ? 'on' : ''}`} aria-pressed={sound === s} onClick={() => updateConfig({ dsp: withSound(dsp, s) })}>
+              <button key={s} className={`sound ${sound === s ? 'on' : ''}`} aria-pressed={sound === s} onClick={() => setOutputDsp(withSound(dsp, s))}>
                 <span className="sound-top">
                   <Icon size={18} />
                   <em className="num">{t(`dsp.sounds.${s}.meta`)}</em>
@@ -111,17 +112,16 @@ function ChainArrow(): React.JSX.Element {
 }
 
 /** Crossfeed y altavoces virtuales (página «Cascos»): uno u otro, encender uno apaga el otro */
-export function HeadphoneCards(): React.JSX.Element | null {
+export function HeadphoneCards(): React.JSX.Element {
   const t = useT()
   const [dsp, set] = useDsp()
-  if (!dsp) return null
   return (
     <div className="dyn-cards pair">
-      <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'crossfeed', on) })}>
+      <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => setOutputDsp(withHeadphones(dsp, 'crossfeed', on))}>
         <Slider label={t('dsp.intensity')} value={dsp.crossfeed.feed} min={1} max={15} step={0.5} fmt={(v) => `${num(v)} dB`} onChange={(feed) => set('crossfeed', { feed })} />
         <Slider label={t('dsp.cutoff')} value={dsp.crossfeed.freq} min={300} max={2000} step={50} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('crossfeed', { freq })} />
       </Card>
-      <Card icon={Speaker} title={t('dsp.speakers')} hint={t('dsp.speakersHint')} on={dsp.speakers.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'speakers', on) })}>
+      <Card icon={Speaker} title={t('dsp.speakers')} hint={t('dsp.speakersHint')} on={dsp.speakers.on} onToggle={(on) => setOutputDsp(withHeadphones(dsp, 'speakers', on))}>
         <Slider label={t('dsp.intensity')} value={dsp.speakers.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('speakers', { amount: v / 100 })} />
       </Card>
     </div>
@@ -144,12 +144,14 @@ function CompSliders({ comp, set }: { comp: Dsp['comp']; set: (patch: Partial<Ds
 }
 
 /** Puerta de ruido y compresor del micrófono, antes de que lo reciba cualquier app (en ese orden) */
-export function MicDynamics(): React.JSX.Element | null {
+export function MicDynamics(): React.JSX.Element {
   const t = useT()
-  const mic = useStore((s) => s.config?.mic)
-  if (!mic) return null
-  const set = <K extends 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => updateConfig({ mic: { ...mic, dsp: { ...mic.dsp, [key]: { ...mic.dsp[key], ...patch } } } })
-  const g = mic.dsp.gate
+  const dsp = useStore((s) => micSettings(s).dsp)
+  const set = <K extends 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => {
+    const cur = micSettings().dsp
+    setMicDsp({ ...cur, [key]: { ...cur[key], ...patch } })
+  }
+  const g = dsp.gate
   return (
     <div className="chain">
       <Card icon={DoorClosed} title={t('mic.gate')} hint={t('mic.gateHint')} on={g.on} onToggle={(on) => set('gate', { on })}>
@@ -160,8 +162,8 @@ export function MicDynamics(): React.JSX.Element | null {
         <Slider label={t('dsp.release')} value={g.release} min={5} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set('gate', { release })} />
       </Card>
       <ChainArrow />
-      <Card icon={Gauge} title={t('dsp.comp')} hint={t('mic.compHint')} on={mic.dsp.comp.on} onToggle={(on) => set('comp', { on })}>
-        <CompSliders comp={mic.dsp.comp} set={(patch) => set('comp', patch)} />
+      <Card icon={Gauge} title={t('dsp.comp')} hint={t('mic.compHint')} on={dsp.comp.on} onToggle={(on) => set('comp', { on })}>
+        <CompSliders comp={dsp.comp} set={(patch) => set('comp', patch)} />
       </Card>
     </div>
   )

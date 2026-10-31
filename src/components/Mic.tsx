@@ -4,6 +4,7 @@ import { useT } from '../i18n'
 import { Select } from './controls'
 import { AddBand, CurveEditor, HistoryButtons } from './Editor'
 import { Install, MicDynamics, SectionHead } from './Dynamics'
+import { SectionPresets } from './Presets'
 import { Setup } from './Setup'
 
 /** Página «Micrófono»: su propio selector y encendido, su EQ, la puerta de ruido y el compresor. Lo que se ajusta
@@ -44,20 +45,21 @@ export function MicPage(): React.JSX.Element {
         )}
         <div className="spacer" />
         {ready && (
-          <>
-            <HistoryButtons />
-            <AddBand />
-            <button className={`power tip-right ${off ? 'bypassed' : ''}`} onClick={toggle} data-tip={tip} aria-label={tip} aria-pressed={!off}>
-              <Power size={15} />
-              <span>MIC</span>
-            </button>
-          </>
+          <button className={`power tip-right ${off ? 'bypassed' : ''}`} onClick={toggle} data-tip={tip} aria-label={tip} aria-pressed={!off}>
+            <Power size={15} />
+            <span>MIC</span>
+          </button>
         )}
       </div>
       {!ready ? (
         <Setup />
       ) : (
         <>
+          <SectionPresets section="mic">
+            <div className="spacer" />
+            <HistoryButtons />
+            <AddBand />
+          </SectionPresets>
           {off && (
             <div className="banner">
               <Power size={16} />

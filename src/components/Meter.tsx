@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
 import { api } from '../lib/api'
-import { editingMic, updateConfig, useStore } from '../lib/store'
+import { editingMic, micSettings, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 
 interface Levels {
@@ -36,8 +36,8 @@ export function Meter(): React.JSX.Element {
   const collapsed = useStore((s) => !!s.config?.meterCollapsed)
   const mic = useStore((s) => editingMic(s))
   const gate = useStore((s) => {
-    const m = s.config?.mic
-    return mic && m && m.dsp.gate.on && !m.bypass ? m.dsp.gate.threshold : null
+    const g = micSettings(s).dsp.gate
+    return mic && g.on && !s.config?.mic.bypass ? g.threshold : null
   })
   const [lv, setLv] = useState<Levels | null>(null)
   const [clip, setClip] = useState(false)

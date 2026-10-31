@@ -17,7 +17,9 @@
 - ⌨️ **Atajos a tu gusto**: grábalos en Ajustes (por defecto `Ctrl+Alt+Num 0…9`), con un aviso en pantalla que no roba el foco. No deja usar los que chocan con AltGr (`€ | @ # ~`) y avisa si otro programa ya tiene el atajo.
 - 🗂️ **Presets en la bandeja**: cambia de preset sin abrir la ventana.
 - ↩️ **Deshacer y rehacer**: `Ctrl+Z` y `Ctrl+Y` en la curva y la dinámica.
-- 🔗 **Compartir presets**: como código para pegar en un chat o como archivo `.poxieq`.
+- 💾 **Presets en todas las secciones**: guarda y cambia con un clic tu Sonido, tu escucha con Cascos, tus comprobaciones de Estudio y los ajustes del Micrófono, igual que las curvas del Ecualizador.
+- 🎧 **Cada dispositivo con lo suyo**: cada salida recuerda su EQ, su Sonido, sus Cascos y el último preset de cada sección, y cada micrófono lo suyo. Al cambiar de salida (a mano o siguiendo a Windows) suena y se ve lo de esa salida.
+- 🔗 **Compartir presets**: de cualquier sección, como código para pegar en un chat o como archivo `.poxieq`; al importarlo va a su sección.
 - 📈 **Analizador mejorado**: retención de picos y modo espectrograma.
 - 🎧 **Altavoces virtuales** para cascos: el estéreo suena delante de ti, como con dos altavoces, sin cambiar el timbre del centro.
 - 🎛️ **Estudio**: mono, side, solo L / R, invertir polaridad e intercambiar canales, y simulación de móvil, portátil, coche, auriculares de botón, tele y altavoz bluetooth.
@@ -40,7 +42,9 @@
 - ⌨️ **Your own shortcuts**: record them in Settings (by default `Ctrl+Alt+Num 0…9`), with an on-screen notice that doesn't steal focus. Combinations that clash with AltGr (`€ | @ # ~`) aren't allowed, and you're warned if another program already owns the shortcut.
 - 🗂️ **Presets in the tray**: switch presets without opening the window.
 - ↩️ **Undo and redo**: `Ctrl+Z` and `Ctrl+Y` for the curve and dynamics.
-- 🔗 **Share presets**: as a code to paste in a chat or as a `.poxieq` file.
+- 💾 **Presets in every section**: save and switch your Sound, Headphones listening, Studio checks and Microphone settings with one click, just like Equalizer curves.
+- 🎧 **Each device keeps its own**: every output remembers its EQ, Sound, Headphones settings and the last preset of each section, and every microphone its own. Switch outputs (by hand or following Windows) and you hear and see that output's settings.
+- 🔗 **Share presets**: from any section, as a code to paste in a chat or as a `.poxieq` file; importing it puts it in the right section.
 - 📈 **Better analyzer**: peak hold and a spectrogram mode.
 - 🎧 **Virtual speakers** for headphones: stereo plays in front of you, like two speakers, without changing the tone of the center.
 - 🎛️ **Studio**: mono, side, solo L / R, polarity invert and channel swap, plus phone, laptop, car, earbuds, TV and Bluetooth speaker simulation.

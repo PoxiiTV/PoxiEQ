@@ -4,6 +4,7 @@ import type { Listen, Sim } from '../lib/api'
 import { setStudio, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { SectionHead } from './Dynamics'
+import { SectionPresets } from './Presets'
 
 const LISTEN: Listen[] = ['stereo', 'mono', 'side', 'left', 'right']
 const SIMS: { id: Sim; icon: LucideIcon }[] = [
@@ -23,6 +24,7 @@ export function StudioPage(): React.JSX.Element {
 
   return (
     <div className="page">
+      <SectionPresets section="studio" />
       <section>
         <SectionHead label={t('studio.monitor')} />
         <div className="studio-row">

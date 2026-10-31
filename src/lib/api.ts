@@ -34,12 +34,34 @@ export interface Dsp {
   bassBoost: { on: boolean; amount: number }
 }
 
-/** Micrófono: lo mismo en todas las entradas activadas (su EQ va en `curves` con el id de la entrada) */
+/** Micrófono: su propio bypass (su EQ va en `curves` y su puerta/compresor en `perDevice`, con el id de la
+ *  entrada) */
 export interface Mic {
   /** Sin procesar (aparte del bypass de las salidas) */
   bypass: boolean
-  /** Solo se usan la puerta y el compresor */
+}
+
+/** Secciones con presets propios (los del Ecualizador son `Preset`) */
+export type Section = 'sound' | 'phones' | 'studio' | 'mic'
+
+/** Preset de una sección: Sonido y Cascos guardan sus partes de `dsp`; Micrófono su `curve` y su puerta/compresor
+ *  en `dsp`; Estudio, `studio`. Rust descarta lo que no es de su sección (`SectionPresets::sanitize`). */
+export interface SectionPreset {
+  id: string
+  name: string
+  dsp?: Dsp | null
+  curve?: Curve | null
+  studio?: Studio | null
+}
+
+export type SectionPresets = Record<Section, SectionPreset[]>
+
+/** Lo que recuerda cada dispositivo aparte de su curva */
+export interface DeviceSettings {
+  /** En una salida, Sonido y Cascos; en un micrófono, su puerta y su compresor */
   dsp: Dsp
+  /** Último preset elegido en cada sección */
+  presets: { sound: string | null; phones: string | null; mic: string | null }
 }
 
 /** Atajos globales en el formato del registrador (`control+alt+Numpad0`); `null` = sin atajo */
@@ -95,7 +117,9 @@ export interface Config {
   presets: Preset[]
   loudness: Loudness
   meterCollapsed: boolean
-  dsp: Dsp
+  /** Por id de dispositivo; sin entrada, lo de serie (`DSP_DEFAULT`, ningún preset) */
+  perDevice: Record<string, DeviceSettings>
+  sectionPresets: SectionPresets
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic

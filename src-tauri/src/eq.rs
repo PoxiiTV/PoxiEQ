@@ -144,7 +144,7 @@ pub fn band_db(b: &Band, f: f64) -> f64 {
 pub fn sanitize_presets(presets: &mut Vec<Preset>) {
     presets.truncate(200);
     for p in presets.iter_mut() {
-        p.name = p.name.trim().chars().filter(|c| !c.is_control()).take(48).collect();
+        p.name = clean_name(&p.name);
         p.id.truncate(64);
         p.curve.sanitize();
         if p.room.as_deref().is_some_and(|r| r.len() != 38 || !is_guid(r)) {
@@ -318,17 +318,155 @@ impl Studio {
     }
 }
 
-/// Micrófono: lo mismo para todas las entradas activadas. Su EQ va en `Config.curves` con el GUID de la
-/// entrada, como el de cualquier salida.
+/// Micrófono: su propio bypass, aparte del de las salidas (el atajo de bypass no quita la puerta en un
+/// directo). Su EQ va en `Config.curves` y su puerta/compresor en `Config.per_device`, con el GUID de la entrada.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Mic {
-    /// Sin procesar. Aparte del bypass de las salidas: el atajo de bypass no quita la puerta en un directo.
     pub bypass: bool,
-    /// Puerta de ruido y compresor (PoxiDSP en la etapa de captura)
-    pub dsp: poxidsp::Settings,
+    /// Formato anterior: una puerta y un compresor para todos los micrófonos. Solo se lee, para repartirlo.
+    #[serde(skip_serializing)]
+    pub dsp: Option<poxidsp::Settings>,
 }
 
+// ------------------------------------------------- ajustes por dispositivo y presets de sección
+
+/// Lo que cada dispositivo recuerda aparte de su EQ (que va en `Config.curves`)
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DeviceSettings {
+    /// PoxiDSP: en una salida, Sonido y Cascos; en un micrófono, su puerta y su compresor
+    pub dsp: poxidsp::Settings,
+    /// Último preset elegido en cada sección
+    pub presets: Picks,
+}
+
+/// Id del último preset elegido en cada sección (`None`: ninguno)
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Picks {
+    pub sound: Option<String>,
+    pub phones: Option<String>,
+    pub mic: Option<String>,
+}
+
+/// Secciones con presets propios (los del Ecualizador son [`Preset`])
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Section {
+    Sound,
+    Phones,
+    Studio,
+    Mic,
+}
+
+/// Preset de una sección. Cada una guarda solo lo suyo (lo demás no se escribe y se descarta al validar):
+/// Sonido y Cascos sus partes de PoxiDSP, Micrófono su EQ y su puerta/compresor, Estudio la monitorización
+/// y la simulación.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionPreset {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dsp: Option<poxidsp::Settings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curve: Option<Curve>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub studio: Option<Studio>,
+}
+
+/// Presets propios de cada sección
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SectionPresets {
+    pub sound: Vec<SectionPreset>,
+    pub phones: Vec<SectionPreset>,
+    pub studio: Vec<SectionPreset>,
+    pub mic: Vec<SectionPreset>,
+}
+
+/// Presets como mucho en cada sección
+pub const MAX_SECTION_PRESETS: usize = 100;
+
+/// Nombre de preset: sin caracteres de control, sin espacios a los lados y como mucho 48 caracteres
+pub fn clean_name(name: &str) -> String {
+    name.trim().chars().filter(|c| !c.is_control()).take(48).collect::<String>().trim().to_string()
+}
+
+/// Solo las partes de PoxiDSP de una sección; el resto, por defecto (apagado)
+pub fn section_dsp(dsp: &poxidsp::Settings, section: Section) -> poxidsp::Settings {
+    let d = poxidsp::Settings::default();
+    match section {
+        Section::Sound => poxidsp::Settings { leveler: dsp.leveler, comp: dsp.comp, limiter: dsp.limiter, bass_boost: dsp.bass_boost, bass: dsp.bass, dialog: dsp.dialog, ..d },
+        Section::Phones => poxidsp::Settings { crossfeed: dsp.crossfeed, speakers: dsp.speakers, ..d },
+        Section::Mic => poxidsp::Settings { gate: dsp.gate, comp: dsp.comp, ..d },
+        Section::Studio => d,
+    }
+}
+
+impl SectionPresets {
+    fn lists(&mut self) -> [(Section, &mut Vec<SectionPreset>); 4] {
+        [(Section::Sound, &mut self.sound), (Section::Phones, &mut self.phones), (Section::Studio, &mut self.studio), (Section::Mic, &mut self.mic)]
+    }
+
+    /// Ids propios válidos, nombres limpios, sin repetidos, rangos de cada ajuste y solo lo de su sección
+    /// (lo que le falta a una sección para tener sentido descarta el preset)
+    pub fn sanitize(&mut self) {
+        for (section, list) in self.lists() {
+            let mut seen = std::collections::HashSet::new();
+            list.retain_mut(|p| {
+                p.name = clean_name(&p.name);
+                let keep = !p.name.is_empty() && p.id.starts_with("u:") && crate::apps::valid_preset_id(&p.id) && seen.insert(p.id.clone());
+                let dsp = p.dsp.take().map(|mut d| {
+                    d.sanitize();
+                    section_dsp(&d, section)
+                });
+                let (curve, studio) = (p.curve.take(), p.studio.take());
+                match section {
+                    Section::Sound | Section::Phones => p.dsp = dsp,
+                    Section::Mic => {
+                        p.dsp = dsp;
+                        p.curve = curve.map(|mut c| {
+                            c.sanitize();
+                            Curve { preset: None, ears: None, ..c }
+                        });
+                    }
+                    Section::Studio => p.studio = studio,
+                }
+                keep && match section {
+                    Section::Sound | Section::Phones => p.dsp.is_some(),
+                    Section::Mic => p.dsp.is_some() && p.curve.is_some(),
+                    Section::Studio => p.studio.is_some(),
+                }
+            });
+            list.truncate(MAX_SECTION_PRESETS);
+        }
+    }
+
+    fn has(&self, section: Section, id: &str) -> bool {
+        let list = match section {
+            Section::Sound => &self.sound,
+            Section::Phones => &self.phones,
+            Section::Studio => &self.studio,
+            Section::Mic => &self.mic,
+        };
+        list.iter().any(|p| p.id == id)
+    }
+}
+
+/// Ajustes de cada dispositivo: rangos de PoxiDSP y el último preset de cada sección solo si existe
+pub fn sanitize_devices(devices: &mut HashMap<String, DeviceSettings>, presets: &SectionPresets) {
+    devices.retain(|id, _| id.len() == 38 && is_guid(id));
+    for d in devices.values_mut() {
+        d.dsp.sanitize();
+        let p = &mut d.presets;
+        for (section, pick) in [(Section::Sound, &mut p.sound), (Section::Phones, &mut p.phones), (Section::Mic, &mut p.mic)] {
+            if pick.as_deref().is_some_and(|id| !presets.has(section, id)) {
+                *pick = None;
+            }
+        }
+    }
+}
 /// Lo que suena ahora sin guardarse en la configuración
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Live {
@@ -348,19 +486,29 @@ fn is_guid(id: &str) -> bool {
 
 /// Texto de `poxieq.txt`. Primero las herramientas de estudio, antes de cualquier `Device:` (valen para todas
 /// las salidas, también en bypass: son de escucha, no del EQ); luego una sección `Device:` por salida, nada
-/// si está en bypass. La dinámica (PoxiDSP) va al final, solo en L/R y solo si hay algo encendido.
+/// si está en bypass. Cada dispositivo lleva su propio PoxiDSP al final (`devices`), solo en L/R y solo si
+/// tiene algo encendido. Un dispositivo sin curva guardada suena plano (con su PoxiDSP si lo tiene).
 ///
-/// Las entradas (`is_input`) llevan su propia sección con `Stage: capture` (su única etapa), su EQ y la
-/// puerta/compresor de [`Mic`]. No dependen del bypass, del A/B ni del test de audición, solo de `mic.bypass`.
-pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, mic: &Mic, live: &Live, is_input: impl Fn(&str) -> bool) -> String {
+/// Las entradas (`is_input`) llevan su propia sección con `Stage: capture` (su única etapa), su EQ y su
+/// puerta/compresor. No dependen del bypass, del A/B ni del test de audición, solo de `mic_bypass`.
+pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceSettings>, bypass: bool, loudness: &Loudness, mic_bypass: bool, live: &Live, is_input: impl Fn(&str) -> bool) -> String {
     let mut out = String::from("# PoxiEQ: archivo generado automáticamente, los cambios a mano se pierden\r\n");
     if live.measuring {
         out.push_str("# Medición de sala: todo en plano\r\n");
         return out;
     }
-    let mut ids: Vec<&String> = curves.keys().filter(|id| is_guid(id)).collect();
-    ids.sort();
-    let (inputs, outputs): (Vec<&String>, Vec<&String>) = ids.into_iter().partition(|id| is_input(id));
+    let flat = Curve::default();
+    let none = poxidsp::Settings::default();
+    // Con curva o con algo de PoxiDSP encendido; ordenados para que el archivo no cambie sin motivo
+    let ids: std::collections::BTreeSet<&String> = curves
+        .keys()
+        .chain(devices.iter().filter(|(_, d)| d.dsp.active()).map(|(id, _)| id))
+        .filter(|id| is_guid(id))
+        .collect();
+    let (inputs, outputs): (Vec<_>, Vec<_>) = ids
+        .into_iter()
+        .map(|id| (id.as_str(), curves.get(id).unwrap_or(&flat), devices.get(id).map_or(&none, |d| &d.dsp)))
+        .partition(|(id, _, _)| is_input(id));
     if live.hearing {
         out.push_str("# Test de audición: todo en plano\r\n");
     } else {
@@ -368,17 +516,16 @@ pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness
         if bypass {
             out.push_str("# Bypass activado\r\n");
         } else {
-            render_outputs(&mut out, curves, &outputs, loudness, dsp, live);
+            render_outputs(&mut out, &outputs, loudness, live);
         }
     }
-    if !mic.bypass {
-        for id in inputs {
-            let c = &curves[id];
+    if !mic_bypass {
+        for (id, c, dsp) in inputs {
             out.push_str(&format!("\r\nDevice: {id}\r\nStage: capture\r\nPreamp: {:.1} dB\r\n", c.preamp));
             out.push_str(&filters(&c.bands));
             // Todos los canales (un micro mono es «C», no «L R»): el motor reparte de dos en dos
-            if mic.dsp.active() {
-                let chunk = poxidsp::base64(&mic.dsp.chunk(poxidsp::device_key(id)));
+            if dsp.active() {
+                let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
                 out.push_str(&format!("Channel: all\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\n", poxidsp::DLL_NAME));
             }
         }
@@ -386,9 +533,8 @@ pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness
     out
 }
 
-fn render_outputs(out: &mut String, curves: &HashMap<String, Curve>, ids: &[&String], loudness: &Loudness, dsp: &poxidsp::Settings, live: &Live) {
-    for &id in ids {
-        let c = &curves[id];
+fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &poxidsp::Settings)], loudness: &Loudness, live: &Live) {
+    for &(id, c, dsp) in outputs {
         if let Some(g) = live.compare {
             out.push_str(&format!("\r\nDevice: {id}\r\nPreamp: {:.1} dB\r\n", clamp(g, -30.0, 12.0, 0.0)));
             continue;
@@ -419,9 +565,14 @@ fn render_outputs(out: &mut String, curves: &HashMap<String, Curve>, ids: &[&Str
 mod tests {
     use super::*;
 
-    /// `render` sin micrófonos
+    /// `render` sin micrófonos y con el mismo PoxiDSP en todas las salidas con curva
     fn out(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, dsp: &poxidsp::Settings, live: &Live) -> String {
-        render(curves, bypass, loudness, dsp, &Mic::default(), live, |_| false)
+        let devices = curves.keys().map(|id| (id.clone(), DeviceSettings { dsp: *dsp, ..DeviceSettings::default() })).collect();
+        render(curves, &devices, bypass, loudness, false, live, |_| false)
+    }
+
+    fn with_dsp(dsp: poxidsp::Settings) -> DeviceSettings {
+        DeviceSettings { dsp, ..DeviceSettings::default() }
     }
 
     #[test]
@@ -434,13 +585,14 @@ mod tests {
             (mic_id.clone(), Curve { preamp: 4.0, bands: vec![pk], ..Curve::default() }),
         ]);
         let is_input = |id: &str| id == mic_id;
-        let none = poxidsp::Settings::default();
-        let mut mic = Mic::default();
-        mic.dsp.gate.on = true;
-        mic.dsp.comp.on = true;
+        let mut dsp = poxidsp::Settings::default();
+        dsp.gate.on = true;
+        dsp.comp.on = true;
+        let devices = HashMap::from([(mic_id.clone(), with_dsp(dsp))]);
+        let r = |devices: &HashMap<String, DeviceSettings>, bypass: bool, mic_bypass: bool, live: &Live| render(&curves, devices, bypass, &Loudness::default(), mic_bypass, live, is_input);
         let live = Live { studio: Studio { listen: Listen::Mono, ..Studio::default() }, ..Live::default() };
-        let text = render(&curves, false, &Loudness::default(), &none, &mic, &live, is_input);
-        let chunk = poxidsp::base64(&mic.dsp.chunk(poxidsp::device_key(&mic_id)));
+        let text = r(&devices, false, false, &live);
+        let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(&mic_id)));
         let section = format!(
             "Device: {mic_id}\r\nStage: capture\r\nPreamp: 4.0 dB\r\nFilter: ON PK Fc 200.0 Hz Gain -3.0 dB Q 1.000\r\nChannel: all\r\nVSTPlugin: Library \"PoxiDSP.dll\" ChunkData \"{chunk}\"\r\n"
         );
@@ -448,21 +600,95 @@ mod tests {
         // Las herramientas de estudio (antes de cualquier `Device:`) no llegan al micrófono
         let studio_at = text.find("Copy:").unwrap();
         assert!(text[..studio_at].contains("Stage: post-mix\r\n"));
-        assert!(text.contains(&format!("Device: {out_id}\r\nPreamp")));
+        // La salida no tiene nada de PoxiDSP: ni se carga
+        assert!(text.contains(&format!("Device: {out_id}\r\nPreamp: 0.0 dB\r\nFilter: ON PK Fc 200.0 Hz Gain -3.0 dB Q 1.000\r\n\r\nDevice: {mic_id}")));
+        assert_eq!(text.matches("VSTPlugin").count(), 1);
 
         // Ni el bypass, ni el A/B ni el test de audición le quitan la puerta al micrófono
         for (bypass, live) in [(true, Live::default()), (false, Live { compare: Some(-1.0), ..Live::default() }), (false, Live { hearing: true, ..Live::default() })] {
-            assert!(render(&curves, bypass, &Loudness::default(), &none, &mic, &live, is_input).contains(&section));
+            assert!(r(&devices, bypass, false, &live).contains(&section));
         }
         // Su propio bypass sí
-        let off = Mic { bypass: true, ..mic };
-        assert!(!render(&curves, false, &Loudness::default(), &none, &off, &Live::default(), is_input).contains(&mic_id));
+        assert!(!r(&devices, false, true, &Live::default()).contains(&mic_id));
         // Con la puerta y el compresor apagados el plugin ni se carga
-        let plain = render(&curves, false, &Loudness::default(), &none, &Mic::default(), &Live::default(), is_input);
+        let plain = r(&HashMap::new(), false, false, &Live::default());
         assert!(plain.contains(&mic_id) && !plain.contains("VSTPlugin"));
         // La medición de sala lo deja todo en plano, micrófono incluido
-        let m = render(&curves, false, &Loudness::default(), &none, &mic, &Live { measuring: true, ..live }, is_input);
+        let m = r(&devices, false, false, &Live { measuring: true, ..live });
         assert!(!m.contains("Device") && !m.contains("Copy"));
+    }
+
+    #[test]
+    fn cada_dispositivo_con_su_poxidsp() {
+        let a = "{00000000-0000-0000-0000-00000000000a}".to_string();
+        let b = "{00000000-0000-0000-0000-00000000000b}".to_string();
+        let c = "{00000000-0000-0000-0000-00000000000c}".to_string();
+        let d = "{00000000-0000-0000-0000-00000000000d}".to_string();
+        let mut night = poxidsp::Settings::default();
+        night.leveler.on = true;
+        night.leveler.target = -23.0;
+        let mut phones = poxidsp::Settings::default();
+        phones.crossfeed.on = true;
+        // A: con curva y nivelador; B: sin curva, solo crossfeed; C: con curva y nada encendido; D: nada de nada
+        let curves = HashMap::from([(a.clone(), Curve { preamp: -2.0, ..Curve::default() }), (c.clone(), Curve::default())]);
+        let devices = HashMap::from([(a.clone(), with_dsp(night)), (b.clone(), with_dsp(phones)), (c.clone(), DeviceSettings::default()), (d.clone(), DeviceSettings::default())]);
+        let text = render(&curves, &devices, false, &Loudness::default(), false, &Live::default(), |_| false);
+        let plugin = |dsp: &poxidsp::Settings, id: &str| {
+            format!("Channel: L R\r\nVSTPlugin: Library \"PoxiDSP.dll\" ChunkData \"{}\"\r\nChannel: all\r\n", poxidsp::base64(&dsp.chunk(poxidsp::device_key(id))))
+        };
+        assert!(text.contains(&format!("Device: {a}\r\nPreamp: -2.0 dB\r\n{}", plugin(&night, &a))), "{text}");
+        assert!(text.contains(&format!("Device: {b}\r\nPreamp: 0.0 dB\r\n{}", plugin(&phones, &b))), "{text}");
+        // C sin plugin y D ni aparece
+        assert!(text.contains(&format!("Device: {c}\r\nPreamp: 0.0 dB\r\n")) && !text.contains(&d));
+        assert_eq!(text.matches("VSTPlugin").count(), 2);
+        // Cada sección lleva sus ajustes (no los de otra salida)
+        let (sa, sb) = (text.find(&a).unwrap(), text.find(&b).unwrap());
+        assert!(sa < sb && text[sa..sb].contains(&plugin(&night, &a)) && !text[sa..sb].contains(&plugin(&phones, &b)));
+        // En bypass ninguna salida suena procesada
+        assert!(!render(&curves, &devices, true, &Loudness::default(), false, &Live::default(), |_| false).contains("VSTPlugin"));
+    }
+
+    #[test]
+    fn presets_de_seccion_validados() {
+        let mut dsp = poxidsp::Settings::default();
+        (dsp.comp.on, dsp.comp.ratio, dsp.crossfeed.on, dsp.gate.on) = (true, 99.0, true, true);
+        let p = |id: &str, name: &str| SectionPreset { id: id.into(), name: name.into(), dsp: Some(dsp), curve: Some(Curve::default()), studio: Some(Studio::default()) };
+        let mut presets = SectionPresets {
+            sound: vec![p("u:a", "  Noche\u{7} "), p("u:a", "Repetido"), p("b:flat", "De serie"), p("u:mal id", "X"), p("u:b", "   "), SectionPreset { dsp: None, ..p("u:c", "Sin ajustes") }],
+            phones: (0..150).map(|i| p(&format!("u:{i}"), "P")).collect(),
+            studio: vec![p("u:s", "Mono"), SectionPreset { studio: None, ..p("u:t", "Vacío") }],
+            mic: vec![p("u:m", "Voz"), SectionPreset { curve: None, ..p("u:n", "Sin EQ") }],
+        };
+        presets.sanitize();
+        // Solo el primero de Sonido es válido: nombre limpio, rangos recortados y solo sus partes
+        assert_eq!(presets.sound.len(), 1);
+        let s = &presets.sound[0];
+        assert_eq!(s.name, "Noche");
+        let sd = s.dsp.unwrap();
+        assert!(sd.comp.on && sd.comp.ratio == 20.0 && !sd.crossfeed.on && !sd.gate.on);
+        assert!(s.curve.is_none() && s.studio.is_none());
+        // Cascos: como mucho 100 y solo crossfeed/altavoces
+        assert_eq!(presets.phones.len(), MAX_SECTION_PRESETS);
+        let pd = presets.phones[0].dsp.unwrap();
+        assert!(pd.crossfeed.on && !pd.comp.on);
+        // Estudio solo con su escucha; micrófono con EQ, puerta y compresor
+        assert_eq!(presets.studio.len(), 1);
+        assert!(presets.studio[0].dsp.is_none() && presets.studio[0].curve.is_none());
+        assert_eq!(presets.mic.len(), 1);
+        let md = presets.mic[0].dsp.unwrap();
+        assert!(md.gate.on && md.comp.on && !md.crossfeed.on && presets.mic[0].curve.is_some());
+
+        // El último preset de cada dispositivo solo si existe
+        let picks = Picks { sound: Some("u:a".into()), phones: Some("u:borrado".into()), mic: None };
+        let mut devices = HashMap::from([
+            ("{00000000-0000-0000-0000-00000000000a}".to_string(), DeviceSettings { dsp, presets: picks }),
+            ("../x".to_string(), DeviceSettings::default()),
+        ]);
+        sanitize_devices(&mut devices, &presets);
+        assert_eq!(devices.len(), 1);
+        let d = &devices["{00000000-0000-0000-0000-00000000000a}"];
+        assert_eq!((d.presets.sound.as_deref(), d.presets.phones.as_deref()), (Some("u:a"), None));
+        assert_eq!(d.dsp.comp.ratio, 20.0);
     }
 
     #[test]

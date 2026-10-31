@@ -7,7 +7,7 @@ mod hotkeys;
 mod osd;
 mod room;
 
-use eq::{Curve, Live, Loudness, Mic, Preset};
+use eq::{Curve, DeviceSettings, Live, Loudness, Mic, Preset, SectionPresets};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -49,8 +49,15 @@ pub struct Config {
     pub presets: Vec<Preset>,
     pub loudness: Loudness,
     pub meter_collapsed: bool,
-    /// Dinámica y realces (PoxiDSP), los mismos en todas las salidas
-    pub dsp: poxidsp::Settings,
+    /// Formato anterior: una sola dinámica (Sonido + Cascos) para todas las salidas. Solo se lee, para
+    /// repartirla entre los dispositivos (`migrate_per_device`).
+    #[serde(skip_serializing)]
+    pub dsp: Option<poxidsp::Settings>,
+    /// Lo que recuerda cada dispositivo (por GUID) aparte de su curva: su PoxiDSP y el último preset de cada
+    /// sección. Sin entrada, lo de serie (Natural, sin crossfeed).
+    pub per_device: HashMap<String, DeviceSettings>,
+    /// Presets propios de Sonido, Cascos, Estudio y Micrófono
+    pub section_presets: SectionPresets,
     /// Preset automático por aplicación en primer plano
     pub app_rules: Vec<apps::AppRule>,
     /// Atajos globales: bypass y un preset por hueco, cada uno con su combinación
@@ -60,7 +67,7 @@ pub struct Config {
     pub bypass_hotkey: Option<bool>,
     #[serde(skip_serializing)]
     pub preset_keys: Option<Vec<Option<String>>>,
-    /// Micrófono: puerta de ruido, compresor y su propio bypass (su EQ va en `curves`)
+    /// Micrófono: su propio bypass (su EQ va en `curves` y su puerta/compresor en `per_device`)
     pub mic: Mic,
 }
 
@@ -82,7 +89,9 @@ impl Default for Config {
             presets: vec![],
             loudness: Loudness::default(),
             meter_collapsed: false,
-            dsp: poxidsp::Settings::default(),
+            dsp: None,
+            per_device: HashMap::new(),
+            section_presets: SectionPresets::default(),
             app_rules: vec![],
             hotkeys: hotkeys::Hotkeys::default(),
             bypass_hotkey: None,
@@ -111,8 +120,8 @@ impl Config {
         self.curves.values_mut().for_each(Curve::sanitize);
         eq::sanitize_presets(&mut self.presets);
         self.loudness.sanitize();
-        self.dsp.sanitize();
-        self.mic.dsp.sanitize();
+        self.section_presets.sanitize();
+        eq::sanitize_devices(&mut self.per_device, &self.section_presets);
         if !matches!(self.analyzer_mode.as_str(), "spectrum" | "spectrogram") {
             self.analyzer_mode = "spectrum".into();
         }
@@ -127,6 +136,19 @@ impl Config {
             self.hotkeys = hotkeys::Hotkeys::migrate(self.bypass_hotkey.take(), self.preset_keys.take());
         }
         self.hotkeys.sanitize(apps::valid_preset_id);
+    }
+
+    /// Antes la dinámica de las salidas (Sonido y Cascos) era una para todas y la puerta/compresor del
+    /// micrófono, otra para todos: cada una pasa tal cual a los dispositivos de su tipo que ya se usaban
+    /// (`used`: id y si es una entrada) y que aún no tienen la suya. Los demás empiezan con lo de serie.
+    fn migrate_per_device(&mut self, used: &[(String, bool)]) {
+        let (outputs, inputs) = (self.dsp.take(), self.mic.dsp.take());
+        for (id, input) in used {
+            if let Some(mut dsp) = if *input { inputs } else { outputs } {
+                dsp.sanitize();
+                self.per_device.entry(id.clone()).or_insert(DeviceSettings { dsp, ..DeviceSettings::default() });
+            }
+        }
     }
 
     /// Lo que pinta el menú de la bandeja: si cambia, se rehace
@@ -246,12 +268,7 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
         (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone())
     };
     *st.cfg() = cfg.clone();
-    if let Ok(json) = serde_json::to_string_pretty(&cfg) {
-        if let Some(dir) = st.config_path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(&st.config_path, json);
-    }
+    save(&st.config_path, &cfg);
     if tray != cfg.tray_key() {
         refresh_tray(app);
     }
@@ -264,6 +281,46 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
         }
     }
     cfg
+}
+
+fn save(path: &std::path::Path, cfg: &Config) {
+    if let Ok(json) = serde_json::to_string_pretty(cfg) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, json);
+    }
+}
+
+/// Configuración y estado momentáneo con los que arranca la app. Lo del formato anterior se reparte entre los
+/// dispositivos que ya se usaban (`used`) y, siguiendo a Windows, se empieza en su salida predeterminada. Cada
+/// dispositivo suena con lo suyo (lo escribe `apply`). Lo momentáneo empieza siempre limpio: Estudio en
+/// estéreo normal y sin simulación, aunque haya presets suyos guardados.
+fn startup(mut cfg: Config, used: &[(String, bool)], default_output: Option<String>, is_input: impl Fn(&str) -> bool) -> (Config, Live) {
+    cfg.sanitize();
+    cfg.migrate_per_device(used);
+    // Antes el micrófono se elegía en el mismo selector que las salidas
+    if cfg.device.as_deref().is_some_and(&is_input) {
+        cfg.mic_device = cfg.device.take();
+    }
+    if cfg.follow_default && default_output.is_some() {
+        cfg.device = default_output;
+    }
+    (cfg, Live::default())
+}
+
+/// Dispositivos que ya se usaban (activados en el motor o con curva propia), solo si hay algo que migrar
+fn used_devices(cfg: &Config) -> Vec<(String, bool)> {
+    if cfg.dsp.is_none() && cfg.mic.dsp.is_none() {
+        return vec![];
+    }
+    let mut used: Vec<(String, bool)> = engine::status().devices.into_iter().filter(|d| d.enabled).map(|d| (d.id, d.input)).collect();
+    for id in cfg.curves.keys().filter(|id| engine::is_device_id(id)) {
+        if !used.iter().any(|(u, _)| u == id) {
+            used.push((id.clone(), engine::is_input(id)));
+        }
+    }
+    used
 }
 
 /// Cambio hecho desde Rust (atajo, bandeja, regla por app): se guarda, suena y se avisa a la interfaz
@@ -306,7 +363,7 @@ fn apply_preset(app: &AppHandle, id: &str) -> Option<String> {
 fn presets_sync(app: AppHandle, st: State<'_, AppState>, mut presets: Vec<PresetEntry>) {
     presets.truncate(300);
     presets.retain_mut(|p| {
-        p.name = p.name.trim().chars().filter(|c| !c.is_control()).take(48).collect();
+        p.name = eq::clean_name(&p.name);
         p.curve.sanitize();
         p.auto_gain = eq::clamp(p.auto_gain, -30.0, 12.0, 0.0);
         apps::valid_preset_id(&p.id) && !p.name.is_empty()
@@ -340,9 +397,11 @@ fn preset_export(app: AppHandle, name: String, code: String) -> Res<String> {
     Ok(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())
 }
 
-/// Código de preset compartido (`PXEQ1.` + base64url): solo eso y de tamaño razonable
+/// Código de preset compartido (`PXEQ2.` + base64url, o `PXEQ1.` de los primeros, solo del ecualizador): solo
+/// eso y de tamaño razonable. Su contenido lo valida la interfaz al importarlo (`share.ts`).
 fn share_code_ok(code: &str) -> bool {
-    code.len() <= 8192 && code.strip_prefix("PXEQ1.").is_some_and(|b| !b.is_empty() && b.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'))
+    let body = code.strip_prefix("PXEQ2.").or_else(|| code.strip_prefix("PXEQ1."));
+    code.len() <= 8192 && body.is_some_and(|b| !b.is_empty() && b.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'))
 }
 
 /// Nombre de archivo válido en Windows a partir del nombre del preset
@@ -363,7 +422,7 @@ fn apply(cfg: &Config, live: &Live) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    let text = eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, &cfg.dsp, &cfg.mic, live, engine::is_input);
+    let text = eq::render(&cfg.curves, &cfg.per_device, cfg.bypass, &cfg.loudness, cfg.mic.bypass, live, engine::is_input);
     engine::write_config(&text).map_err(|e| problem("engine.write", e))
 }
 
@@ -872,16 +931,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             let config_path = app.path().app_data_dir()?.join("config.json");
-            let mut cfg = Config::load(&config_path);
-            cfg.sanitize();
-            // Antes el micrófono se elegía en el mismo selector que las salidas
-            if cfg.device.as_deref().is_some_and(engine::is_input) {
-                cfg.mic_device = cfg.device.take();
-            }
-            // Siguiendo a Windows, se arranca en la salida que tenga puesta
+            let loaded = Config::load(&config_path);
+            let legacy = loaded.dsp.is_some() || loaded.mic.dsp.is_some();
+            let used = used_devices(&loaded);
             let default_output = engine::default_device(false);
-            if cfg.follow_default && default_output.is_some() {
-                cfg.device = default_output.clone();
+            let (cfg, live) = startup(loaded, &used, default_output.clone(), engine::is_input);
+            if legacy {
+                // Repartido una vez: el formato anterior ya no se vuelve a leer
+                save(&config_path, &cfg);
             }
             app.manage(AppState {
                 config: Mutex::new(cfg.clone()),
@@ -895,7 +952,7 @@ pub fn run() {
                     eq_on: "EQ encendido".into(),
                     eq_off: "EQ apagado".into(),
                 }),
-                live: Mutex::new(Live::default()),
+                live: Mutex::new(live),
                 presets: Mutex::new(vec![]),
                 watcher: OnceLock::new(),
                 hotkeys_failed: Mutex::new(vec![]),
@@ -934,7 +991,7 @@ pub fn run() {
             let handle = app.handle().clone();
             engine::watch_devices(move || devices_changed(&handle));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
-            let _ = apply(&cfg, &Live::default());
+            let _ = apply(&cfg, &live);
             Ok(())
         })
         .on_window_event(|w, ev| {
@@ -1030,16 +1087,89 @@ mod tests {
         let mut bad: Config = serde_json::from_str(r#"{"micDevice":"../x","followDefault":false}"#).unwrap();
         bad.sanitize();
         assert!(!bad.follow_default && bad.mic_device.is_none());
-        // Ajustes del micrófono fuera de rango
-        let mut m: Config = serde_json::from_str(r#"{"mic":{"bypass":true,"dsp":{"gate":{"on":true,"threshold":20,"range":500}}}}"#).unwrap();
+        // Ajustes de un dispositivo fuera de rango
+        let id = "{00000000-0000-0000-0000-00000000000a}";
+        let mut m: Config = serde_json::from_str(&format!(r#"{{"mic":{{"bypass":true}},"perDevice":{{"{id}":{{"dsp":{{"gate":{{"on":true,"threshold":20,"range":500}}}}}}}}}}"#)).unwrap();
         m.sanitize();
-        assert!(m.mic.bypass && m.mic.dsp.gate.on);
-        assert_eq!((m.mic.dsp.gate.threshold, m.mic.dsp.gate.range), (0.0, 90.0));
+        let gate = m.per_device[id].dsp.gate;
+        assert!(m.mic.bypass && gate.on);
+        assert_eq!((gate.threshold, gate.range), (0.0, 90.0));
         // «Graves»: sin el campo (configuración de antes) queda por defecto; fuera de rango se recorta
-        let mut g: Config = serde_json::from_str(r#"{"dsp":{"bass":{"on":true},"bassBoost":{"on":true,"amount":7}}}"#).unwrap();
+        let mut g: Config = serde_json::from_str(&format!(r#"{{"perDevice":{{"{id}":{{"dsp":{{"bass":{{"on":true}},"bassBoost":{{"on":true,"amount":7}}}}}}}}}}"#)).unwrap();
         g.sanitize();
-        assert!(g.dsp.bass.on && g.dsp.bass_boost.on && g.dsp.bass_boost.amount == 1.0);
-        assert_eq!(old.dsp.bass_boost, poxidsp::BassBoost::default());
+        let d = g.per_device[id].dsp;
+        assert!(d.bass.on && d.bass_boost.on && d.bass_boost.amount == 1.0);
+        assert!(old.per_device.is_empty() && old.section_presets == SectionPresets::default());
+    }
+
+    /// Configuración del formato anterior: una dinámica para todas las salidas y otra para todos los micros
+    const OLD: &str = r#"{"device":"{00000000-0000-0000-0000-00000000000a}",
+        "curves":{"{00000000-0000-0000-0000-00000000000a}":{"preamp":-3,"bands":[]}},
+        "dsp":{"leveler":{"on":true,"target":-23},"crossfeed":{"on":true,"feed":6},"bassBoost":{"on":true,"amount":0.4}},
+        "mic":{"bypass":false,"dsp":{"gate":{"on":true,"threshold":-45},"comp":{"on":true,"ratio":4}}}}"#;
+
+    #[test]
+    fn migracion_global_a_por_dispositivo() {
+        let (a, b, mic, new) = (
+            "{00000000-0000-0000-0000-00000000000a}",
+            "{00000000-0000-0000-0000-00000000000b}",
+            "{00000000-0000-0000-0000-0000000000c0}",
+            "{00000000-0000-0000-0000-00000000000f}",
+        );
+        let used = [(a.to_string(), false), (b.to_string(), false), (mic.to_string(), true)];
+        let (cfg, _) = startup(serde_json::from_str(OLD).unwrap(), &used, None, |id| id == mic);
+        // Cada salida usada se queda con lo de antes, sin perder nada
+        for id in [a, b] {
+            let d = &cfg.per_device[id].dsp;
+            assert!(d.leveler.on && d.leveler.target == -23.0 && d.crossfeed.on && d.crossfeed.feed == 6.0 && d.bass_boost.on && d.bass_boost.amount == 0.4);
+            assert!(!d.gate.on, "la puerta del micrófono no pasa a las salidas");
+        }
+        // El micrófono, con su puerta y su compresor
+        let m = &cfg.per_device[mic].dsp;
+        assert!(m.gate.on && m.gate.threshold == -45.0 && m.comp.on && m.comp.ratio == 4.0 && !m.leveler.on);
+        // Uno nuevo empieza con lo de serie (Natural, sin crossfeed)
+        assert!(!cfg.per_device.contains_key(new));
+        // Se guarda sin el formato anterior y al volver a cargarse no se migra otra vez ni se pierde nada
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(back.get("dsp").is_none() && back["mic"].get("dsp").is_none());
+        let again: Config = serde_json::from_str(&json).unwrap();
+        assert!(again.dsp.is_none() && again.mic.dsp.is_none());
+        let (again, _) = startup(again, &[(new.to_string(), false)], None, |_| false);
+        assert_eq!(again.per_device, cfg.per_device);
+        // Lo que ya tenía su propia configuración no se pisa
+        let mut keep: Config = serde_json::from_str(OLD).unwrap();
+        keep.per_device.insert(a.into(), DeviceSettings::default());
+        keep.migrate_per_device(&used);
+        assert_eq!(keep.per_device[a], DeviceSettings::default());
+        assert!(keep.per_device[b].dsp.leveler.on);
+    }
+
+    #[test]
+    fn al_arrancar_cada_dispositivo_lo_suyo_y_estudio_limpio() {
+        let (a, b) = ("{00000000-0000-0000-0000-00000000000a}", "{00000000-0000-0000-0000-00000000000b}");
+        let mut cfg: Config = serde_json::from_str(OLD).unwrap();
+        // Hay presets de Estudio guardados y B tiene otra configuración (solo crossfeed)
+        cfg.section_presets.studio.push(eq::SectionPreset {
+            id: "u:mono".into(),
+            name: "Mono".into(),
+            dsp: None,
+            curve: None,
+            studio: Some(eq::Studio { listen: eq::Listen::Mono, sim: Some(eq::Sim::Phone), ..eq::Studio::default() }),
+        });
+        let mut phones = poxidsp::Settings::default();
+        phones.crossfeed.on = true;
+        cfg.per_device.insert(b.into(), DeviceSettings { dsp: phones, ..DeviceSettings::default() });
+        // Windows tiene puesta B: se arranca en ella, cada una con lo suyo y Estudio sin nada
+        let (cfg, live) = startup(cfg, &[(a.to_string(), false), (b.to_string(), false)], Some(b.into()), |_| false);
+        assert_eq!(cfg.device.as_deref(), Some(b));
+        assert_eq!(live, Live::default());
+        assert_eq!(cfg.section_presets.studio.len(), 1, "los presets de Estudio se conservan");
+        let text = eq::render(&cfg.curves, &cfg.per_device, cfg.bypass, &cfg.loudness, cfg.mic.bypass, &live, |_| false);
+        assert!(!text.contains("Copy:") && !text.contains("estudio"), "{text}");
+        let chunk = |id: &str| poxidsp::base64(&cfg.per_device[id].dsp.chunk(poxidsp::device_key(id)));
+        assert!(text.contains(&chunk(a)) && text.contains(&chunk(b)));
+        assert_ne!(cfg.per_device[a].dsp, cfg.per_device[b].dsp);
     }
 
     #[test]
@@ -1066,7 +1196,9 @@ mod tests {
         assert!(share_code_ok("PXEQ1.eyJuIjoiYSJ9"));
         assert!(!share_code_ok("PXEQ1."));
         assert!(!share_code_ok("PXEQ1.abc def"));
-        assert!(!share_code_ok("PXEQ2.abc"));
+        assert!(share_code_ok("PXEQ2.eyJzIjoic291bmQifQ"));
+        assert!(!share_code_ok("PXEQ2."));
+        assert!(!share_code_ok("PXEQ3.abc"));
         assert!(!share_code_ok(&format!("PXEQ1.{}", "a".repeat(9000))));
         assert_eq!(file_stem("Mis DT 770: noche/peli?"), "Mis DT 770 nochepeli");
         assert_eq!(file_stem(r"..\..\"), "preset");

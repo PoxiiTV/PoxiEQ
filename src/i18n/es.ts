@@ -106,7 +106,7 @@ export default {
     sound: 'Sonoridad',
     custom: 'Personalizado',
     sounds: {
-      natural: { name: 'Natural', meta: 'Sin procesar', text: 'Tal cual llega: apaga la dinámica, los realces y el crossfeed o los altavoces virtuales.' },
+      natural: { name: 'Natural', meta: 'Sin procesar', text: 'Tal cual llega: apaga la dinámica y los realces (lo de Cascos no lo toca).' },
       streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Todo al mismo volumen, como en Spotify o YouTube.' },
       loud: { name: 'Fuerte', meta: '−9 LUFS', text: 'Más pegada y presencia, para ruido alrededor o altavoces flojos.' },
       night: { name: 'Noche', meta: '−23 LUFS', text: 'Compresión fuerte: explosiones bajas y diálogos claros sin molestar.' }
@@ -209,7 +209,7 @@ export default {
   mic: {
     pick: 'Micrófono que editas',
     none: 'No hay ningún micrófono conectado',
-    intro: 'Lo que ajustes aquí lo reciben Discord, OBS y cualquier app que use el micrófono, en este orden: EQ, puerta de ruido y compresor. La puerta y el compresor son los mismos en todos los micrófonos con PoxiEQ.',
+    intro: 'Lo que ajustes aquí lo reciben Discord, OBS y cualquier app que use el micrófono, en este orden: EQ, puerta de ruido y compresor. Cada micrófono recuerda lo suyo.',
     eq: 'Ecualizador del micrófono',
     bypassOn: 'Micrófono sin procesar: pulsa para procesarlo',
     bypassOff: 'Dejar el micrófono sin procesar',
@@ -252,6 +252,8 @@ export default {
     saved: 'Preset guardado',
     deleted: 'Preset eliminado',
     undo: 'Deshacer',
+    none: 'Ninguno',
+    full: 'Ya tienes {n} presets en esta sección: borra alguno para guardar más',
     autoeq: 'Buscar mis cascos',
     builtin: {
       'b:flat': 'Plano',
@@ -421,6 +423,32 @@ export default {
     listeningHint: 'Crossfeed o altavoces virtuales: uno u otro, al encender uno se apaga el otro.',
     apply: 'Aplicar «{n}»'
   },
+  sections: {
+    eq: {
+      saves: 'Se guarda la curva del ecualizador (preamp y bandas).',
+      namePh: 'Mis cascos, Noche de pelis…'
+    },
+    sound: {
+      saves: 'Se guarda todo lo de Sonido de esta salida: la cadena de dinámica y los realces, con Graves y Armónicos.',
+      namePh: 'Pelis por la noche, Música alta…',
+      empty: 'Guarda aquí tu sonido (dinámica y realces) para ponerlo con un clic en cualquier salida.'
+    },
+    phones: {
+      saves: 'Se guarda la escucha con cascos: crossfeed o altavoces virtuales y sus valores. El EQ de tus cascos va en los presets del Ecualizador.',
+      namePh: 'Crossfeed suave, Altavoces delante…',
+      empty: 'Guarda aquí tu crossfeed o tus altavoces virtuales para cambiar con un clic.'
+    },
+    studio: {
+      saves: 'Se guarda la monitorización y la simulación. Al abrir PoxiEQ, Estudio empieza siempre en estéreo normal.',
+      namePh: 'Comprobar mono, Móvil en mono…',
+      empty: 'Guarda aquí tus comprobaciones de mezcla para ponerlas con un clic.'
+    },
+    mic: {
+      saves: 'Se guarda todo lo del micrófono: su EQ, la puerta de ruido y el compresor.',
+      namePh: 'Directo, Podcast…',
+      empty: 'Guarda aquí los ajustes de tu micro (EQ, puerta y compresor) para cambiar con un clic.'
+    }
+  },
   share: {
     title: 'Compartir preset',
     text: 'Copia el código y pégalo en un chat, o guárdalo como archivo .poxieq. Quien lo reciba lo importa con un clic.',
@@ -432,7 +460,9 @@ export default {
     importTitle: 'Importar preset',
     importText: 'Pega el código de un preset o suelta aquí un archivo .poxieq (también vale soltarlo en cualquier parte de la ventana).',
     import: 'Importar y aplicar',
-    imported: '«{n}» añadido a Mis presets',
+    imported: '«{n}» añadido a Mis presets de {s}',
+    kind: 'Preset de {s}',
+    allOff: 'Todo apagado',
     bad: 'Este código no es un preset de PoxiEQ válido.',
     dropBad: 'Suelta un archivo .poxieq para importar un preset'
   },

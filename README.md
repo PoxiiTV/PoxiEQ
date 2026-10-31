@@ -40,11 +40,11 @@ PoxiEQ lo instala y lo activa por ti con un clic, **sin reiniciar el PC**.
 - 👂 **Test de audición**: mide en cada oído tu umbral en 10 frecuencias y crea el preset «Mi audición», una compensación suave (también por oído). No es una prueba médica.
 - 📐 **Corrección de sala** para altavoces: con un micrófono en tu sitio, barridos senoidales logarítmicos en varias posiciones, media, suavizado de 1/3 o 1/6 de octava y hasta 10 filtros calculados solos, sobre todo de corte (las subidas tienen tope y nunca por debajo de donde llega el altavoz). Por defecto solo corrige los graves (hasta 300–500 Hz) y el objetivo puede ser plano o con caída hacia agudos.
 - 🎙️ **Micrófono**: EQ propio, **puerta de ruido** y **compresor** antes de que el sonido llegue a Discord, OBS o cualquier app, con su medidor de entrada (y la raya del umbral de la puerta). Su propio bypass: el atajo del EQ no le quita la puerta en mitad de un directo.
-- 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos. Compártelos con un código para pegar en un chat o como archivo `.poxieq` (arrástralo a la ventana para importarlo).
+- 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos. Sonido, Cascos, Estudio y Micrófono tienen también sus propios presets. Compártelos con un código para pegar en un chat o como archivo `.poxieq` (arrástralo a la ventana para importarlo: va solo a su sección).
 - 🎯 **Preset por aplicación**: Spotify → Música, tu juego → Pasos. Cambia solo cuando la app pasa a primer plano y vuelve al que tenías al salir.
 - ⌨️ **Atajos a tu gusto**: bypass y nueve presets, cada uno con la combinación que grabes en Ajustes (por defecto `Ctrl+Alt+Num 0…9`). Rechaza las que chocan con AltGr (que te dejarían sin `€ | @ # ~`), las que no llevan modificador y las repetidas, y avisa si otro programa ya tiene esa combinación. Con un aviso en pantalla que no roba el foco.
 - ↩️ **Deshacer y rehacer** (`Ctrl+Z` / `Ctrl+Y`) de la curva y la dinámica: un arrastre entero es un solo paso.
-- 🔌 **Un EQ por salida**: cada dispositivo guarda su propia curva.
+- 🔌 **Cada dispositivo con lo suyo**: cada salida guarda su curva, su Sonido, sus Cascos y el último preset de cada sección; cada micrófono, su EQ, puerta y compresor. Estudio empieza siempre en estéreo normal.
 - 🔁 **Sigue la salida de Windows**: al conectar unos cascos o un altavoz Bluetooth y pasar Windows a él, PoxiEQ cambia solo a su EQ (se puede apagar en Ajustes).
 - ⏯️ **Bypass** con **Ctrl+Alt+Num 0** (o el atajo que elijas) desde cualquier sitio, también en juegos, y desde la bandeja.
 - 🎨 Temas oscuro y claro, 7 colores, español e inglés. Arranca con Windows si quieres y se actualiza solo.
@@ -110,11 +110,11 @@ and enables it for you with one click, **without restarting your PC**.
 - 👂 **Hearing test**: measures your threshold at 10 frequencies in each ear and creates the "My hearing" preset, a gentle compensation (per ear too). Not a medical test.
 - 📐 **Room correction** for speakers: with a microphone at your seat, logarithmic sine sweeps at several positions, averaging, 1/3 or 1/6 octave smoothing and up to 10 automatically fitted filters, mostly cuts (boosts are capped and never below where the speaker reaches). By default it only corrects the bass (up to 300–500 Hz) and the target can be flat or tilted towards the treble.
 - 🎙️ **Microphone**: its own EQ, **noise gate** and **compressor** before the sound reaches Discord, OBS or any app, with an input meter (showing the gate threshold). Its own bypass: the EQ shortcut won't remove the gate in the middle of a stream.
-- 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own. Share them as a code to paste in a chat or as a `.poxieq` file (drop it on the window to import it).
+- 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own. Sound, Headphones, Studio and Microphone have their own presets too. Share them as a code to paste in a chat or as a `.poxieq` file (drop it on the window to import it: it goes to its own section).
 - 🎯 **Preset per app**: Spotify → Music, your game → Footsteps. It switches when the app comes to the foreground and goes back to yours when you leave.
 - ⌨️ **Your own shortcuts**: bypass and nine presets, each with the combination you record in Settings (by default `Ctrl+Alt+Num 0…9`). It rejects those that clash with AltGr (which would cost you `€ | @ # ~`), those without a modifier and duplicates, and warns if another program already owns the combination. With an on-screen notice that doesn't steal focus.
 - ↩️ **Undo and redo** (`Ctrl+Z` / `Ctrl+Y`) for the curve and dynamics: a whole drag is a single step.
-- 🔌 **One EQ per output**: each device keeps its own curve.
+- 🔌 **Each device keeps its own**: every output keeps its curve, Sound, Headphones settings and the last preset of each section; every microphone its EQ, gate and compressor. Studio always starts in normal stereo.
 - 🔁 **Follows the Windows output**: when you plug in headphones or a Bluetooth speaker and Windows switches to it, PoxiEQ switches to its EQ (you can turn this off in Settings).
 - ⏯️ **Bypass** with **Ctrl+Alt+Num 0** (or the shortcut you choose) from anywhere, games included, and from the tray.
 - 🎨 Dark and light themes, 7 colors, Spanish and English. Optional start with Windows, updates itself.

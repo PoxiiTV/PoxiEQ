@@ -1,7 +1,7 @@
 import { AudioWaveform, Headphones, House, Mic, Settings, SlidersVertical, Volume2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { SOUND_PARTS } from '../lib/dsp'
-import { go, studioActive, useStore, type Page } from '../lib/store'
+import { partsOn, SECTION_PARTS } from '../lib/dsp'
+import { go, micSettings, outputSettings, studioActive, useStore, type Page } from '../lib/store'
 import { useT } from '../i18n'
 
 const PAGES: [Page, LucideIcon][] = [
@@ -17,13 +17,11 @@ const PAGES: [Page, LucideIcon][] = [
 type Dot = 'on' | 'warn' | null
 
 function useDots(): Record<Page, Dot> {
-  const sound = useStore((s) => !!s.config && SOUND_PARTS.some((k) => s.config!.dsp[k].on))
-  const phones = useStore((s) => !!s.config && (s.config.dsp.crossfeed.on || s.config.dsp.speakers.on))
+  // Lo de la salida que se edita y lo del micrófono que se edita (cada uno tiene lo suyo)
+  const sound = useStore((s) => partsOn(outputSettings(s).dsp, SECTION_PARTS.sound))
+  const phones = useStore((s) => partsOn(outputSettings(s).dsp, SECTION_PARTS.phones))
   const studio = useStore((s) => studioActive(s.studio))
-  const mic = useStore((s) => {
-    const m = s.config?.mic
-    return !!m && !m.bypass && (m.dsp.gate.on || m.dsp.comp.on)
-  })
+  const mic = useStore((s) => !s.config?.mic.bypass && partsOn(micSettings(s).dsp, SECTION_PARTS.mic))
   return { eq: null, sound: sound ? 'on' : null, phones: phones ? 'on' : null, studio: studio ? 'warn' : null, room: null, mic: mic ? 'on' : null, settings: null }
 }
 
