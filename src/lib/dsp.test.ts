@@ -54,4 +54,6 @@ test('crossfeed y altavoces virtuales nunca a la vez', () => {
   const off = withHeadphones(v, 'speakers', false)
   assert.deepEqual([off.crossfeed.on, off.speakers.on], [false, false])
   assert.equal(withSound(v, 'natural').speakers.on, false)
+  // Lo de cascos va en otra página: con solo eso encendido, «Sonido» sigue en Natural
+  assert.equal(soundOf(v), 'natural')
 })

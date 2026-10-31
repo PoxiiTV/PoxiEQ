@@ -28,6 +28,9 @@ const PRESETS: Record<Exclude<Sound, 'natural'>, Chain> = {
 }
 
 const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed', 'speakers', 'gate'] as const
+/** Lo que se ajusta en la página «Sonido»: la cadena de volumen y los realces (crossfeed y altavoces virtuales
+ *  van en «Cascos») */
+export const SOUND_PARTS = ['leveler', 'comp', 'limiter', 'bass', 'dialog'] as const
 
 export function withSound(d: Dsp, s: Sound): Dsp {
   if (s !== 'natural') return { ...d, ...structuredClone(PRESETS[s]) }
@@ -36,9 +39,9 @@ export function withSound(d: Dsp, s: Sound): Dsp {
 
 const same = (a: object, b: object): boolean => Object.entries(a).every(([k, v]) => (b as Record<string, unknown>)[k] === v)
 
-/** Preset de sonoridad que coincide con los ajustes (`null` = personalizado) */
+/** Preset de sonoridad que coincide con los ajustes de la página «Sonido» (`null` = personalizado) */
 export function soundOf(d: Dsp): Sound | null {
-  if (!dspActive(d)) return 'natural'
+  if (!SOUND_PARTS.some((k) => d[k].on)) return 'natural'
   return (Object.keys(PRESETS) as (keyof typeof PRESETS)[]).find((s) => (['leveler', 'comp', 'limiter'] as const).every((k) => same(PRESETS[s][k], d[k]))) ?? null
 }
 

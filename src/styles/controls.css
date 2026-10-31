@@ -96,7 +96,11 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
   color: var(--text);
   font-size: 12px;
   font-weight: 700;
-  white-space: nowrap;
+  /* Los largos pasan a varias líneas en vez de salirse de la ventana */
+  width: max-content;
+  max-width: 300px;
+  white-space: normal;
+  line-height: 1.35;
   pointer-events: none;
   opacity: 0;
   z-index: 200;

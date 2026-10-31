@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { AudioLines, ChevronDown, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
+import { ArrowDown, AudioLines, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
@@ -14,23 +13,40 @@ const SOUND_ICONS: Record<Sound, LucideIcon> = { natural: Leaf, streaming: Radio
 const num = (v: number, digits = 1): string => v.toFixed(digits).replace('-', '−')
 const db = (v: number): string => `${v > 0 ? '+' : ''}${num(v)} dB`
 
-/** Panel «Dinámica»: presets de sonoridad, realces y, plegado, cada procesador a mano */
-export function Dynamics(): React.JSX.Element | null {
-  const t = useT()
+/** Cambia una parte de la dinámica de las salidas */
+function useDsp(): [Dsp | undefined, <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>) => void] {
   const dsp = useStore((s) => s.config?.dsp)
-  const [advanced, setAdvanced] = useState(false)
+  const set = <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>): void => {
+    const cur = useStore.getState().config?.dsp
+    if (cur) updateConfig({ dsp: { ...cur, [key]: { ...cur[key], ...patch } } })
+  }
+  return [dsp, set]
+}
+
+/** Encabezado de un apartado de página (con número si sigue un orden) */
+export function SectionHead({ n, label, children }: { n?: number; label: string; children?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="dyn-head">
+      <span className="label">{n ? `${n} · ${label}` : label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** Página «Sonido»: sonoridad, la cadena de dinámica en el orden de la señal y los realces. Todo a la vista. */
+export function SoundPage(): React.JSX.Element | null {
+  const t = useT()
+  const [dsp, set] = useDsp()
   if (!dsp) return null
   const sound = soundOf(dsp)
-  const set = <K extends keyof Dsp>(key: K, patch: Partial<Dsp[K]>): void => updateConfig({ dsp: { ...dsp, [key]: { ...dsp[key], ...patch } } })
 
   return (
-    <div className="dyn">
+    <div className="page">
       <Install />
       <section>
-        <div className="dyn-head">
-          <span className="label">{t('dsp.sound')}</span>
+        <SectionHead n={1} label={t('dsp.sound')}>
           {sound === null && <span className="chip">{t('dsp.custom')}</span>}
-        </div>
+        </SectionHead>
         <div className="sounds">
           {SOUNDS.map((s) => {
             const Icon = SOUND_ICONS[s]
@@ -49,10 +65,27 @@ export function Dynamics(): React.JSX.Element | null {
       </section>
 
       <section>
-        <div className="dyn-head">
-          <span className="label">{t('dsp.extras')}</span>
+        <SectionHead n={2} label={t('dsp.chain')} />
+        <small className="studio-hint">{t('dsp.chainHint')}</small>
+        <div className="chain">
+          <Card icon={AudioLines} title={t('dsp.leveler')} hint={t('dsp.levelerHint')} on={dsp.leveler.on} onToggle={(on) => set('leveler', { on })}>
+            <Slider label={t('dsp.target')} value={dsp.leveler.target} min={-36} max={-6} fmt={(v) => `${num(v, 0)} LUFS`} onChange={(target) => set('leveler', { target })} />
+            <Slider label={t('dsp.maxGain')} value={dsp.leveler.maxGain} min={0} max={24} fmt={db} onChange={(maxGain) => set('leveler', { maxGain })} />
+          </Card>
+          <ChainArrow />
+          <Card icon={Gauge} title={t('dsp.comp')} hint={t('dsp.compHint')} on={dsp.comp.on} onToggle={(on) => set('comp', { on })}>
+            <CompSliders comp={dsp.comp} set={(patch) => set('comp', patch)} />
+          </Card>
+          <ChainArrow />
+          <Card icon={ShieldCheck} title={t('dsp.limiter')} hint={t('dsp.limiterHint')} on={dsp.limiter.on} onToggle={(on) => set('limiter', { on })}>
+            <Slider label={t('dsp.ceiling')} value={dsp.limiter.ceiling} min={-12} max={0} step={0.1} fmt={(v) => `${num(v)} dBTP`} onChange={(ceiling) => set('limiter', { ceiling })} />
+          </Card>
         </div>
-        <div className="dyn-cards">
+      </section>
+
+      <section>
+        <SectionHead n={3} label={t('dsp.extras')} />
+        <div className="dyn-cards pair">
           <Card icon={Waves} title={t('dsp.bass')} hint={t('dsp.bassHint')} on={dsp.bass.on} onToggle={(on) => set('bass', { on })}>
             <Slider label={t('dsp.amount')} value={dsp.bass.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('bass', { amount: v / 100 })} />
             <Slider label={t('dsp.below')} value={dsp.bass.freq} min={40} max={200} step={5} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('bass', { freq })} />
@@ -60,41 +93,39 @@ export function Dynamics(): React.JSX.Element | null {
           <Card icon={Mic} title={t('dsp.dialog')} hint={t('dsp.dialogHint')} on={dsp.dialog.on} onToggle={(on) => set('dialog', { on })}>
             <Slider label={t('dsp.boost')} value={dsp.dialog.amount} min={0} max={12} step={0.5} fmt={db} onChange={(amount) => set('dialog', { amount })} />
           </Card>
-          <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'crossfeed', on) })}>
-            <Slider label={t('dsp.intensity')} value={dsp.crossfeed.feed} min={1} max={15} step={0.5} fmt={(v) => `${num(v)} dB`} onChange={(feed) => set('crossfeed', { feed })} />
-            <Slider label={t('dsp.cutoff')} value={dsp.crossfeed.freq} min={300} max={2000} step={50} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('crossfeed', { freq })} />
-          </Card>
-          <Card icon={Speaker} title={t('dsp.speakers')} hint={t('dsp.speakersHint')} on={dsp.speakers.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'speakers', on) })}>
-            <Slider label={t('dsp.intensity')} value={dsp.speakers.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('speakers', { amount: v / 100 })} />
-          </Card>
         </div>
-      </section>
-
-      <section>
-        <button className="dyn-more" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
-          {t('dsp.advanced')}
-          <ChevronDown size={16} />
-        </button>
-        {advanced && (
-          <div className="dyn-cards">
-            <Card icon={AudioLines} title={t('dsp.leveler')} hint={t('dsp.levelerHint')} on={dsp.leveler.on} onToggle={(on) => set('leveler', { on })}>
-              <Slider label={t('dsp.target')} value={dsp.leveler.target} min={-36} max={-6} fmt={(v) => `${num(v, 0)} LUFS`} onChange={(target) => set('leveler', { target })} />
-              <Slider label={t('dsp.maxGain')} value={dsp.leveler.maxGain} min={0} max={24} fmt={db} onChange={(maxGain) => set('leveler', { maxGain })} />
-            </Card>
-            <Card icon={Gauge} title={t('dsp.comp')} hint={t('dsp.compHint')} on={dsp.comp.on} onToggle={(on) => set('comp', { on })}>
-              <CompSliders comp={dsp.comp} set={(patch) => set('comp', patch)} />
-            </Card>
-            <Card icon={ShieldCheck} title={t('dsp.limiter')} hint={t('dsp.limiterHint')} on={dsp.limiter.on} onToggle={(on) => set('limiter', { on })}>
-              <Slider label={t('dsp.ceiling')} value={dsp.limiter.ceiling} min={-12} max={0} step={0.1} fmt={(v) => `${num(v)} dBTP`} onChange={(ceiling) => set('limiter', { ceiling })} />
-            </Card>
-          </div>
-        )}
       </section>
     </div>
   )
 }
 
-/** Compresor: los mismos controles en las salidas (ajustes avanzados) y en el micrófono */
+function ChainArrow(): React.JSX.Element {
+  return (
+    <div className="chain-arrow" aria-hidden>
+      <ArrowDown size={14} />
+    </div>
+  )
+}
+
+/** Crossfeed y altavoces virtuales (página «Cascos»): uno u otro, encender uno apaga el otro */
+export function HeadphoneCards(): React.JSX.Element | null {
+  const t = useT()
+  const [dsp, set] = useDsp()
+  if (!dsp) return null
+  return (
+    <div className="dyn-cards pair">
+      <Card icon={Headphones} title={t('dsp.crossfeed')} hint={t('dsp.crossfeedHint')} on={dsp.crossfeed.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'crossfeed', on) })}>
+        <Slider label={t('dsp.intensity')} value={dsp.crossfeed.feed} min={1} max={15} step={0.5} fmt={(v) => `${num(v)} dB`} onChange={(feed) => set('crossfeed', { feed })} />
+        <Slider label={t('dsp.cutoff')} value={dsp.crossfeed.freq} min={300} max={2000} step={50} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('crossfeed', { freq })} />
+      </Card>
+      <Card icon={Speaker} title={t('dsp.speakers')} hint={t('dsp.speakersHint')} on={dsp.speakers.on} onToggle={(on) => updateConfig({ dsp: withHeadphones(dsp, 'speakers', on) })}>
+        <Slider label={t('dsp.intensity')} value={dsp.speakers.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('speakers', { amount: v / 100 })} />
+      </Card>
+    </div>
+  )
+}
+
+/** Compresor: los mismos controles en las salidas y en el micrófono */
 function CompSliders({ comp, set }: { comp: Dsp['comp']; set: (patch: Partial<Dsp['comp']>) => void }): React.JSX.Element {
   const t = useT()
   return (
@@ -109,7 +140,7 @@ function CompSliders({ comp, set }: { comp: Dsp['comp']; set: (patch: Partial<Ds
   )
 }
 
-/** Panel «Dinámica» de un micrófono: puerta de ruido y compresor, antes de que lo reciba cualquier app */
+/** Puerta de ruido y compresor del micrófono, antes de que lo reciba cualquier app (en ese orden) */
 export function MicDynamics(): React.JSX.Element | null {
   const t = useT()
   const mic = useStore((s) => s.config?.mic)
@@ -117,32 +148,24 @@ export function MicDynamics(): React.JSX.Element | null {
   const set = <K extends 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => updateConfig({ mic: { ...mic, dsp: { ...mic.dsp, [key]: { ...mic.dsp[key], ...patch } } } })
   const g = mic.dsp.gate
   return (
-    <div className="dyn">
-      <Install />
-      <section>
-        <div className="dyn-head">
-          <span className="label">{t('mic.dynamics')}</span>
-        </div>
-        <small className="studio-hint">{t('mic.hint')}</small>
-        <div className="dyn-cards">
-          <Card icon={DoorClosed} title={t('mic.gate')} hint={t('mic.gateHint')} on={g.on} onToggle={(on) => set('gate', { on })}>
-            <Slider label={t('dsp.threshold')} value={g.threshold} min={-90} max={0} fmt={(v) => `${num(v, 0)} dBFS`} onChange={(threshold) => set('gate', { threshold })} />
-            <Slider label={t('mic.range')} value={g.range} min={0} max={90} fmt={(v) => `${num(-v, 0)} dB`} onChange={(range) => set('gate', { range })} />
-            <Slider label={t('dsp.attack')} value={g.attack} min={0.1} max={50} log fmt={(v) => `${num(v, v < 10 ? 1 : 0)} ms`} onChange={(attack) => set('gate', { attack })} />
-            <Slider label={t('mic.hold')} value={g.hold} min={0} max={2000} step={10} fmt={(v) => `${Math.round(v)} ms`} onChange={(hold) => set('gate', { hold })} />
-            <Slider label={t('dsp.release')} value={g.release} min={5} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set('gate', { release })} />
-          </Card>
-          <Card icon={Gauge} title={t('dsp.comp')} hint={t('mic.compHint')} on={mic.dsp.comp.on} onToggle={(on) => set('comp', { on })}>
-            <CompSliders comp={mic.dsp.comp} set={(patch) => set('comp', patch)} />
-          </Card>
-        </div>
-      </section>
+    <div className="chain">
+      <Card icon={DoorClosed} title={t('mic.gate')} hint={t('mic.gateHint')} on={g.on} onToggle={(on) => set('gate', { on })}>
+        <Slider label={t('dsp.threshold')} value={g.threshold} min={-90} max={0} fmt={(v) => `${num(v, 0)} dBFS`} onChange={(threshold) => set('gate', { threshold })} />
+        <Slider label={t('mic.range')} value={g.range} min={0} max={90} fmt={(v) => `${num(-v, 0)} dB`} onChange={(range) => set('gate', { range })} />
+        <Slider label={t('dsp.attack')} value={g.attack} min={0.1} max={50} log fmt={(v) => `${num(v, v < 10 ? 1 : 0)} ms`} onChange={(attack) => set('gate', { attack })} />
+        <Slider label={t('mic.hold')} value={g.hold} min={0} max={2000} step={10} fmt={(v) => `${Math.round(v)} ms`} onChange={(hold) => set('gate', { hold })} />
+        <Slider label={t('dsp.release')} value={g.release} min={5} max={2000} log fmt={(v) => `${Math.round(v)} ms`} onChange={(release) => set('gate', { release })} />
+      </Card>
+      <ChainArrow />
+      <Card icon={Gauge} title={t('dsp.comp')} hint={t('mic.compHint')} on={mic.dsp.comp.on} onToggle={(on) => set('comp', { on })}>
+        <CompSliders comp={mic.dsp.comp} set={(patch) => set('comp', patch)} />
+      </Card>
     </div>
   )
 }
 
 /** Aviso cuando el procesador no está instalado o es de otra versión (un permiso de administrador) */
-function Install(): React.JSX.Element | null {
+export function Install(): React.JSX.Element | null {
   const t = useT()
   const state = useStore((s) => s.engine?.dsp)
   const step = useStore((s) => s.setup)
@@ -192,7 +215,7 @@ function Card({
 const LOG_STEPS = 1000
 
 /** Deslizador con etiqueta y valor; `log` reparte la escala en logaritmo (tiempos de ataque/relajación) */
-function Slider({
+export function Slider({
   label,
   value,
   min,

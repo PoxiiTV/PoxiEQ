@@ -1,14 +1,16 @@
 import { LoaderCircle, RotateCcw, ShieldCheck, Zap } from 'lucide-react'
 import { runSetup } from '../lib/actions'
-import { currentDevice, useStore } from '../lib/store'
+import { currentDevice, editingMic, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Logo } from './ui'
 
-/** Pantalla cuando el motor falta o la salida elegida aún no pasa por PoxiEQ */
+/** Tarjeta cuando el motor falta o lo que se edita (la salida o, en su página, el micrófono) aún no pasa por
+ *  PoxiEQ. Activar es un aviso de UAC por dispositivo: solo con el botón, nunca solo. */
 export function Setup(): React.JSX.Element {
   const t = useT()
   const installed = useStore((s) => !!s.engine?.installed)
   const device = useStore((s) => currentDevice(s))
+  const mic = useStore((s) => editingMic(s))
   const step = useStore((s) => s.setup)
 
   if (!device) {
@@ -16,7 +18,7 @@ export function Setup(): React.JSX.Element {
       <div className="setup">
         <div className="setup-card">
           <Logo size={64} />
-          <h1>{t('device.none')}</h1>
+          <h1>{t(mic ? 'mic.none' : 'device.none')}</h1>
         </div>
       </div>
     )

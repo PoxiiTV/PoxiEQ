@@ -4,12 +4,12 @@ import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Tra
 import type { LucideIcon } from 'lucide-react'
 import { api, type Accent, type AppRule, type Config, type OpenApp } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { allPresets, currentCurve, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, currentCurve, refreshEngine, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
 import { KeyRecorder, Range, Select, type Option } from './controls'
-import { Logo, Modal, Switch } from './ui'
+import { Logo, Switch } from './ui'
 
 type Cat = 'general' | 'auto' | 'keys' | 'engine' | 'about'
 const CATS: [Cat, LucideIcon][] = [
@@ -42,33 +42,28 @@ function Row({ title, hint, children }: { title: string; hint?: string; children
   )
 }
 
-export function Settings(): React.JSX.Element | null {
+/** Página «Ajustes»: sus apartados en una barra de pestañas arriba */
+export function SettingsPage(): React.JSX.Element {
   const t = useT()
-  const open = useStore((s) => s.settingsOpen)
   const [cat, setCat] = useState<Cat>('general')
-  if (!open) return null
   return (
-    <Modal onClose={() => setState({ settingsOpen: false })} className="settings">
-      <nav>
-        <h2>{t('settings.title')}</h2>
+    <div className="page settings-page">
+      <div className="segmented settings-tabs" role="tablist" aria-label={t('settings.title')}>
         {CATS.map(([c, Icon]) => (
-          <button key={c} className={`nav-item ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>
-            <Icon size={16} />
-            {t(`settings.cats.${c}`)}
+          <button key={c} role="tab" aria-selected={cat === c} className={cat === c ? 'on' : ''} onClick={() => setCat(c)}>
+            <Icon size={15} />
+            <span>{t(`settings.cats.${c}`)}</span>
           </button>
         ))}
-      </nav>
-      <div className="body">
-        <button className="icon-btn settings-close" onClick={() => setState({ settingsOpen: false })} aria-label={t('common.close')}>
-          <X size={17} />
-        </button>
+      </div>
+      <div className="settings-body" role="tabpanel">
         {cat === 'general' && <General />}
         {cat === 'auto' && <AutoRules />}
         {cat === 'keys' && <Keys />}
         {cat === 'engine' && <Engine />}
         {cat === 'about' && <About />}
       </div>
-    </Modal>
+    </div>
   )
 }
 
@@ -130,6 +125,9 @@ function General(): React.JSX.Element {
       </Row>
       <Row title={t('settings.closeToTray')} hint={t('settings.closeToTrayHint')}>
         <Switch on={cfg.closeToTray} label={t('settings.closeToTray')} onChange={(closeToTray) => set({ closeToTray })} />
+      </Row>
+      <Row title={t('settings.follow')} hint={t('settings.followHint')}>
+        <Switch on={cfg.followDefault} label={t('settings.follow')} onChange={(followDefault) => set({ followDefault })} />
       </Row>
       <h3 style={{ marginTop: 22 }}>{t('settings.sound')}</h3>
       <Row title={t('settings.loudness')} hint={t('settings.loudnessHint')}>

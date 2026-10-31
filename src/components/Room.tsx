@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CircleCheck, LoaderCircle, Mic, TriangleAlert } from 'lucide-react'
-import { api, type RoomFit, type RoomLevels, type RoomParams } from '../lib/api'
+import { CircleCheck, LoaderCircle, Mic, Ruler, TriangleAlert } from 'lucide-react'
+import { api, type Preset, type RoomFit, type RoomLevels, type RoomParams } from '../lib/api'
 import { autoPreamp, fmtFreq } from '../lib/eq'
-import { currentDevice, savePresetFor, setState, toast, useStore } from '../lib/store'
+import { applyPreset, currentCurve, currentOutput, saveRoomPreset, setState, toast, useStore } from '../lib/store'
 import { errorText, useT } from '../i18n'
 import { Range, Select } from './controls'
+import { Preview } from './AutoEq'
+import { SectionHead, Slider } from './Dynamics'
 import { Modal } from './ui'
 
 /** Rango del nivel del barrido (dBFS de pico): el mismo tope que pone Rust (`room::MAX_LEVEL`) */
@@ -18,6 +20,59 @@ const RANGES: { id: string; high: number }[] = [
   { id: 'r500', high: 500 },
   { id: 'full', high: 20000 }
 ]
+
+const NONE: Preset[] = []
+
+/** Página «Sala»: qué hace la corrección, el botón del asistente y lo último medido en la salida que se edita */
+export function RoomPage(): React.JSX.Element {
+  const t = useT()
+  const output = useStore((s) => currentOutput(s))
+  const presets = useStore((s) => s.config?.presets ?? NONE)
+  const active = useStore((s) => currentCurve(s).preset)
+  const last = output ? presets.findLast((p) => p.room === output.id) : undefined
+  return (
+    <div className="page">
+      <section>
+        <SectionHead label={t('room.title')} />
+        <div className="dyn-card">
+          <div className="dyn-card-head">
+            <Ruler size={16} />
+            <b>{t('room.cardTitle')}</b>
+          </div>
+          <small>{t('room.cardText')}</small>
+          <small>{t('room.cardWhen')}</small>
+          <div className="panel-actions start">
+            <button className="btn btn-sm btn-primary" onClick={() => setState({ modal: 'room' })}>
+              {t('room.start')}
+            </button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <SectionHead label={t('room.last')} />
+        {last ? (
+          <div className="dyn-card">
+            <div className="dyn-card-head">
+              <b>{last.name}</b>
+              {active === last.id && <span className="chip ok">{t('common.inUse')}</span>}
+            </div>
+            <small>{t('room.lastText', { n: last.curve.bands.length, d: output?.name ?? '' })}</small>
+            <Preview bands={last.curve.bands} />
+            {active !== last.id && (
+              <div className="panel-actions start">
+                <button className="btn btn-sm btn-primary" onClick={() => applyPreset(last.curve, last.id)}>
+                  {t('room.apply')}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <small className="studio-hint">{t('room.none', { d: output?.name ?? '' })}</small>
+        )}
+      </section>
+    </div>
+  )
+}
 
 export function RoomModal(): React.JSX.Element | null {
   const open = useStore((s) => s.modal === 'room')
@@ -35,8 +90,7 @@ function RoomWizard(): React.JSX.Element {
   const outputs = useMemo(() => (devices ?? []).filter((d) => !d.input && !d.unplugged), [devices])
   const inputs = useMemo(() => (devices ?? []).filter((d) => d.input && !d.unplugged), [devices])
   const [output, setOutput] = useState(() => {
-    const cur = currentDevice()
-    return (cur && !cur.input ? cur.id : outputs.find((d) => d.default)?.id) ?? outputs[0]?.id ?? ''
+    return currentOutput()?.id ?? outputs[0]?.id ?? ''
   })
   const [input, setInput] = useState(() => inputs.find((d) => d.default)?.id ?? inputs[0]?.id ?? '')
   const [level, setLevel] = useState(-24)
@@ -88,7 +142,7 @@ function RoomWizard(): React.JSX.Element {
   const save = (): void => {
     if (!fit) return
     const n = name.trim() || t('room.defaultName', { d: outName })
-    savePresetFor(n, { preamp: autoPreamp(fit.bands), autoPreamp: true, bands: fit.bands, preset: null }, output)
+    saveRoomPreset(n, { preamp: autoPreamp(fit.bands), autoPreamp: true, bands: fit.bands, preset: null }, output)
     toast(t('room.saved', { n, d: outName }))
     close()
   }
@@ -124,9 +178,9 @@ function RoomWizard(): React.JSX.Element {
               ))}
             </div>
           </div>
-          <RoomSlider label={t('room.slope')} value={params.slope} min={-1.5} max={0} step={0.1} fmt={(v) => `${v.toFixed(1).replace('-', '−')} dB/oct`} onChange={(slope) => setParams({ ...params, slope })} />
-          <RoomSlider label={t('room.maxBoost')} value={params.maxBoost} min={0} max={6} step={0.5} fmt={(v) => `+${v.toFixed(1)} dB`} onChange={(maxBoost) => setParams({ ...params, maxBoost })} />
-          <RoomSlider label={t('room.filters')} value={params.filters} min={1} max={10} step={1} fmt={(v) => String(v)} onChange={(filters) => setParams({ ...params, filters })} />
+          <Slider label={t('room.slope')} value={params.slope} min={-1.5} max={0} step={0.1} fmt={(v) => `${v.toFixed(1).replace('-', '−')} dB/oct`} onChange={(slope) => setParams({ ...params, slope })} />
+          <Slider label={t('room.maxBoost')} value={params.maxBoost} min={0} max={6} step={0.5} fmt={(v) => `+${v.toFixed(1)} dB`} onChange={(maxBoost) => setParams({ ...params, maxBoost })} />
+          <Slider label={t('room.filters')} value={params.filters} min={1} max={10} step={1} fmt={(v) => String(v)} onChange={(filters) => setParams({ ...params, filters })} />
         </div>
         {fit && (
           <p className="room-summary small">
@@ -232,16 +286,6 @@ function RoomWizard(): React.JSX.Element {
         </button>
       </div>
     </Modal>
-  )
-}
-
-function RoomSlider({ label, value, min, max, step, fmt, onChange }: { label: string; value: number; min: number; max: number; step: number; fmt: (v: number) => string; onChange: (v: number) => void }): React.JSX.Element {
-  return (
-    <label className="dyn-slider">
-      <span>{label}</span>
-      <Range value={value} min={min} max={max} step={step} label={label} onChange={onChange} />
-      <b className="num">{fmt(value)}</b>
-    </label>
   )
 }
 

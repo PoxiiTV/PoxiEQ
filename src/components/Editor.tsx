@@ -1,86 +1,130 @@
 import { useEffect, useRef, useState } from 'react'
-import { AudioWaveform, Copy, Ear, Mic, Plus, Power, Redo2, RotateCcw, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
+import { AudioWaveform, Copy, Ear, Import, Plus, Power, Redo2, RotateCcw, Save, Search, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
-import { dspActive } from '../lib/dsp'
-import { currentCurve, editingMic, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
+import { currentCurve, go, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Switch } from './ui'
 import { addBand, bandColor, Graph, KINDS, removeBand, updateBand } from './Graph'
-import { Dynamics, MicDynamics } from './Dynamics'
-import { Studio } from './Studio'
+import { PresetMenu } from './Presets'
 
-export function Editor(): React.JSX.Element {
+/** El buscador de AutoEq vive en «Cascos»: se va allí con el cursor ya en la búsqueda */
+function findHeadphones(): void {
+  go('phones')
+  requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.autoeq-panel .finder-search input')?.focus())
+}
+
+/** Página «Ecualizador» (salidas): presets y acciones arriba; preamp, curva y bandas debajo */
+export function EqPage(): React.JSX.Element {
   const t = useT()
-  const curve = useStore((s) => currentCurve(s))
-  // Micrófono: su EQ, su puerta y su compresor (sin estudio ni A/B: son de escucha)
-  const mic = useStore((s) => editingMic(s))
-  const bypass = useStore((s) => (mic ? !!s.config?.mic.bypass : !!s.config?.bypass))
-  const picked = useStore((s) => s.tab)
-  const tab = mic && picked === 'studio' ? 'eq' : picked
-  const dspOn = useStore((s) => !!s.config && dspActive(mic ? s.config.mic.dsp : s.config.dsp))
-  const studioOn = useStore((s) => studioActive(s.studio))
-  const clips = headroom(curve) > 0.05
-  const resume = (): void => {
-    const cfg = useStore.getState().config
-    if (cfg) updateConfig(mic ? { mic: { ...cfg.mic, bypass: false } } : { bypass: false })
-  }
-
+  const bypass = useStore((s) => !!s.config?.bypass)
   return (
     <div className="editor">
-      {bypass && (
-        <div className="banner">
-          <Power size={16} />
-          <span>{t(mic ? 'mic.bypassBanner' : 'eq.bypassBanner')}</span>
-          <div className="spacer" />
-          <button className="btn btn-sm btn-primary" onClick={resume}>
-            {t('eq.bypassResume')}
-          </button>
-        </div>
-      )}
-      {studioOn && <StudioBanner />}
       <div className="toolbar">
-        {mic && (
-          <span className="chip mic-chip" data-tip={t('mic.chipTip')}>
-            <Mic size={13} />
-            {t('mic.chip')}
-          </span>
-        )}
-        <div className="segmented tabs" role="tablist">
-          <button role="tab" aria-selected={tab === 'eq'} className={tab === 'eq' ? 'on' : ''} onClick={() => setState({ tab: 'eq' })}>
-            {t('tabs.eq')}
-          </button>
-          <button role="tab" aria-selected={tab === 'dsp'} className={tab === 'dsp' ? 'on' : ''} onClick={() => setState({ tab: 'dsp' })}>
-            {t('tabs.dsp')}
-            {dspOn && <i className="tab-dot" aria-hidden />}
-          </button>
-          {!mic && (
-            <button role="tab" aria-selected={tab === 'studio'} className={tab === 'studio' ? 'on' : ''} onClick={() => setState({ tab: 'studio' })}>
-              {t('tabs.studio')}
-              {studioOn && <i className="tab-dot warn" aria-hidden />}
-            </button>
-          )}
-        </div>
+        <PresetMenu />
+        <button className="btn btn-sm hb" data-tip={t('presets.save')} aria-label={t('presets.save')} onClick={() => setState({ modal: 'savePreset' })}>
+          <Save size={15} />
+          <span className="btn-label">{t('presets.saveShort')}</span>
+        </button>
+        <button className="btn btn-sm hb" data-tip={t('presets.autoeq')} aria-label={t('presets.autoeq')} onClick={findHeadphones}>
+          <Search size={15} />
+          <span className="btn-label">{t('presets.autoeq')}</span>
+        </button>
+        <button className="btn btn-sm hb hb-early" data-tip={t('share.importTitle')} aria-label={t('share.importTitle')} onClick={() => setState({ modal: 'import', importCode: '' })}>
+          <Import size={15} />
+          <span className="btn-label">{t('presets.import')}</span>
+        </button>
+        <div className="spacer" />
+        {!bypass && <AbButton />}
         <HistoryButtons />
-        {tab === 'eq' && <EqTools curve={curve} clips={clips} bypass={bypass || mic} />}
+        <AddBand />
       </div>
-      {tab === 'eq' ? (
-        <>
-          <Graph />
-          <div className="hint-line small muted">{t('eq.hint')}</div>
-          <Bands />
-        </>
-      ) : tab === 'dsp' ? (
-        mic ? <MicDynamics /> : <Dynamics />
-      ) : (
-        <Studio />
-      )}
+      <CurveEditor />
     </div>
   )
 }
 
-/** Aviso fijo mientras haya algo de estudio puesto (en cualquier pestaña): que no se quede por error */
+/** Preamp, curva y bandas de lo que se edita (la salida o, en su página, el micrófono) */
+export function CurveEditor(): React.JSX.Element {
+  const t = useT()
+  const curve = useStore((s) => currentCurve(s))
+  const clips = headroom(curve) > 0.05
+  return (
+    <>
+      <div className="eq-row">
+        <div className="preamp">
+          <span className="label">{t('eq.preamp')}</span>
+          <input
+            type="range"
+            min={-30}
+            max={12}
+            step={0.1}
+            value={curve.preamp}
+            disabled={curve.autoPreamp}
+            aria-label={t('eq.preamp')}
+            style={{ '--p': `${((curve.preamp + 30) / 42) * 100}%` } as React.CSSProperties}
+            onChange={(e) => setCurve({ ...curve, preamp: +e.target.value, autoPreamp: false }, true)}
+          />
+          <b className="num">{fmtDb(curve.preamp)} dB</b>
+          <label className="auto" data-tip={t('eq.autoTip')}>
+            <Switch on={curve.autoPreamp} onChange={(on) => setCurve({ ...curve, autoPreamp: on }, true)} label={t('eq.auto')} />
+            {t('eq.auto')}
+          </label>
+          {clips && (
+            <span className="clip" data-tip={t('eq.clip')}>
+              <TriangleAlert size={16} />
+            </span>
+          )}
+        </div>
+        {!!curve.ears && (
+          <span className="chip ears" data-tip={t('eq.earsTip')}>
+            <Ear size={13} />
+            {t('eq.ears')}
+            <button aria-label={t('eq.earsRemove')} onClick={() => setCurve({ ...curve, ears: null })}>
+              <X size={12} />
+            </button>
+          </span>
+        )}
+        <div className="spacer" />
+        <button className="icon-btn tip-right" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand(), ears: null })}>
+          <RotateCcw size={16} />
+        </button>
+        <button className="icon-btn tip-right" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>
+          <Copy size={16} />
+        </button>
+      </div>
+      <Graph />
+      <div className="hint-line small muted">{t('eq.hint')}</div>
+      <Bands />
+    </>
+  )
+}
+
+/** Avisos fijos en las secciones de las salidas: EQ apagado y escucha de estudio puesta (que no se quede por
+ *  error) */
+export function Banners(): React.JSX.Element | null {
+  const t = useT()
+  const bypass = useStore((s) => !!s.config?.bypass)
+  const studio = useStore((s) => studioActive(s.studio))
+  if (!bypass && !studio) return null
+  return (
+    <div className="banners">
+      {bypass && (
+        <div className="banner">
+          <Power size={16} />
+          <span>{t('eq.bypassBanner')}</span>
+          <div className="spacer" />
+          <button className="btn btn-sm btn-primary" onClick={() => updateConfig({ bypass: false })}>
+            {t('eq.bypassResume')}
+          </button>
+        </div>
+      )}
+      {studio && <StudioBanner />}
+    </div>
+  )
+}
+
 function StudioBanner(): React.JSX.Element {
   const t = useT()
   const studio = useStore((s) => s.studio)
@@ -106,7 +150,7 @@ function StudioBanner(): React.JSX.Element {
 }
 
 /** Deshacer / rehacer curva y dinámica (también Ctrl+Z, Ctrl+Y y Ctrl+Mayús+Z) */
-function HistoryButtons(): React.JSX.Element {
+export function HistoryButtons(): React.JSX.Element {
   const t = useT()
   const can = useStore((s) => s.history)
   return (
@@ -121,58 +165,13 @@ function HistoryButtons(): React.JSX.Element {
   )
 }
 
-/** Preamp, A/B y acciones de la curva (barra de la pestaña EQ). Sin A/B si no suena la curva (bypass) o es un
- *  micrófono (no se escucha aquí). */
-function EqTools({ curve, clips, bypass }: { curve: Curve; clips: boolean; bypass: boolean }): React.JSX.Element {
+export function AddBand(): React.JSX.Element {
   const t = useT()
   return (
-    <>
-      <div className="preamp">
-        <span className="label">{t('eq.preamp')}</span>
-        <input
-          type="range"
-          min={-30}
-          max={12}
-          step={0.1}
-          value={curve.preamp}
-          disabled={curve.autoPreamp}
-          aria-label={t('eq.preamp')}
-          style={{ '--p': `${((curve.preamp + 30) / 42) * 100}%` } as React.CSSProperties}
-          onChange={(e) => setCurve({ ...curve, preamp: +e.target.value, autoPreamp: false }, true)}
-        />
-        <b className="num">{fmtDb(curve.preamp)} dB</b>
-        <label className="auto" data-tip={t('eq.autoTip')}>
-          <Switch on={curve.autoPreamp} onChange={(on) => setCurve({ ...curve, autoPreamp: on }, true)} label={t('eq.auto')} />
-          {t('eq.auto')}
-        </label>
-        {clips && (
-          <span className="clip" data-tip={t('eq.clip')}>
-            <TriangleAlert size={16} />
-          </span>
-        )}
-      </div>
-      {!!curve.ears && (
-        <span className="chip ears" data-tip={t('eq.earsTip')}>
-          <Ear size={13} />
-          {t('eq.ears')}
-          <button aria-label={t('eq.earsRemove')} onClick={() => setCurve({ ...curve, ears: null })}>
-            <X size={12} />
-          </button>
-        </span>
-      )}
-      <div className="spacer" />
-      {!bypass && <AbButton curve={curve} />}
-      <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand(), ears: null })}>
-        <RotateCcw size={16} />
-      </button>
-      <button className="icon-btn" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>
-        <Copy size={16} />
-      </button>
-      <button className="btn btn-sm btn-add" data-tip={t('eq.add')} aria-label={t('eq.add')} onClick={() => addBand()}>
-        <Plus size={15} />
-        <span className="btn-label">{t('eq.add')}</span>
-      </button>
-    </>
+    <button className="btn btn-sm hb hb-early tip-right" data-tip={t('eq.add')} aria-label={t('eq.add')} onClick={() => addBand()}>
+      <Plus size={15} />
+      <span className="btn-label">{t('eq.add')}</span>
+    </button>
   )
 }
 
@@ -185,8 +184,9 @@ function matchGain(c: Curve): number {
 }
 
 /** A/B: mantén pulsado para oír el original al mismo volumen que tu curva */
-function AbButton({ curve }: { curve: Curve }): React.JSX.Element {
+function AbButton(): React.JSX.Element {
   const t = useT()
+  const curve = useStore((s) => currentCurve(s))
   const [on, setOn] = useState(false)
   const start = (): void => {
     setOn(true)

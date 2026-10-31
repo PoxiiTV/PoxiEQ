@@ -1,8 +1,9 @@
-import { ArrowLeftRight, Car, Ear, Earbuds, Laptop, Ruler, Smartphone, Speaker, Tv } from 'lucide-react'
+import { ArrowLeftRight, Car, Earbuds, Laptop, Smartphone, Speaker, Tv } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Listen, Sim } from '../lib/api'
-import { setState, setStudio, useStore } from '../lib/store'
+import { setStudio, useStore } from '../lib/store'
 import { useT } from '../i18n'
+import { SectionHead } from './Dynamics'
 
 const LISTEN: Listen[] = ['stereo', 'mono', 'side', 'left', 'right']
 const SIMS: { id: Sim; icon: LucideIcon }[] = [
@@ -14,18 +15,16 @@ const SIMS: { id: Sim; icon: LucideIcon }[] = [
   { id: 'speaker', icon: Speaker }
 ]
 
-/** Panel «Estudio»: monitorización, simulación de otros sistemas, test de audición y corrección de sala */
-export function Studio(): React.JSX.Element {
+/** Página «Estudio»: monitorización y simulación de otros sistemas (momentáneas: el aviso de arriba lo recuerda) */
+export function StudioPage(): React.JSX.Element {
   const t = useT()
   const studio = useStore((s) => s.studio)
   const bypass = useStore((s) => !!s.config?.bypass)
 
   return (
-    <div className="dyn studio">
+    <div className="page">
       <section>
-        <div className="dyn-head">
-          <span className="label">{t('studio.monitor')}</span>
-        </div>
+        <SectionHead label={t('studio.monitor')} />
         <div className="studio-row">
           <div className="segmented listen" role="radiogroup" aria-label={t('studio.monitor')}>
             {LISTEN.map((l) => (
@@ -51,9 +50,7 @@ export function Studio(): React.JSX.Element {
       </section>
 
       <section>
-        <div className="dyn-head">
-          <span className="label">{t('studio.sim')}</span>
-        </div>
+        <SectionHead label={t('studio.sim')} />
         <div className="sounds sims">
           {SIMS.map(({ id, icon: Icon }) => (
             <button key={id} className={`sound ${studio.sim === id ? 'on' : ''}`} aria-pressed={studio.sim === id} onClick={() => setStudio({ sim: studio.sim === id ? null : id })}>
@@ -66,38 +63,6 @@ export function Studio(): React.JSX.Element {
           ))}
         </div>
         <small className="studio-hint">{t('studio.simHint')}</small>
-      </section>
-
-      <section>
-        <div className="dyn-head">
-          <span className="label">{t('hearing.title')}</span>
-        </div>
-        <div className="dyn-card hearing-card">
-          <div className="dyn-card-head">
-            <Ear size={16} />
-            <b>{t('hearing.cardTitle')}</b>
-          </div>
-          <small>{t('hearing.cardText')}</small>
-          <button className="btn btn-sm btn-primary" onClick={() => setState({ modal: 'hearing' })}>
-            {t('hearing.start')}
-          </button>
-        </div>
-      </section>
-
-      <section>
-        <div className="dyn-head">
-          <span className="label">{t('room.title')}</span>
-        </div>
-        <div className="dyn-card hearing-card">
-          <div className="dyn-card-head">
-            <Ruler size={16} />
-            <b>{t('room.cardTitle')}</b>
-          </div>
-          <small>{t('room.cardText')}</small>
-          <button className="btn btn-sm btn-primary" onClick={() => setState({ modal: 'room' })}>
-            {t('room.start')}
-          </button>
-        </div>
       </section>
     </div>
   )

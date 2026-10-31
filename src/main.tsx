@@ -45,7 +45,7 @@ window.addEventListener('drop', (e) => {
   const f = e.dataTransfer?.files[0]
   if (!f || !getState().config) return
   if (!f.name.toLowerCase().endsWith('.poxieq') || f.size > MAX_FILE) return toast(t('share.dropBad'), 'info')
-  void f.text().then((importCode) => setState({ importCode, modal: 'import', settingsOpen: false }))
+  void f.text().then((importCode) => setState({ importCode, modal: 'import' }))
 })
 
 async function start(): Promise<void> {
@@ -61,7 +61,7 @@ async function start(): Promise<void> {
   // Cambios hechos desde Rust (bandeja, atajos, preset por app): ya están guardados, aquí solo se pintan
   void listen<Config>('config', (e) => {
     const s = getState()
-    const bands = currentCurve({ config: e.payload, engine: s.engine }).bands.length
+    const bands = currentCurve({ ...s, config: e.payload }).bands.length
     setState({ config: e.payload, selected: s.selected !== null && s.selected < bands ? s.selected : null })
   })
   // Al esconder la ventana Rust quita lo momentáneo (monitorización, simulación, test de audición, medición de
@@ -75,7 +75,16 @@ async function start(): Promise<void> {
   }
   void listen<string[]>('hotkeys-failed', (e) => failedHotkeys(e.payload))
   void api.hotkeysFailed().then(failedHotkeys)
-  // Cascos enchufados o desenchufados mientras la app estaba escondida
+  // Windows ha cambiado de salida predeterminada o se ha conectado algo: Rust ya ha pasado a esa salida si se
+  // sigue a Windows (llega su id) y aquí se refresca la lista y se avisa. Si aún no tiene el motor activado, se
+  // ve la tarjeta de activación (nunca se lanza el permiso de administrador solo).
+  void listen<string | null>('devices', (e) =>
+    void refreshEngine().then((engine) => {
+      const d = e.payload && engine.devices.find((x) => x.id === e.payload)
+      if (d) toast(t('follow.now', { d: `${d.name} · ${d.device}` }), 'info', { secs: 4 })
+    })
+  )
+  // Por si algo cambió sin aviso mientras la ventana estaba escondida
   window.addEventListener('focus', () => void refreshEngine())
   // Se enseña la ventana ya pintada (sin parpadeo blanco), salvo si arrancó con Windows en la bandeja
   if (!app.startHidden) requestAnimationFrame(() => void getCurrentWindow().show())

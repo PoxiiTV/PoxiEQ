@@ -6,12 +6,12 @@
   min-height: 0;
 }
 
-/* ——— Barra lateral (presets) ——— */
+/* ——— Barra lateral: menú principal ——— */
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 10px 12px;
+  padding: 10px 10px 12px;
   border-right: 1px solid var(--border);
   background: var(--surface);
   overflow-y: auto;
@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  height: 36px;
+  height: 38px;
   padding: 0 11px;
   border-radius: 10px;
   border: 0;
@@ -37,9 +37,15 @@
     color 150ms ease,
     transform 160ms var(--ease-out);
 }
-.nav-item:hover {
-  background: var(--surface-2);
-  color: var(--text);
+.nav-item svg {
+  flex: none;
+  transition: color 150ms ease;
+}
+@media (hover: hover) {
+  .nav-item:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 .nav-item:active {
   transform: scale(0.98);
@@ -58,66 +64,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Compartir y borrar: solo con el ratón encima o el foco dentro (así el nombre tiene todo el ancho) */
-.nav-item .row-actions {
-  display: none;
-  gap: 2px;
-  margin-right: -6px;
+/* Algo de la sección está encendido (ámbar: escucha de estudio, que cambia lo que oyes) */
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
-.nav-item:hover .row-actions,
-.nav-item:focus-within .row-actions {
-  display: flex;
-}
-.nav-item .row-action {
-  width: 26px;
-  height: 26px;
-}
-/* Nombre completo de un preset cortado: debajo, del ancho de la fila y en varias líneas si hace falta
-   (la barra lateral tiene scroll y cortaría un tooltip más ancho que ella) */
-.sidebar .nav-item[data-tip]::after {
-  left: 4px;
-  right: 4px;
-  top: calc(100% + 4px);
-  transform: translateY(-3px);
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-  line-height: 1.35;
-}
-@media (hover: hover) {
-  .sidebar .nav-item[data-tip]:hover::after {
-    transform: none;
-  }
-}
-.nav-title.with-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-right: 4px;
-  padding-top: 8px;
-  padding-bottom: 2px;
-}
-.nav-title .icon-btn {
-  width: 26px;
-  height: 26px;
-}
-.nav-title {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 14px 11px 6px;
-}
-.nav-empty {
-  padding: 2px 11px 8px;
-  line-height: 1.45;
-}
-.sidebar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
+.nav-dot.warn {
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
 }
 
 /* ——— Escenario ——— */
@@ -135,10 +93,26 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px 18px 14px;
+  /* Con poca altura (y avisos arriba) se desplaza en vez de cortar las bandas */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+/* Avisos fijos de las secciones de las salidas (EQ apagado, escucha de estudio) */
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 0;
+  flex: none;
+}
+.banners + .editor,
+.banners + .page {
+  padding-top: 12px;
 }
 .banner {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 10px;
   padding: 9px 10px 9px 14px;
   border-radius: var(--r-md);
@@ -163,29 +137,57 @@
   display: flex;
   gap: 2px;
 }
-/* La barra se adapta al ancho del editor: primero se queda en icono «Añadir banda», luego se estrecha el
-   preamp y, si aun así no cabe, pasa a dos líneas (nunca se corta nada) */
-.editor {
+/* Las cabeceras se adaptan al ancho: primero se quedan en icono «Importar» y «Añadir banda» (`hb-early`), luego
+   el resto (`hb`) y se estrecha el preamp. El tooltip solo sale cuando el botón se queda sin texto. */
+.editor,
+.page {
   container-type: inline-size;
 }
-@container (min-width: 1001px) {
-  .toolbar .btn-add[data-tip]::after {
-    display: none;
-  }
+.toolbar .hb[data-tip]::after {
+  display: none;
 }
-@container (max-width: 1000px) {
-  .toolbar .btn-add {
+@container (max-width: 959px) {
+  .toolbar .hb-early {
     width: 30px;
     padding: 0;
   }
-  .toolbar .btn-add .btn-label {
+  .toolbar .hb-early .btn-label {
     display: none;
+  }
+  .toolbar .hb-early[data-tip]::after {
+    display: block;
+  }
+}
+@container (max-width: 759px) {
+  .toolbar .hb {
+    width: 30px;
+    padding: 0;
+  }
+  .toolbar .hb .btn-label {
+    display: none;
+  }
+  .toolbar .hb[data-tip]::after {
+    display: block;
   }
 }
 @container (max-width: 880px) {
   .preamp input[type='range'] {
     width: 110px;
   }
+}
+@container (max-width: 640px) {
+  .preamp input[type='range'] {
+    width: 80px;
+  }
+}
+/* Preamp y acciones de la curva */
+.eq-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
 }
 .preamp {
   display: flex;
@@ -359,6 +361,11 @@
 .dd-menu button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+@media (max-height: 700px) {
+  .graph {
+    min-height: 160px;
+  }
 }
 .hint-line {
   margin-top: -6px;
@@ -601,15 +608,7 @@
   }
 }
 
-/* ——— Ajustes y modales ——— */
-.settings .body {
-  position: relative;
-}
-.settings-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-}
+/* ——— Fichas ——— */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -620,6 +619,10 @@
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+.chip {
+  flex: none;
+  white-space: nowrap;
 }
 .chip.ok {
   background: rgba(34, 197, 94, 0.14);
@@ -662,9 +665,44 @@
   }
 }
 
-/* ——— Buscador de AutoEq ——— */
-.modal.autoeq {
-  width: min(640px, 100%);
+/* ——— Buscador de AutoEq (página «Cascos») ——— */
+.autoeq-panel .finder-search {
+  margin-top: 4px;
+}
+.finder-list.idle {
+  display: none;
+}
+/* Título de un paso del panel: volver, nombre y lo de debajo */
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.panel-title .txt {
+  min-width: 0;
+}
+.panel-title b {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.panel-title small {
+  display: block;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.panel-actions.start {
+  justify-content: flex-start;
 }
 .finder-search {
   position: relative;
@@ -683,7 +721,7 @@
   font-size: 15px;
 }
 .finder-list {
-  height: 300px;
+  height: min(300px, 45vh);
   overflow-y: auto;
   margin-top: 10px;
   padding: 4px;
@@ -991,37 +1029,28 @@
   text-align: right;
 }
 
-/* ——— Pestañas EQ · Dinámica ——— */
-.tabs {
-  flex: none;
-}
-.tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-
-/* ——— Dinámica ——— */
-.dyn {
+/* ——— Páginas (Sonido, Cascos, Estudio, Sala, Micrófono, Ajustes) ——— */
+.page {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 2px 2px 8px;
+  gap: 20px;
+  padding: 16px 18px 22px;
 }
-.dyn section {
+/* Con la ventana maximizada no se estira de más: se lee mejor */
+.page > * {
+  width: 100%;
+  max-width: 1120px;
+}
+.page section {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 .dyn-head {
   display: flex;
@@ -1034,8 +1063,16 @@
 }
 .sounds {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+.sounds.sims {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+@container (max-width: 700px) {
+  .sounds {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .sound {
   display: flex;
@@ -1104,6 +1141,28 @@
   gap: 10px;
   align-items: start;
 }
+/* Dos tarjetas que van juntas, de la misma altura; una debajo de otra si no caben */
+.dyn-cards.pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+@container (max-width: 600px) {
+  .dyn-cards.pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Cadena de dinámica: una tarjeta por procesador, en el orden de la señal */
+.chain {
+  display: flex;
+  flex-direction: column;
+}
+.chain-arrow {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding-left: 15px;
+  color: var(--muted);
+}
 .dyn-card {
   display: flex;
   flex-direction: column;
@@ -1135,6 +1194,7 @@
   flex: 1;
   min-width: 0;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 .dyn-card > small {
   color: var(--muted);
@@ -1142,9 +1202,9 @@
   line-height: 1.4;
 }
 .dyn-sliders {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px 22px;
   margin-top: 2px;
   transition: opacity 150ms ease;
 }
@@ -1175,38 +1235,6 @@
 .dyn-slider input {
   grid-area: range;
 }
-.dyn-more {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  margin-left: -10px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--text-2);
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-  transition:
-    background 150ms ease,
-    color 150ms ease;
-}
-@media (hover: hover) {
-  .dyn-more:hover {
-    background: var(--surface-2);
-    color: var(--text);
-  }
-}
-.dyn-more svg {
-  transition: transform 200ms var(--ease-out);
-}
-.dyn-more[aria-expanded='true'] svg {
-  transform: rotate(180deg);
-}
-
 /* Reducción de ganancia (solo cuando actúa): de arriba abajo, 0…24 dB */
 .meter-bar.gr i {
   position: absolute;
@@ -1219,18 +1247,13 @@
 .meter-read .line.gr b {
   color: var(--warning);
 }
-.nav-title [data-tip]::after {
-  text-transform: none;
-  letter-spacing: normal;
-}
-
 /* ——— Ajustes: preset por app y atajos ——— */
 .icon-btn:disabled {
   opacity: 0.35;
   cursor: default;
   pointer-events: none;
 }
-.settings .set-intro {
+.settings-page .set-intro {
   margin: -6px 0 6px;
 }
 .set-empty {
@@ -1344,10 +1367,6 @@
 }
 
 /* ——— Estudio: monitorización, simulaciones y test de audición ——— */
-.tab-dot.warn {
-  background: var(--warning);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
-}
 .studio-banner b {
   font-weight: 800;
   color: var(--warning);
@@ -1415,13 +1434,6 @@
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.4;
-}
-.hearing-card {
-  max-width: 560px;
-}
-.hearing-card .btn {
-  align-self: flex-start;
-  margin-top: 4px;
 }
 .chip.ears {
   flex: none;
@@ -1544,7 +1556,7 @@
   flex-wrap: wrap;
 }
 
-/* ——— Grupos en los desplegables (salidas / micrófonos) ——— */
+/* ——— Grupos en los desplegables (menú de presets) ——— */
 .dd-group {
   padding: 8px 10px 4px;
   font-size: 10.5px;
@@ -1570,12 +1582,6 @@
 .titlebar .device-pick .kind[data-tip]::after {
   left: 0;
   right: auto;
-}
-.mic-chip {
-  flex: none;
-  gap: 6px;
-  background: var(--accent-soft);
-  color: var(--text);
 }
 .meter-thr {
   position: absolute;
@@ -1843,4 +1849,156 @@
 }
 .room .modal-actions {
   flex-wrap: wrap;
+}
+
+/* ——— Menú de presets (cabecera del ecualizador) ——— */
+/* La cabecera no pasa a dos líneas: lo que cede es el nombre del preset (con «…») */
+.editor > .toolbar,
+.mic-page > .toolbar {
+  flex-wrap: nowrap;
+}
+.pm {
+  flex: 0 1 auto;
+  min-width: 150px;
+}
+.pm .dd-btn {
+  width: 100%;
+  max-width: 300px;
+  justify-content: flex-start;
+}
+.pm-label {
+  flex: none;
+  color: var(--muted);
+  font-weight: 700;
+}
+.pm-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  text-align: left;
+}
+.pm-menu {
+  left: 0;
+  right: auto;
+  width: max(100%, 300px);
+  max-width: min(360px, calc(100vw - 40px));
+  max-height: min(380px, 62vh);
+  transform-origin: top left;
+}
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+  transition: background 120ms ease;
+}
+@media (hover: hover) {
+  .pm-row:hover {
+    background: var(--surface-2);
+  }
+}
+.pm-row:focus-within {
+  background: var(--surface-2);
+}
+.dd-menu .pm-pick {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+}
+.pm-pick .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-row.on .pm-pick {
+  color: var(--accent);
+  font-weight: 800;
+}
+.pm-pick:focus-visible {
+  outline-offset: -2px;
+}
+/* Renombrar, compartir y borrar: con el ratón encima o el foco dentro (así el nombre tiene todo el ancho) */
+.pm-actions {
+  display: none;
+  flex: none;
+  gap: 2px;
+  padding-right: 3px;
+}
+.pm-row:hover .pm-actions,
+.pm-row:focus-within .pm-actions {
+  display: flex;
+}
+.dd-menu .pm-actions .icon-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 7px;
+}
+.pm-row.editing {
+  padding: 2px;
+}
+.pm-input {
+  height: 32px;
+  font-weight: 700;
+}
+.pm-empty {
+  padding: 4px 10px 8px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+/* ——— Micrófono ——— */
+.mic-page .device-pick {
+  flex: 0 1 auto;
+}
+.mic-page .device-pick .dd {
+  min-width: 0;
+  max-width: 100%;
+}
+.mic-page .device-pick .dd-btn {
+  max-width: min(380px, 100%);
+}
+/* En una página con scroll la curva tiene alto propio */
+.page .graph {
+  flex: none;
+  height: clamp(220px, 40vh, 380px);
+}
+
+/* ——— Ajustes (página) ——— */
+.settings-tabs {
+  flex: none;
+  align-self: flex-start;
+  width: auto;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.settings-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.settings-tabs svg {
+  flex: none;
+}
+@container (max-width: 640px) {
+  .settings-tabs svg {
+    display: none;
+  }
+  .settings-tabs button {
+    padding: 0 11px;
+  }
+}
+.settings-body {
+  max-width: 760px;
+}
+.settings-page h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 800;
 }

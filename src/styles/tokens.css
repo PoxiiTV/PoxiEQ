@@ -13,7 +13,7 @@
   --r-xl: 28px;
 
   --titlebar-h: 44px;
-  --sidebar-w: 236px;
+  --sidebar-w: 196px;
 }
 
 :root[data-theme='dark'] {

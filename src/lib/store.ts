@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { api, type AppInfo, type Config, type Device, type EngineStatus, type Preset, type Studio } from './api'
 import { autoPreamp, BUILTIN, builtinCurve, type Curve } from './eq'
 import { Grouper, History } from './history'
+import { cleanName } from './share'
 import { errorText, t } from '../i18n'
 
 export interface Toast {
@@ -15,6 +16,9 @@ export interface Toast {
 /** Paso de la activación del motor que se enseña mientras dura */
 export type SetupStep = 'download' | 'install' | 'check' | null
 
+/** Secciones del menú lateral */
+export type Page = 'eq' | 'sound' | 'phones' | 'studio' | 'room' | 'mic' | 'settings'
+
 interface State {
   app: AppInfo | null
   config: Config | null
@@ -22,12 +26,11 @@ interface State {
   setup: SetupStep
   /** Banda elegida en la curva (índice) */
   selected: number | null
-  /** Pestaña del editor: curva, dinámica o estudio */
-  tab: 'eq' | 'dsp' | 'studio'
+  /** Sección a la vista. En «Micrófono» se edita el micrófono; en el resto, la salida */
+  page: Page
   /** Herramientas de estudio puestas ahora (momentáneas, no van a la configuración) */
   studio: Studio
-  settingsOpen: boolean
-  modal: 'autoeq' | 'savePreset' | 'import' | 'hearing' | 'room' | null
+  modal: 'savePreset' | 'import' | 'hearing' | 'room' | null
   /** Preset que se está compartiendo (ventana de compartir abierta) */
   sharing: Preset | null
   /** Código que llega a la ventana de importar (archivo arrastrado) */
@@ -47,9 +50,8 @@ export const useStore = create<State>(() => ({
   engine: null,
   setup: null,
   selected: null,
-  tab: 'eq',
+  page: 'eq',
   studio: STUDIO_OFF,
-  settingsOpen: false,
   modal: null,
   sharing: null,
   importCode: '',
@@ -142,7 +144,7 @@ function travel(dir: 'undo' | 'redo'): void {
   if (!cfg) return
   const snap = history[dir]({ curves: cfg.curves, dsp: cfg.dsp, mic: cfg.mic })
   if (!snap) return
-  const bands = currentCurve({ config: { ...cfg, ...snap }, engine: getState().engine }).bands.length
+  const bands = currentCurve({ ...getState(), config: { ...cfg, ...snap } }).bands.length
   const sel = getState().selected
   if (sel !== null && sel >= bands) setState({ selected: null })
   updateConfig(snap, false)
@@ -152,23 +154,36 @@ function travel(dir: 'undo' | 'redo'): void {
 export const undo = (): void => travel('undo')
 export const redo = (): void => travel('redo')
 
-// ——— Dispositivo y curva actuales ———
+// ——— Sección, dispositivo y curva actuales ———
 
-/** Lo que se edita: la salida o el micrófono elegido si está conectado y, si no, la salida predeterminada */
-export function currentDevice(s: Pick<State, 'config' | 'engine'> = getState()): Device | null {
-  const list = s.engine?.devices.filter((d) => !d.unplugged) ?? []
-  const outputs = list.filter((d) => !d.input)
-  return list.find((d) => d.id === s.config?.device) ?? outputs.find((d) => d.default) ?? outputs[0] ?? null
+export function go(page: Page): void {
+  setState({ page, selected: null })
 }
 
-/** Se está editando un micrófono */
-export const editingMic = (s: Pick<State, 'config' | 'engine'> = getState()): boolean => !!currentDevice(s)?.input
+type Sel = Pick<State, 'config' | 'engine' | 'page'>
 
+/** El elegido si está conectado y, si no, el predeterminado (o el primero) */
+function pick(s: Pick<State, 'config' | 'engine'>, input: boolean, id: string | null | undefined): Device | null {
+  const list = s.engine?.devices.filter((d) => d.input === input && !d.unplugged) ?? []
+  return list.find((d) => d.id === id) ?? list.find((d) => d.default) ?? list[0] ?? null
+}
+
+/** Salida que se edita (la de la barra de título) */
+export const currentOutput = (s: Pick<State, 'config' | 'engine'> = getState()): Device | null => pick(s, false, s.config?.device)
+
+/** Micrófono que se edita (el de su página) */
+export const currentMic = (s: Pick<State, 'config' | 'engine'> = getState()): Device | null => pick(s, true, s.config?.micDevice)
+
+/** Se está editando el micrófono: en su página */
+export const editingMic = (s: Pick<State, 'page'> = getState()): boolean => s.page === 'mic'
+
+/** Lo que se edita: el micrófono en su página y, en el resto, la salida */
+export const currentDevice = (s: Sel = getState()): Device | null => (editingMic(s) ? currentMic(s) : currentOutput(s))
 
 // Una sola instancia: los selectores de zustand necesitan devolver la misma referencia si nada cambia
 const FLAT: Curve = Object.freeze(builtinCurve('b:flat'))
 
-export function currentCurve(s: Pick<State, 'config' | 'engine'> = getState()): Curve {
+export function currentCurve(s: Sel = getState()): Curve {
   const id = currentDevice(s)?.id
   return (id && s.config?.curves[id]) || FLAT
 }
@@ -201,13 +216,13 @@ export function savePreset(name: string): void {
   updateConfig({ presets, curves: dev ? { ...cfg.curves, [dev]: curve } : cfg.curves })
 }
 
-/** Preset hecho para una salida concreta (corrección de sala): se añade a «Mis presets» y se pone en ella */
-export function savePresetFor(name: string, curve: Curve, device: string): void {
+/** Corrección de sala medida en una salida: se añade a «Mis presets» (marcada con la salida) y se pone en ella */
+export function saveRoomPreset(name: string, curve: Curve, device: string): void {
   const cfg = getState().config
   if (!cfg) return
   const id = newPresetId()
   const c = { ...curve, preset: id }
-  updateConfig({ presets: [...cfg.presets, { id, name, curve: c }], curves: { ...cfg.curves, [device]: c } })
+  updateConfig({ presets: [...cfg.presets, { id, name, curve: c, room: device }], curves: { ...cfg.curves, [device]: c } })
 }
 
 /** Preset que llega compartido: se añade a «Mis presets» y se pone */
@@ -219,14 +234,24 @@ export function importPreset(name: string, curve: Curve): void {
   applyPreset(curve, id)
 }
 
-/** Todos los presets, de serie (traducidos) y propios, en el orden de la barra lateral */
+/** Todos los presets, de serie (traducidos) y propios, en el orden del menú de presets */
 export function allPresets(cfg: Config | null = getState().config): Preset[] {
   return [...BUILTIN.map((b) => ({ id: b.id, name: t(`presets.builtin.${b.id}`), curve: builtinCurve(b.id) })), ...(cfg?.presets ?? [])]
 }
 
+/** Borra uno de «Mis presets», con un aviso para deshacerlo */
 export function deletePreset(id: string): void {
   const cfg = getState().config
-  if (cfg) updateConfig({ presets: cfg.presets.filter((p) => p.id !== id) })
+  if (!cfg) return
+  const before = cfg.presets
+  updateConfig({ presets: before.filter((p) => p.id !== id) })
+  toast(t('presets.deleted'), 'info', { secs: 6, action: { label: t('presets.undo'), run: () => updateConfig({ presets: before }) } })
+}
+
+export function renamePreset(id: string, name: string): void {
+  const cfg = getState().config
+  const clean = cleanName(name)
+  if (cfg && clean) updateConfig({ presets: cfg.presets.map((p) => (p.id === id ? { ...p, name: clean } : p)) })
 }
 
 export async function refreshEngine(): Promise<EngineStatus> {

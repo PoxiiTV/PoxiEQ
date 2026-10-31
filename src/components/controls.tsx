@@ -7,8 +7,6 @@ import { errorText, useT } from '../i18n'
 export interface Option<T extends string | number> {
   value: T
   label: string
-  /** Encabezado del grupo: se pinta encima de la primera opción de cada grupo */
-  group?: string
 }
 
 /** Desplegable propio (el `<select>` del navegador abre una lista nativa) */
@@ -82,12 +80,7 @@ export function Select<T extends string | number>({
       </button>
       {open && (
         <div className="dd-menu" role="listbox">
-          {options.map((o, i) => [
-            o.group && o.group !== options[i - 1]?.group && (
-              <div key={`g:${o.group}`} className="dd-group" role="presentation">
-                {o.group}
-              </div>
-            ),
+          {options.map((o, i) => (
             <button
               key={String(o.value)}
               type="button"
@@ -103,7 +96,7 @@ export function Select<T extends string | number>({
               {o.label}
               {o.value === value && <Check size={14} />}
             </button>
-          ])}
+          ))}
         </div>
       )}
     </div>

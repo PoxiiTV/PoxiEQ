@@ -2,17 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, LoaderCircle, Search } from 'lucide-react'
 import { api, type AutoEqEntry } from '../lib/api'
 import { curveDb, fmtDb, logFreqs, parseApo, type Band } from '../lib/eq'
-import { currentCurve, savePreset, setCurve, setState, toast, useStore } from '../lib/store'
+import { currentCurve, savePreset, setCurve, setState, toast } from '../lib/store'
 import { errorText, useT } from '../i18n'
-import { Modal } from './ui'
 
 // Quién mide mejor va antes: oratory1990 es la referencia de AutoEq
 const RANK: Record<string, number> = { oratory1990: 0, crinacle: 1, Rtings: 2, Innerfidelity: 3 }
 const key = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 // El índice se pide una vez por sesión; Rust lo guarda en caché una semana
 let cache: AutoEqEntry[] | null = null
-
-const close = (): void => setState({ modal: null })
 
 /** Corrección de AutoEq + graves y agudos a gusto (los mismos shelves que usa AutoEq en su web) */
 function withTaste(bands: Band[], bass: number, treble: number): Band[] {
@@ -22,29 +19,24 @@ function withTaste(bands: Band[], bass: number, treble: number): Band[] {
   return [...bands, ...extra]
 }
 
-export function AutoEqModal(): React.JSX.Element | null {
-  const open = useStore((s) => s.modal === 'autoeq')
-  const [picked, setPicked] = useState<{ entry: AutoEqEntry; bands: Band[]; preamp: number } | null>(null)
+type Picked = { entry: AutoEqEntry; bands: Band[]; preamp: number }
+
+/** Buscador de AutoEq dentro de la página «Cascos»: buscar, ver la corrección y aplicarla (o pegar el archivo) */
+export function AutoEqPanel(): React.JSX.Element {
+  const [picked, setPicked] = useState<Picked | null>(null)
   const [manual, setManual] = useState(false)
-  useEffect(() => {
+  const reset = (): void => {
     setPicked(null)
     setManual(false)
-  }, [open])
-  if (!open) return null
+  }
   return (
-    <Modal onClose={close} wide className="autoeq">
-      {picked ? (
-        <Detail picked={picked} back={() => setPicked(null)} />
-      ) : manual ? (
-        <Manual back={() => setManual(false)} />
-      ) : (
-        <Finder onPick={setPicked} onManual={() => setManual(true)} />
-      )}
-    </Modal>
+    <div className="dyn-card autoeq-panel">
+      {picked ? <Detail picked={picked} back={reset} /> : manual ? <Manual back={reset} /> : <Finder onPick={setPicked} onManual={() => setManual(true)} />}
+    </div>
   )
 }
 
-function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands: Band[]; preamp: number }) => void; onManual: () => void }): React.JSX.Element {
+function Finder({ onPick, onManual }: { onPick: (p: Picked) => void; onManual: () => void }): React.JSX.Element {
   const t = useT()
   const [list, setList] = useState<AutoEqEntry[] | null>(cache)
   const [failed, setFailed] = useState(false)
@@ -52,6 +44,7 @@ function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands:
   const [hl, setHl] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const box = useRef<HTMLDivElement>(null)
+  const requested = useRef(false)
 
   const load = (): void => {
     setFailed(false)
@@ -66,9 +59,13 @@ function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands:
         toast(errorText(e), 'err')
       })
   }
-  useEffect(() => {
-    if (!cache) load()
-  }, [])
+  // La lista se pide al ir a buscar, no solo por abrir la página
+  const loadOnce = (): void => {
+    if (!cache && !list && !requested.current) {
+      requested.current = true
+      load()
+    }
+  }
 
   const results = useMemo(() => {
     const words = q.split(/\s+/).map(key).filter(Boolean)
@@ -98,14 +95,14 @@ function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands:
 
   return (
     <>
-      <h2>{t('autoeq.title')}</h2>
-      <p>{t('autoeq.text')}</p>
+      <small>{t('autoeq.text')}</small>
       <div className="finder-search">
         <Search size={17} />
         <input
           className="input"
-          autoFocus
           value={q}
+          aria-label={t('autoeq.title')}
+          onFocus={loadOnce}
           placeholder={t('autoeq.search')}
           spellCheck={false}
           onChange={(e) => setQ(e.target.value)}
@@ -120,8 +117,8 @@ function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands:
           }}
         />
       </div>
-      <div className="finder-list" ref={box}>
-        {!list && !failed && (
+      <div className={`finder-list ${q.trim() ? '' : 'idle'}`} ref={box}>
+        {!list && !failed && q.trim() && (
           <div className="finder-note">
             <LoaderCircle size={16} className="spin" /> {t('autoeq.loading')}
           </div>
@@ -146,20 +143,16 @@ function Finder({ onPick, onManual }: { onPick: (p: { entry: AutoEqEntry; bands:
           </button>
         ))}
       </div>
-      <div className="modal-actions">
+      <div className="panel-actions start">
         <button className="btn btn-ghost btn-sm" onClick={onManual}>
           {t('autoeq.manual')}
-        </button>
-        <div className="spacer" />
-        <button className="btn btn-ghost" onClick={close}>
-          {t('common.cancel')}
         </button>
       </div>
     </>
   )
 }
 
-function Detail({ picked, back }: { picked: { entry: AutoEqEntry; bands: Band[]; preamp: number }; back: () => void }): React.JSX.Element {
+function Detail({ picked, back }: { picked: Picked; back: () => void }): React.JSX.Element {
   const t = useT()
   const [bass, setBass] = useState(0)
   const [treble, setTreble] = useState(0)
@@ -171,32 +164,34 @@ function Detail({ picked, back }: { picked: { entry: AutoEqEntry; bands: Band[];
     if (name.trim()) savePreset(name.trim().slice(0, 48))
     setState({ selected: null })
     toast(t('autoeq.ok', { n: bands.length }))
-    close()
+    back()
   }
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 4 }}>
+      <div className="panel-title">
         <button className="icon-btn" onClick={back} aria-label={t('autoeq.back')}>
           <ArrowLeft size={17} />
         </button>
-        <h2 style={{ margin: 0 }}>{picked.entry.name}</h2>
+        <div className="txt">
+          <b>{picked.entry.name}</b>
+          <small>
+            {t('autoeq.by', { s: picked.entry.source })} · {t(`autoeq.forms.${picked.entry.form}`)}
+          </small>
+        </div>
       </div>
-      <p className="small muted" style={{ marginLeft: 38 }}>
-        {t('autoeq.by', { s: picked.entry.source })} · {t(`autoeq.forms.${picked.entry.form}`)}
-      </p>
       <Preview bands={bands} />
       <div className="taste">
         <Taste label={t('autoeq.bass')} value={bass} min={-6} max={12} onChange={setBass} />
         <Taste label={t('autoeq.treble')} value={treble} min={-6} max={6} onChange={setTreble} />
       </div>
       <p className="hint">{t('autoeq.tasteHint')}</p>
-      <label className="label" htmlFor="autoeq-name" style={{ marginTop: 14 }}>
+      <label className="label" htmlFor="autoeq-name" style={{ marginTop: 8 }}>
         {t('autoeq.name')}
       </label>
       <input id="autoeq-name" className="input" maxLength={48} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && apply()} />
-      <div className="modal-actions">
-        <button className="btn btn-ghost" onClick={close}>
+      <div className="panel-actions">
+        <button className="btn btn-ghost" onClick={back}>
           {t('common.cancel')}
         </button>
         <button className="btn btn-primary" onClick={apply}>
@@ -251,17 +246,19 @@ function Manual({ back }: { back: () => void }): React.JSX.Element {
     if (name.trim()) savePreset(name.trim())
     setState({ selected: null })
     toast(t('autoeq.ok', { n: r.bands.length }))
-    close()
+    back()
   }
   return (
     <>
-      <div className="row" style={{ marginBottom: 8 }}>
+      <div className="panel-title">
         <button className="icon-btn" onClick={back} aria-label={t('autoeq.back')}>
           <ArrowLeft size={17} />
         </button>
-        <h2 style={{ margin: 0 }}>{t('autoeq.manual')}</h2>
+        <div className="txt">
+          <b>{t('autoeq.manual')}</b>
+          <small>{t('autoeq.manualText')}</small>
+        </div>
       </div>
-      <p>{t('autoeq.manualText')}</p>
       <textarea
         autoFocus
         className={`textarea mono autoeq-text ${over ? 'over' : ''}`}
@@ -281,12 +278,12 @@ function Manual({ back }: { back: () => void }): React.JSX.Element {
           if (f && f.size < 256 * 1024) void f.text().then(setText)
         }}
       />
-      <label className="label" htmlFor="autoeq-manual-name" style={{ marginTop: 14 }}>
+      <label className="label" htmlFor="autoeq-manual-name" style={{ marginTop: 8 }}>
         {t('autoeq.name')}
       </label>
       <input id="autoeq-manual-name" className="input" maxLength={48} value={name} onChange={(e) => setName(e.target.value)} />
-      <div className="modal-actions">
-        <button className="btn btn-ghost" onClick={close}>
+      <div className="panel-actions">
+        <button className="btn btn-ghost" onClick={back}>
           {t('common.cancel')}
         </button>
         <button className="btn btn-primary" disabled={!text.trim()} onClick={apply}>

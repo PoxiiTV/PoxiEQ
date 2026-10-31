@@ -7,6 +7,8 @@ export interface Preset {
   id: string
   name: string
   curve: Curve
+  /** Corrección de sala: la salida en la que se midió */
+  room?: string | null
 }
 
 export interface Loudness {
@@ -80,7 +82,12 @@ export interface Config {
   analyzer: boolean
   analyzerMode: AnalyzerMode
   seenVersion: string
+  /** Salida que se edita (`null`: la predeterminada) */
   device: string | null
+  /** Micrófono que se edita en su página (`null`: el predeterminado) */
+  micDevice: string | null
+  /** Al cambiar Windows la salida predeterminada, editar esa (lo hace Rust: evento `devices`) */
+  followDefault: boolean
   curves: Record<string, Curve>
   presets: Preset[]
   loudness: Loudness

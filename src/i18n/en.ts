@@ -5,22 +5,32 @@ export default {
     close: 'Close',
     done: 'Done',
     retry: 'Retry',
-    delete: 'Delete'
+    delete: 'Delete',
+    inUse: 'In use'
   },
   titlebar: {
     minimize: 'Minimize',
     maximize: 'Maximize',
     close: 'Close',
-    settings: 'Settings',
     bypassOn: 'EQ off: click to turn it on',
     bypassOff: 'Turn the EQ off (bypass)',
-    micBypassOn: 'Microphone unprocessed: click to process it',
-    micBypassOff: 'Leave the microphone unprocessed',
-    device: 'What you edit: an output or a microphone',
-    outputs: 'Outputs',
-    inputs: 'Microphones',
-    outputTip: 'Output: what you hear',
-    micTip: 'Microphone: what others hear'
+    device: 'Output you are editing',
+    outputTip: 'Output: what you hear'
+  },
+  nav: {
+    label: 'Main menu',
+    eq: 'Equalizer',
+    sound: 'Sound',
+    phones: 'Headphones',
+    studio: 'Studio',
+    room: 'Room',
+    mic: 'Microphone',
+    settings: 'Settings',
+    on: 'Something is on',
+    warn: 'Studio listening on'
+  },
+  follow: {
+    now: 'Now playing through {d}'
   },
   tray: {
     open: 'Open PoxiEQ',
@@ -87,7 +97,6 @@ export default {
       highPass: 'High pass'
     }
   },
-  tabs: { eq: 'EQ', dsp: 'Dynamics', studio: 'Studio' },
   dsp: {
     install: "Dynamics needs PoxiEQ's processor. Windows will ask for administrator permission once.",
     installBtn: 'Install',
@@ -97,11 +106,13 @@ export default {
     sound: 'Loudness',
     custom: 'Custom',
     sounds: {
-      natural: { name: 'Natural', meta: 'Unprocessed', text: 'As it comes: turns off all dynamics and enhancers.' },
+      natural: { name: 'Natural', meta: 'Unprocessed', text: 'As it comes: turns off dynamics, enhancers and crossfeed or virtual speakers.' },
       streaming: { name: 'Streaming', meta: '−14 LUFS', text: 'Everything at the same volume, like Spotify or YouTube.' },
       loud: { name: 'Loud', meta: '−9 LUFS', text: 'More punch and presence, for noisy rooms or weak speakers.' },
       night: { name: 'Night', meta: '−23 LUFS', text: 'Heavy compression: quiet explosions and clear dialogue without disturbing anyone.' }
     },
+    chain: 'Dynamics chain',
+    chainHint: 'In the order the signal flows. Picking a loudness above sets all three at once.',
     extras: 'Enhancers',
     bass: 'Psychoacoustic bass',
     bassHint: 'Adds bass harmonics: you hear more low end on headphones or small speakers without raising the volume.',
@@ -116,7 +127,6 @@ export default {
     speakers: 'Virtual speakers',
     speakersHint: 'For headphones: stereo plays from two speakers in front of you instead of inside your head. Replaces crossfeed.',
     cutoff: 'Cutoff',
-    advanced: 'Advanced settings',
     leveler: 'Leveler',
     levelerHint: "Slowly (over seconds) brings the volume to the target loudness. It doesn't lift silence.",
     target: 'Target',
@@ -195,11 +205,14 @@ export default {
     saved: '“My hearing” preset saved and applied'
   },
   mic: {
-    chip: 'Microphone',
-    chipTip: "You're editing a microphone: what you set here is what Discord, OBS and any app using it receive.",
+    pick: 'Microphone you are editing',
+    none: 'No microphone connected',
+    intro: 'What you set here is what Discord, OBS and any app using the microphone receive, in this order: EQ, noise gate and compressor. The gate and compressor are the same for every microphone with PoxiEQ.',
+    eq: 'Microphone equalizer',
+    bypassOn: 'Microphone unprocessed: click to process it',
+    bypassOff: 'Leave the microphone unprocessed',
     bypassBanner: 'The microphone is unprocessed: apps get its original sound.',
     dynamics: 'Microphone dynamics',
-    hint: 'Applied before the sound reaches any app, in this order: EQ, noise gate and compressor. The same for every microphone with PoxiEQ.',
     gate: 'Noise gate',
     gateHint: "Lowers background noise (fan, keyboard) when you're not talking. Set the threshold just above the noise: the line on the meter shows where it is.",
     range: 'Attenuation',
@@ -221,10 +234,16 @@ export default {
     reset: 'Reset'
   },
   presets: {
-    title: 'Presets',
+    title: 'Preset',
+    menu: 'Choose preset',
+    custom: 'Custom',
+    builtinTitle: 'Built-in',
     mine: 'My presets',
     mineEmpty: 'Save your curves here to switch between them with one click.',
     save: 'Save as preset',
+    saveShort: 'Save',
+    import: 'Import',
+    rename: 'Rename',
     saveTitle: 'Save preset',
     name: 'Name',
     namePh: 'My headphones, Movie night…',
@@ -265,7 +284,7 @@ export default {
   },
   settings: {
     title: 'Settings',
-    cats: { general: 'General', auto: 'Automatic', keys: 'Shortcuts', engine: 'Audio engine', about: 'About' },
+    cats: { general: 'General', auto: 'Automatic', keys: 'Shortcuts', engine: 'Engine', about: 'About' },
     appearance: 'Appearance',
     theme: 'Theme',
     themes: { dark: 'Dark', light: 'Light', system: 'Like Windows' },
@@ -277,6 +296,8 @@ export default {
     autostartHint: 'Opens in the tray, without a window.',
     closeToTray: 'Close to tray',
     closeToTrayHint: 'The X hides the window. The EQ keeps working even if you quit PoxiEQ completely.',
+    follow: 'Follow the Windows default output',
+    followHint: 'When you plug in headphones or a Bluetooth speaker and Windows switches to it, PoxiEQ switches to its EQ.',
     sound: 'Sound',
     loudness: 'Automatic loudness',
     loudnessHint: 'Adds bass and treble as you turn the Windows volume down, like your ears need. Turn it off for mixing: it skews what you hear.',
@@ -350,6 +371,11 @@ export default {
     cardTitle: 'Fit your speakers to the room',
     cardText: 'With a microphone at your listening spot, measure how the room sounds and create a preset that cuts the bass resonances. About 3 minutes.',
     start: 'Measure the room',
+    cardWhen: 'For speakers, not headphones. You need a microphone (a measurement one is best).',
+    last: 'Latest result on this output',
+    lastText: '{n} filters measured on {d}. It is also in My presets.',
+    none: "You haven't measured the room with {d} yet.",
+    apply: 'Apply',
     intro: 'PoxiEQ plays a tone sweep through the speakers while recording the microphone, and works out the filters that correct the room.',
     p1: 'Put the microphone where you listen, at ear height and pointing up. A measurement mic is best.',
     p2: 'Keep the room quiet. Start with a low Windows volume and raise it until "Check level" comes out right.',
@@ -387,6 +413,11 @@ export default {
     again: 'Back to measuring',
     save: 'Save and apply to {d}',
     saved: 'Preset "{n}" saved and applied to {d}'
+  },
+  phones: {
+    listening: 'Listening on headphones',
+    listeningHint: 'Crossfeed or virtual speakers: one or the other, turning one on turns the other off.',
+    apply: 'Apply “{n}”'
   },
   share: {
     title: 'Share preset',

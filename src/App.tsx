@@ -1,38 +1,44 @@
 import { useEffect } from 'react'
 import { api } from './lib/api'
 import { autoPreamp } from './lib/eq'
-import { allPresets, currentDevice, useStore } from './lib/store'
+import { allPresets, currentDevice, currentOutput, useStore } from './lib/store'
 import { useT } from './i18n'
 import { TitleBar, Toasts } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
-import { Editor } from './components/Editor'
+import { Banners, EqPage } from './components/Editor'
+import { SoundPage } from './components/Dynamics'
+import { PhonesPage } from './components/Phones'
+import { StudioPage } from './components/Studio'
+import { RoomModal, RoomPage } from './components/Room'
+import { MicPage } from './components/Mic'
+import { SettingsPage } from './components/Settings'
 import { Meter } from './components/Meter'
 import { Setup } from './components/Setup'
-import { Settings } from './components/Settings'
 import { ImportModal, SavePresetModal, ShareModal, UpdateModal, WhatsNew } from './components/Overlays'
-import { AutoEqModal } from './components/AutoEq'
 import { HearingModal } from './components/Hearing'
-import { RoomModal } from './components/Room'
 import { ContextMenu } from './components/ContextMenu'
 
 export function App(): React.JSX.Element {
   const t = useT()
-  const ready = useStore((s) => !!s.engine?.installed && !!currentDevice(s)?.enabled)
-  const device = useStore((s) => (ready ? currentDevice(s)?.id : undefined))
+  // Lo que miden los medidores: el micrófono en su página y, en el resto, la salida (si ya pasa por PoxiEQ)
+  const metered = useStore((s) => {
+    const d = currentDevice(s)
+    return s.engine?.installed && d?.enabled ? d.id : undefined
+  })
   const lang = useStore((s) => s.config?.lang)
   const presets = useStore((s) => s.config?.presets)
 
   // Captura de lo que suena (medidores y analizador): solo con la ventana a la vista, en la bandeja no gasta CPU
   useEffect(() => {
-    if (!device) return
-    const sync = (): void => void (document.hidden ? api.analyzerStop() : api.analyzerStart(device))
+    if (!metered) return
+    const sync = (): void => void (document.hidden ? api.analyzerStop() : api.analyzerStart(metered))
     sync()
     document.addEventListener('visibilitychange', sync)
     return () => {
       document.removeEventListener('visibilitychange', sync)
       void api.analyzerStop()
     }
-  }, [device])
+  }, [metered])
 
   // El menú de la bandeja y el aviso en pantalla, en el idioma de la app
   useEffect(() => {
@@ -51,21 +57,40 @@ export function App(): React.JSX.Element {
         <TitleBar />
         <main className="main">
           <Sidebar />
-          <section className="stage">{ready ? <Editor /> : <Setup />}</section>
-          {ready && <Meter />}
+          <section className="stage">
+            <Page />
+          </section>
+          {metered && <Meter />}
         </main>
       </div>
-      <Settings />
       <SavePresetModal />
       <ShareModal />
       <ImportModal />
-      <AutoEqModal />
       <HearingModal />
       <RoomModal />
       <UpdateModal />
       <WhatsNew />
       <ContextMenu />
       <Toasts />
+    </>
+  )
+}
+
+/** La sección elegida en el menú. Las de las salidas piden antes activar el motor en la salida que se edita. */
+function Page(): React.JSX.Element {
+  const page = useStore((s) => s.page)
+  const ready = useStore((s) => !!s.engine?.installed && !!currentOutput(s)?.enabled)
+  if (page === 'settings') return <SettingsPage />
+  if (page === 'mic') return <MicPage />
+  if (!ready) return <Setup />
+  return (
+    <>
+      <Banners />
+      {page === 'eq' && <EqPage />}
+      {page === 'sound' && <SoundPage />}
+      {page === 'phones' && <PhonesPage />}
+      {page === 'studio' && <StudioPage />}
+      {page === 'room' && <RoomPage />}
     </>
   )
 }
