@@ -1,5 +1,5 @@
-// Presets de sonoridad de PoxiDSP: solo tocan la cadena de volumen (nivelador, compresor y limitador);
-// graves, diálogos y crossfeed van aparte y se quedan como estén.
+// Presets de sonoridad de PoxiDSP. Streaming, Fuerte y Noche solo tocan la cadena de volumen (nivelador,
+// compresor y limitador) y dejan los realces como estén; Natural lo apaga todo: el sonido tal cual llega.
 import type { Dsp } from './api'
 
 export type Sound = 'natural' | 'streaming' | 'loud' | 'night'
@@ -27,17 +27,21 @@ const PRESETS: Record<Exclude<Sound, 'natural'>, Chain> = {
   }
 }
 
+const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed'] as const
+
 export function withSound(d: Dsp, s: Sound): Dsp {
   if (s !== 'natural') return { ...d, ...structuredClone(PRESETS[s]) }
-  return { ...d, leveler: { ...d.leveler, on: false }, comp: { ...d.comp, on: false }, limiter: { ...d.limiter, on: false } }
+  return Object.fromEntries(PARTS.map((k) => [k, { ...d[k], on: false }])) as unknown as Dsp
 }
 
 const same = (a: object, b: object): boolean => Object.entries(a).every(([k, v]) => (b as Record<string, unknown>)[k] === v)
 
 /** Preset de sonoridad que coincide con los ajustes (`null` = personalizado) */
 export function soundOf(d: Dsp): Sound | null {
-  if (!d.leveler.on && !d.comp.on && !d.limiter.on) return 'natural'
+  if (!dspActive(d)) return 'natural'
   return (Object.keys(PRESETS) as (keyof typeof PRESETS)[]).find((s) => (['leveler', 'comp', 'limiter'] as const).every((k) => same(PRESETS[s][k], d[k]))) ?? null
 }
 
-export const dspActive = (d: Dsp): boolean => [d.limiter, d.comp, d.leveler, d.bass, d.dialog, d.crossfeed].some((p) => p.on)
+export function dspActive(d: Dsp): boolean {
+  return PARTS.some((k) => d[k].on)
+}

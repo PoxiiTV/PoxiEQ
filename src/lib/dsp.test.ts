@@ -21,14 +21,20 @@ test('cada preset de sonoridad se reconoce a sí mismo', () => {
   assert.equal(withSound(OFF, 'night').leveler.target, -23)
 })
 
-test('los presets no tocan los realces y Natural apaga solo el volumen', () => {
-  const extras = { ...OFF, crossfeed: { ...OFF.crossfeed, on: true } }
+test('los presets no tocan los realces y Natural lo apaga todo', () => {
+  const extras = { ...OFF, crossfeed: { ...OFF.crossfeed, on: true }, bass: { ...OFF.bass, on: true, amount: 0.7 }, dialog: { ...OFF.dialog, on: true } }
   const loud = withSound(extras, 'loud')
   assert.equal(loud.crossfeed.on, true)
+  assert.equal(loud.bass.on, true)
+  // Con realces encendidos y la cadena de volumen apagada ya no es «Natural»
+  assert.equal(soundOf(withSound(extras, 'natural')), 'natural')
+  assert.equal(soundOf({ ...OFF, dialog: { ...OFF.dialog, on: true } }), null)
   const natural = withSound(loud, 'natural')
-  assert.equal(natural.crossfeed.on, true)
   assert.equal(soundOf(natural), 'natural')
-  assert.equal(dspActive(natural), true)
+  assert.equal(dspActive(natural), false)
+  // Apagar no borra los ajustes: al volver a encender cada realce sigue como estaba
+  assert.equal(natural.bass.amount, 0.7)
+  assert.equal(natural.leveler.target, -9)
 })
 
 test('un ajuste a mano deja el preset en personalizado', () => {
