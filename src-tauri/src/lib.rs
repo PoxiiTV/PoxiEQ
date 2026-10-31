@@ -1035,6 +1035,11 @@ mod tests {
         m.sanitize();
         assert!(m.mic.bypass && m.mic.dsp.gate.on);
         assert_eq!((m.mic.dsp.gate.threshold, m.mic.dsp.gate.range), (0.0, 90.0));
+        // «Graves»: sin el campo (configuración de antes) queda por defecto; fuera de rango se recorta
+        let mut g: Config = serde_json::from_str(r#"{"dsp":{"bass":{"on":true},"bassBoost":{"on":true,"amount":7}}}"#).unwrap();
+        g.sanitize();
+        assert!(g.dsp.bass.on && g.dsp.bass_boost.on && g.dsp.bass_boost.amount == 1.0);
+        assert_eq!(old.dsp.bass_boost, poxidsp::BassBoost::default());
     }
 
     #[test]

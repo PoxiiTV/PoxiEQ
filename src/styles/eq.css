@@ -1151,6 +1151,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Realces: «Graves» (la rueda) a la izquierda en dos filas y los otros dos apilados a su lado */
+.dyn-cards.extras {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.dyn-cards.extras > .knob-card {
+  grid-row: span 2;
+}
+@container (max-width: 600px) {
+  .dyn-cards.extras {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dyn-cards.extras > .knob-card {
+    grid-row: auto;
+  }
+}
+.knob-card .dyn-sliders {
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: 4px 0 2px;
+}
 /* Cadena de dinámica: una tarjeta por procesador, en el orden de la señal */
 .chain {
   display: flex;

@@ -11,7 +11,8 @@
 - 🖱️ **Curva en vivo**: arrastra los puntos, la rueda cambia el ancho y el sonido cambia al instante.
 - 🎧 **Buscar mis cascos**: escribe tu modelo y aplica su corrección de AutoEq.
 - 🛡️ **Preamp automático** para que nunca sature, **bypass** con `Ctrl+Alt+Num 0` y desde la bandeja.
-- 🔊 **Dinámica**: presets de sonoridad (Natural, Streaming, Fuerte, Noche), limitador de true peak, compresor, nivelador por LUFS, graves psicoacústicos, realce de diálogos y crossfeed.
+- 🔊 **Dinámica**: presets de sonoridad (Natural, Streaming, Fuerte, Noche), limitador de true peak, compresor, nivelador por LUFS, armónicos de graves, realce de diálogos y crossfeed.
+- 🔈 **Graves con una rueda**: hasta +10 dB de graves limpios y con pegada (sin embarrar los medios ni distorsionar) y protección para que nunca sature.
 - 🎯 **Preset por aplicación**: cada app con su preset (Spotify → Música, un juego → Pasos) y, al salir, vuelve el que tenías.
 - ⌨️ **Atajos a tu gusto**: grábalos en Ajustes (por defecto `Ctrl+Alt+Num 0…9`), con un aviso en pantalla que no roba el foco. No deja usar los que chocan con AltGr (`€ | @ # ~`) y avisa si otro programa ya tiene el atajo.
 - 🗂️ **Presets en la bandeja**: cambia de preset sin abrir la ventana.
@@ -33,7 +34,8 @@
 - 🖱️ **Live curve**: drag the points, the wheel changes the width and the sound changes instantly.
 - 🎧 **Find my headphones**: type your model and apply its AutoEq correction.
 - 🛡️ **Automatic preamp** so it never clips, **bypass** with `Ctrl+Alt+Num 0` and from the tray.
-- 🔊 **Dynamics**: loudness presets (Natural, Streaming, Loud, Night), true-peak limiter, compressor, LUFS leveler, psychoacoustic bass, dialogue enhancer and crossfeed.
+- 🔊 **Dynamics**: loudness presets (Natural, Streaming, Loud, Night), true-peak limiter, compressor, LUFS leveler, bass harmonics, dialogue enhancer and crossfeed.
+- 🔈 **Bass on a knob**: up to +10 dB of clean, punchy low end (no muddy mids, no distortion) with protection so it never clips.
 - 🎯 **Preset per app**: each app with its own preset (Spotify → Music, a game → Footsteps) and yours comes back when you leave.
 - ⌨️ **Your own shortcuts**: record them in Settings (by default `Ctrl+Alt+Num 0…9`), with an on-screen notice that doesn't steal focus. Combinations that clash with AltGr (`€ | @ # ~`) aren't allowed, and you're warned if another program already owns the shortcut.
 - 🗂️ **Presets in the tray**: switch presets without opening the window.

@@ -13,7 +13,8 @@ const OFF: Dsp = {
   dialog: { on: false, amount: 4 },
   crossfeed: { on: false, freq: 700, feed: 4.5 },
   speakers: { on: false, amount: 1 },
-  gate: { on: false, threshold: -50, range: 30, attack: 1, hold: 150, release: 200 }
+  gate: { on: false, threshold: -50, range: 30, attack: 1, hold: 150, release: 200 },
+  bassBoost: { on: false, amount: 0.5 }
 }
 
 test('cada preset de sonoridad se reconoce a sí mismo', () => {
@@ -24,10 +25,19 @@ test('cada preset de sonoridad se reconoce a sí mismo', () => {
 })
 
 test('los presets no tocan los realces y Natural lo apaga todo', () => {
-  const extras = { ...OFF, crossfeed: { ...OFF.crossfeed, on: true }, bass: { ...OFF.bass, on: true, amount: 0.7 }, dialog: { ...OFF.dialog, on: true } }
+  const extras = {
+    ...OFF,
+    crossfeed: { ...OFF.crossfeed, on: true },
+    bass: { ...OFF.bass, on: true, amount: 0.7 },
+    dialog: { ...OFF.dialog, on: true },
+    bassBoost: { on: true, amount: 0.65 }
+  }
   const loud = withSound(extras, 'loud')
   assert.equal(loud.crossfeed.on, true)
   assert.equal(loud.bass.on, true)
+  assert.equal(loud.bassBoost.on, true)
+  // Solo «Graves» encendido ya es personalizado
+  assert.equal(soundOf({ ...OFF, bassBoost: { on: true, amount: 0.3 } }), null)
   // Con realces encendidos y la cadena de volumen apagada ya no es «Natural»
   assert.equal(soundOf(withSound(extras, 'natural')), 'natural')
   assert.equal(soundOf({ ...OFF, dialog: { ...OFF.dialog, on: true } }), null)
@@ -36,6 +46,7 @@ test('los presets no tocan los realces y Natural lo apaga todo', () => {
   assert.equal(dspActive(natural), false)
   // Apagar no borra los ajustes: al volver a encender cada realce sigue como estaba
   assert.equal(natural.bass.amount, 0.7)
+  assert.deepEqual(natural.bassBoost, { on: false, amount: 0.65 })
   assert.equal(natural.leveler.target, -9)
 })
 

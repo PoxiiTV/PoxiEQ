@@ -22,6 +22,7 @@ export interface Dsp {
   limiter: { on: boolean; ceiling: number }
   comp: { on: boolean; threshold: number; ratio: number; attack: number; release: number; knee: number; makeup: number }
   leveler: { on: boolean; target: number; maxGain: number }
+  /** «Armónicos» (graves psicoacústicos) */
   bass: { on: boolean; freq: number; amount: number }
   dialog: { on: boolean; amount: number }
   crossfeed: { on: boolean; freq: number; feed: number }
@@ -29,6 +30,8 @@ export interface Dsp {
   speakers: { on: boolean; amount: number }
   /** Puerta de ruido (micrófono): dBFS, dB de atenuación y ms */
   gate: { on: boolean; threshold: number; range: number; attack: number; hold: number; release: number }
+  /** «Graves» (la rueda): `amount` 0…1, a 0 no procesa */
+  bassBoost: { on: boolean; amount: number }
 }
 
 /** Micrófono: lo mismo en todas las entradas activadas (su EQ va en `curves` con el id de la entrada) */

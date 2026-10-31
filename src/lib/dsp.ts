@@ -27,10 +27,10 @@ const PRESETS: Record<Exclude<Sound, 'natural'>, Chain> = {
   }
 }
 
-const PARTS = ['limiter', 'comp', 'leveler', 'bass', 'dialog', 'crossfeed', 'speakers', 'gate'] as const
+const PARTS = ['limiter', 'comp', 'leveler', 'bassBoost', 'bass', 'dialog', 'crossfeed', 'speakers', 'gate'] as const
 /** Lo que se ajusta en la página «Sonido»: la cadena de volumen y los realces (crossfeed y altavoces virtuales
  *  van en «Cascos») */
-export const SOUND_PARTS = ['leveler', 'comp', 'limiter', 'bass', 'dialog'] as const
+export const SOUND_PARTS = ['leveler', 'comp', 'limiter', 'bassBoost', 'bass', 'dialog'] as const
 
 export function withSound(d: Dsp, s: Sound): Dsp {
   if (s !== 'natural') return { ...d, ...structuredClone(PRESETS[s]) }

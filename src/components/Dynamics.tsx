@@ -1,11 +1,11 @@
-import { ArrowDown, AudioLines, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
+import { ArrowDown, AudioLines, AudioWaveform, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
 import { soundOf, SOUNDS, withHeadphones, withSound, type Sound } from '../lib/dsp'
 import { toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
-import { Range } from './controls'
+import { Knob, Range } from './controls'
 import { Switch } from './ui'
 
 const SOUND_ICONS: Record<Sound, LucideIcon> = { natural: Leaf, streaming: Radio, loud: Volume2, night: Moon }
@@ -85,8 +85,11 @@ export function SoundPage(): React.JSX.Element | null {
 
       <section>
         <SectionHead n={3} label={t('dsp.extras')} />
-        <div className="dyn-cards pair">
-          <Card icon={Waves} title={t('dsp.bass')} hint={t('dsp.bassHint')} on={dsp.bass.on} onToggle={(on) => set('bass', { on })}>
+        <div className="dyn-cards extras">
+          <Card icon={Waves} title={t('dsp.lows')} hint={t('dsp.lowsHint')} on={dsp.bassBoost.on} onToggle={(on) => set('bassBoost', { on })} className="knob-card">
+            <Knob label={t('dsp.amount')} value={Math.round(dsp.bassBoost.amount * 100)} fmt={(v) => `${v} %`} onChange={(v) => set('bassBoost', { amount: v / 100 })} />
+          </Card>
+          <Card icon={AudioWaveform} title={t('dsp.bass')} hint={t('dsp.bassHint')} on={dsp.bass.on} onToggle={(on) => set('bass', { on })}>
             <Slider label={t('dsp.amount')} value={dsp.bass.amount * 100} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('bass', { amount: v / 100 })} />
             <Slider label={t('dsp.below')} value={dsp.bass.freq} min={40} max={200} step={5} fmt={(v) => `${Math.round(v)} Hz`} onChange={(freq) => set('bass', { freq })} />
           </Card>
@@ -190,6 +193,7 @@ function Card({
   hint,
   on,
   onToggle,
+  className = '',
   children
 }: {
   icon: LucideIcon
@@ -197,10 +201,11 @@ function Card({
   hint: string
   on: boolean
   onToggle: (on: boolean) => void
+  className?: string
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className={`dyn-card ${on ? 'on' : ''}`} role="group" aria-label={title}>
+    <div className={`dyn-card ${className} ${on ? 'on' : ''}`} role="group" aria-label={title}>
       <div className="dyn-card-head">
         <Icon size={16} />
         <b>{title}</b>

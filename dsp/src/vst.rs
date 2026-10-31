@@ -397,9 +397,11 @@ mod tests {
 
     #[test]
     fn todo_apagado_es_bit_transparente() {
-        // Sin chunk, con chunk apagado y con un chunk ajeno: la salida es la entrada, bit a bit
+        // Sin chunk, con chunk apagado, con los graves encendidos y la rueda a 0, y con un chunk ajeno: la salida
+        // es la entrada, bit a bit
         let off = Settings::default().chunk(1);
-        for chunk in [None, Some(&off[..]), Some(&b"no es nuestro"[..])] {
+        let zero = Settings { bass_boost: crate::BassBoost { on: true, amount: 0.0 }, ..Settings::default() }.chunk(1);
+        for chunk in [None, Some(&off[..]), Some(&zero[..]), Some(&b"no es nuestro"[..])] {
             let h = Host::load(chunk);
             let (l, r) = (signal(FRAMES, 1), signal(FRAMES, 2));
             let (mut ol, mut or) = (l.clone(), r.clone());

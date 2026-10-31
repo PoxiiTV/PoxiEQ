@@ -27,6 +27,8 @@ pub struct Settings {
     pub speakers: Speakers,
     /// Puerta de ruido (micrófono). Va la primera de la cadena.
     pub gate: Gate,
+    /// «Graves»: realce de graves con una rueda. `bass` es otra cosa (los armónicos).
+    pub bass_boost: BassBoost,
 }
 
 /// Limitador brickwall con lookahead
@@ -66,7 +68,8 @@ pub struct Leveler {
     pub max_gain: f32,
 }
 
-/// Realce de graves psicoacústico: armónicos de la banda grave
+/// «Armónicos» en la interfaz: graves psicoacústicos (armónicos de la banda grave). Se llama `bass` por
+/// compatibilidad con las configuraciones guardadas.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
 pub struct Bass {
@@ -124,6 +127,22 @@ pub struct Gate {
     pub release: f32,
 }
 
+/// «Graves»: `y = x + k·LP(x)` por canal, con un paso bajo de 2.º orden a 100 Hz (ver `dsp::LowBoost`)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
+pub struct BassBoost {
+    pub on: bool,
+    /// 0…1: posición de la rueda (k = 2 · amount). A 0 no se procesa nada.
+    pub amount: f32,
+}
+
+impl BassBoost {
+    /// Encendido y con la rueda por encima de 0: solo entonces suma el paso bajo (y la protección)
+    pub fn active(&self) -> bool {
+        self.on && self.amount > 0.0
+    }
+}
+
 impl Default for Limiter {
     fn default() -> Self {
         Self { on: false, ceiling: -1.0 }
@@ -159,6 +178,11 @@ impl Default for Speakers {
         Self { on: false, amount: 1.0 }
     }
 }
+impl Default for BassBoost {
+    fn default() -> Self {
+        Self { on: false, amount: 0.5 }
+    }
+}
 impl Default for Gate {
     fn default() -> Self {
         Self { on: false, threshold: -50.0, range: 30.0, attack: 1.0, hold: 150.0, release: 200.0 }
@@ -176,7 +200,7 @@ fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
 /// Valores en orden fijo: es el formato del ChunkData (versión 1). Lo nuevo va siempre al final: un plugin
 /// anterior lee lo suyo e ignora el resto, y uno nuevo completa con los valores por defecto lo que no trae
 /// un chunk anterior (como mínimo [`MIN_FIELDS`]).
-const FIELDS: usize = 28;
+const FIELDS: usize = 30;
 /// Campos de la primera versión publicada del chunk (hasta los altavoces virtuales)
 const MIN_FIELDS: usize = 22;
 const MAGIC: &[u8; 4] = b"PXD1";
@@ -210,6 +234,7 @@ impl Settings {
         g.attack = clamp(g.attack, 0.1, 50.0, d.gate.attack);
         g.hold = clamp(g.hold, 0.0, 2000.0, d.gate.hold);
         g.release = clamp(g.release, 5.0, 2000.0, d.gate.release);
+        self.bass_boost.amount = clamp(self.bass_boost.amount, 0.0, 1.0, d.bass_boost.amount);
         // Crossfeed y altavoces virtuales hacen lo mismo de dos formas: juntos se cruzaría dos veces
         if self.speakers.on {
             self.crossfeed.on = false;
@@ -218,12 +243,12 @@ impl Settings {
 
     /// Con todo apagado el plugin ni se carga
     pub fn active(&self) -> bool {
-        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on || self.gate.on
+        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on || self.gate.on || self.bass_boost.active()
     }
 
     fn fields(&self) -> [f32; FIELDS] {
         let on = |b: bool| if b { 1.0 } else { 0.0 };
-        let (l, c, v, b, d, x, h, g) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers, self.gate);
+        let (l, c, v, b, d, x, h, g, w) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers, self.gate, self.bass_boost);
         [
             on(l.on), l.ceiling,
             on(c.on), c.threshold, c.ratio, c.attack, c.release, c.knee, c.makeup,
@@ -233,6 +258,7 @@ impl Settings {
             on(x.on), x.freq, x.feed,
             on(h.on), h.amount,
             on(g.on), g.threshold, g.range, g.attack, g.hold, g.release,
+            on(w.on), w.amount,
         ]
     }
 
@@ -247,6 +273,7 @@ impl Settings {
             crossfeed: Crossfeed { on: on(f[17]), freq: f[18], feed: f[19] },
             speakers: Speakers { on: on(f[20]), amount: f[21] },
             gate: Gate { on: on(f[22]), threshold: f[23], range: f[24], attack: f[25], hold: f[26], release: f[27] },
+            bass_boost: BassBoost { on: on(f[28]), amount: f[29] },
         };
         s.sanitize();
         s
@@ -339,6 +366,33 @@ mod tests {
         assert_eq!(Settings::from_chunk(&future).unwrap().0, back_with_gate(&back, s.gate));
         // Ni la mitad de un campo
         assert!(Settings::from_chunk(&full[..8 + MIN_FIELDS * 4 - 1]).is_none());
+    }
+
+    #[test]
+    fn chunk_sin_los_graves_se_sigue_leyendo() {
+        // Un chunk de 28 campos (con la puerta, antes de «Graves») se lee entero y los graves quedan por defecto
+        let mut s = Settings::default();
+        s.gate.on = true;
+        s.gate.hold = 300.0;
+        s.bass_boost = BassBoost { on: true, amount: 0.65 };
+        let full = s.chunk(9);
+        assert_eq!(full.len(), 8 + FIELDS * 4);
+        assert_eq!(Settings::from_chunk(&full).unwrap().0, s);
+        let (old, _) = Settings::from_chunk(&full[..8 + 28 * 4]).unwrap();
+        assert_eq!(old, Settings { bass_boost: BassBoost::default(), ..s });
+        assert!(!old.bass_boost.on);
+        // Rueda a 0: encendido pero sin nada que procesar (el plugin ni se carga)
+        let mut s = Settings { bass_boost: BassBoost { on: true, amount: 0.0 }, ..Settings::default() };
+        assert!(!s.active());
+        s.bass_boost.amount = 0.01;
+        assert!(s.active());
+        // Fuera de rango o no finito
+        s.bass_boost.amount = 3.0;
+        s.sanitize();
+        assert_eq!(s.bass_boost.amount, 1.0);
+        s.bass_boost.amount = f32::NAN;
+        s.sanitize();
+        assert_eq!(s.bass_boost.amount, BassBoost::default().amount);
     }
 
     fn back_with_gate(s: &Settings, gate: Gate) -> Settings {

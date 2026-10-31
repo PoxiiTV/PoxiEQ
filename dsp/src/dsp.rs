@@ -1,8 +1,8 @@
 //! Procesadores de PoxiDSP. Todo en f64 y muestra a muestra; la memoria se reserva solo en
 //! [`Chain::new`] (fuera del hilo de audio), nunca en [`Chain::tick`].
 //!
-//! Orden: puerta de ruido → diálogos → graves → nivelador → compresor → crossfeed o altavoces virtuales →
-//! limitador.
+//! Orden: puerta de ruido → diálogos → graves (rueda) → armónicos → nivelador → compresor → crossfeed o
+//! altavoces virtuales → limitador (el del usuario o, con los graves, el de protección).
 
 use crate::Settings;
 use std::f64::consts::PI;
@@ -160,7 +160,35 @@ impl Voice {
 
 // ---------------------------------------------------------------- graves
 
-/// Graves psicoacústicos: de la banda grave (mono) salen sus armónicos 2.º y 3.º (polinomios de
+/// Paso bajo de los graves: fijo, es lo que da su carácter al realce
+const BOOST_FREQ: f64 = 100.0;
+const BOOST_Q: f64 = 1.0;
+/// k con la rueda al máximo
+const BOOST_MAX: f64 = 2.0;
+/// Techo (dBTP) de la protección que va con los graves cuando el limitador del usuario está apagado
+const PROTECT_CEILING: f64 = -0.1;
+
+/// «Graves»: `y = x + k·LP(x)` en cada canal, con LP un paso bajo RBJ de 2.º orden (100 Hz, Q 1) y
+/// k = 2 · rueda. Al máximo sube +9,8 dB por debajo de 63 Hz y +7 dB a 100 Hz; por encima, la fase del
+/// paso bajo resta y deja un hueco suave (−4 dB hacia 160–250 Hz) que evita que embarre los medios-graves.
+/// Lineal: sin armónicos, sin retardo y sin mezclar canales.
+struct LowBoost {
+    lp: [Biquad; 2],
+    k: f64,
+}
+
+impl LowBoost {
+    fn new(fs: f64, amount: f64) -> Self {
+        Self { lp: [Biquad::lowpass(fs, BOOST_FREQ, BOOST_Q); 2], k: BOOST_MAX * amount }
+    }
+
+    #[inline]
+    fn tick(&mut self, l: f64, r: f64) -> (f64, f64) {
+        (l + self.k * self.lp[0].tick(l), r + self.k * self.lp[1].tick(r))
+    }
+}
+
+/// «Armónicos» (graves psicoacústicos): de la banda grave (mono) salen sus armónicos 2.º y 3.º (polinomios de
 /// Chebyshev sobre la señal normalizada por su envolvente), que el oído completa con la fundamental.
 struct Harmonics {
     low: [Biquad; 2],
@@ -658,6 +686,7 @@ pub struct Meters {
 pub struct Chain {
     gate: Option<Gate>,
     voice: Option<Voice>,
+    boost: Option<LowBoost>,
     harmonics: Option<Harmonics>,
     agc: Option<Agc>,
     comp: Option<Compressor>,
@@ -665,6 +694,7 @@ pub struct Chain {
     trim: Option<Agc>,
     bs2b: Option<Bs2b>,
     speakers: Option<Speakers>,
+    /// El limitador del usuario o, si está apagado y los graves suben, uno de protección a −0,1 dBTP
     limiter: Option<Brickwall>,
     /// Algo salió no finito (no debería): desde ahí, paso directo hasta la siguiente instancia
     failed: bool,
@@ -681,9 +711,11 @@ const MAX_IN: f64 = 1000.0;
 impl Chain {
     pub fn new(s: &Settings, fs: f64) -> Self {
         let fs = if fs.is_finite() { fs.clamp(8000.0, 768_000.0) } else { 48000.0 };
+        let boost = s.bass_boost.active();
         Self {
             gate: s.gate.on.then(|| Gate::new(fs, &s.gate)),
             voice: s.dialog.on.then(|| Voice::new(fs, s.dialog.amount as f64)),
+            boost: boost.then(|| LowBoost::new(fs, s.bass_boost.amount as f64)),
             harmonics: s.bass.on.then(|| Harmonics::new(fs, s.bass.freq as f64, s.bass.amount as f64)),
             agc: s.leveler.on.then(|| Agc::new(fs, s.leveler.target as f64, s.leveler.max_gain as f64)),
             comp: s.comp.on.then(|| Compressor::new(fs, &s.comp)),
@@ -691,7 +723,8 @@ impl Chain {
             // Nunca los dos (ya lo impide `Settings::sanitize`): con altavoces virtuales, el crossfeed sobra
             bs2b: (s.crossfeed.on && !s.speakers.on).then(|| Bs2b::new(fs, s.crossfeed.freq as f64, s.crossfeed.feed as f64)),
             speakers: s.speakers.on.then(|| Speakers::new(fs, s.speakers.amount as f64)),
-            limiter: s.limiter.on.then(|| Brickwall::new(fs, s.limiter.ceiling as f64)),
+            // Los graves pueden subir casi 10 dB: la salida nunca pasa de 0 dBFS aunque el limitador esté apagado
+            limiter: (s.limiter.on || boost).then(|| Brickwall::new(fs, if s.limiter.on { s.limiter.ceiling as f64 } else { PROTECT_CEILING })),
             failed: false,
             gr_comp: 0.0,
             peak: 0.0,
@@ -730,6 +763,9 @@ impl Chain {
             (l, r) = p.tick(l, r);
         }
         if let Some(p) = &mut self.voice {
+            (l, r) = p.tick(l, r);
+        }
+        if let Some(p) = &mut self.boost {
             (l, r) = p.tick(l, r);
         }
         if let Some(p) = &mut self.harmonics {
@@ -969,7 +1005,7 @@ mod tests {
     }
 
     #[test]
-    fn graves_generan_armonicos() {
+    fn armonicos_de_los_graves() {
         let s = with(|s| {
             s.bass.on = true;
             s.bass.amount = 0.5;
@@ -983,6 +1019,128 @@ mod tests {
         assert!(tone(&x, 100.0) < 1e-6);
         // La fundamental no cambia
         assert!((tone(&ol, 50.0) / 0.3 - 1.0).abs() < 0.1);
+    }
+
+    fn boost(amount: f32) -> Settings {
+        with(|s| s.bass_boost = crate::BassBoost { on: true, amount })
+    }
+
+    /// Lo que pide la especificación de «Graves»: |1 + k·H(e^jw)| en dB, con H el paso bajo RBJ (100 Hz, Q 1)
+    /// calculado aquí aparte, a partir de las fórmulas del Cookbook
+    fn boost_spec_db(amount: f64, f: f64, fs: f64) -> f64 {
+        let w0 = 2.0 * PI * 100.0 / fs;
+        let alpha = w0.sin() / 2.0;
+        let (b0, b1, b2) = ((1.0 - w0.cos()) / 2.0, 1.0 - w0.cos(), (1.0 - w0.cos()) / 2.0);
+        let (a0, a1, a2) = (1.0 + alpha, -2.0 * w0.cos(), 1.0 - alpha);
+        let w = 2.0 * PI * f / fs;
+        // Polinomio en z^-1 = e^-jw
+        let poly = |c: [f64; 3]| (c[0] + c[1] * w.cos() + c[2] * (2.0 * w).cos(), -c[1] * w.sin() - c[2] * (2.0 * w).sin());
+        let (nr, ni) = poly([b0, b1, b2]);
+        let (dr, di) = poly([a0, a1, a2]);
+        let den = dr * dr + di * di;
+        let (hr, hi) = ((nr * dr + ni * di) / den, (ni * dr - nr * di) / den);
+        let k = 2.0 * amount;
+        10.0 * ((1.0 + k * hr).powi(2) + (k * hi).powi(2)).log10()
+    }
+
+    #[test]
+    fn graves_respuesta_como_la_especificacion() {
+        for fs in [44100.0, 48000.0, 96000.0] {
+            for amount in [0.5, 1.0] {
+                // Respuesta al impulso de la cadena (pequeño: la protección no actúa y solo retrasa)
+                let mut chain = Chain::new(&boost(amount as f32), fs);
+                let mut x = vec![0.0; fs as usize];
+                x[0] = 0.01;
+                let (h, hr) = run(&mut chain, &x, &x);
+                assert_eq!(h, hr);
+                assert!(chain.take_meters().gr_limit == 0.0);
+                let h: Vec<f64> = h.iter().map(|v| v * 100.0).collect();
+                // De 20 Hz a 20 kHz por tercios de octava
+                for i in 0..=30 {
+                    let f = 20.0 * 2f64.powf(i as f64 / 3.0);
+                    let (got, want) = (fir_db(&h, f, fs), boost_spec_db(amount, f, fs));
+                    assert!((got - want).abs() < 0.1, "{fs} Hz, rueda {amount}: {got:.2} dB a {f:.0} Hz (debe ser {want:.2})");
+                }
+                // Los puntos medidos en el original
+                let at = |f: f64| fir_db(&h, f, fs);
+                let near = |got: f64, want: f64, what: &str| assert!((got - want).abs() <= 0.1, "{fs} Hz, rueda {amount}, {what}: {got:.2} dB");
+                if amount == 1.0 {
+                    near(at(40.0), 9.8, "40 Hz");
+                    near(at(100.0), 7.0, "100 Hz");
+                    near(at(200.0), -4.1, "200 Hz");
+                } else {
+                    near(at(40.0), 6.1, "40 Hz");
+                }
+                // A 1 kHz la fórmula aún resta un poco (−0,17 dB al máximo); a 10 kHz ya nada
+                assert!(at(1000.0) < 0.0 && at(1000.0) > -0.2, "{fs} Hz, rueda {amount}, 1 kHz: {:.2} dB", at(1000.0));
+                near(at(10000.0), 0.0, "10 kHz");
+            }
+        }
+    }
+
+    #[test]
+    fn graves_sin_mezclar_canales_ni_retardo_propio() {
+        // Solo izquierda: la derecha sigue en silencio
+        let mut chain = Chain::new(&boost(1.0), FS);
+        let x = sine(50.0, 0.1, 1.0);
+        let zero = vec![0.0; x.len()];
+        let (ol, or) = run(&mut chain, &x, &zero);
+        assert!(or.iter().all(|&v| v == 0.0));
+        assert!(tone(&ol, 50.0) > 0.25);
+        // Sin armónicos: a 100 y 150 Hz no aparece nada
+        assert!(tone(&ol, 100.0) < 1e-6 && tone(&ol, 150.0) < 1e-6);
+        // El único retardo es el lookahead de la protección
+        assert_eq!(chain.latency(), Brickwall::new(FS, PROTECT_CEILING).latency());
+    }
+
+    #[test]
+    fn graves_a_cero_no_tocan_nada() {
+        // Encendido con la rueda a 0: ni procesador ni protección, la salida es la entrada bit a bit
+        let s = boost(0.0);
+        assert!(!s.active());
+        let mut chain = Chain::new(&s, FS);
+        assert_eq!(chain.latency(), 0);
+        let x = noise(48000, 41);
+        let y = noise(48000, 42);
+        let (ol, or) = run(&mut chain, &x, &y);
+        assert!(ol.iter().zip(&x).chain(or.iter().zip(&y)).all(|(a, b)| a.to_bits() == b.to_bits()));
+        // Con otro realce encendido, igual que si los graves no existieran
+        let mut with_boost = boost(0.0);
+        with_boost.dialog.on = true;
+        let without = with(|s| s.dialog.on = true);
+        let (a, _) = run(&mut Chain::new(&with_boost, FS), &x, &y);
+        let (b, _) = run(&mut Chain::new(&without, FS), &x, &y);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn graves_protegidos_contra_la_saturacion() {
+        // 50 Hz a −6 dBFS al máximo: sin protección saldría a +3,8 dBFS; con ella sube unos +6 dB y no pasa del techo
+        let mut chain = Chain::new(&boost(1.0), FS);
+        let x = sine(50.0, 0.5, 2.0);
+        let (ol, or) = run(&mut chain, &x, &x);
+        let ceil = db_to_lin(PROTECT_CEILING);
+        let max = ol.iter().chain(&or).fold(0f64, |m, v| m.max(v.abs()));
+        assert!(max <= ceil, "pico {} dBFS", lin_to_db(max));
+        let gain = lin_to_db(tone(&ol, 50.0) / 0.5);
+        assert!((5.5..=6.0).contains(&gain), "a 50 Hz sube {gain:.2} dB");
+        assert!(chain.take_meters().gr_limit > 3.0);
+        // Señal fuerte de todo tipo (ruido a 0 dBFS, graves a tope, escalones): ni muestras ni true peak por encima
+        let mut l = noise(48000, 51);
+        l.extend(sine(40.0, 1.0, 1.0));
+        l.extend((0..48000).map(|i| if (i / 4800) % 2 == 0 { 1.0 } else { -1.0 }));
+        let r: Vec<f64> = l.iter().map(|v| -v * 0.8).collect();
+        let mut chain = Chain::new(&boost(1.0), FS);
+        let (ol, or) = run(&mut chain, &l, &r);
+        let max = ol.iter().chain(&or).fold(0f64, |m, v| m.max(v.abs()));
+        assert!(max <= ceil, "pico {} dBFS", lin_to_db(max));
+        assert!(true_peak(&ol, &or) <= PROTECT_CEILING + 0.01);
+        // Con el limitador del usuario encendido manda su techo
+        let mut s = boost(1.0);
+        (s.limiter.on, s.limiter.ceiling) = (true, -3.0);
+        let mut chain = Chain::new(&s, FS);
+        let (ol, _) = run(&mut chain, &x, &x);
+        assert!(ol.iter().all(|v| v.abs() <= db_to_lin(-3.0)));
     }
 
     #[test]
@@ -1201,6 +1359,7 @@ mod tests {
         let mut s = Settings::default();
         (s.limiter.on, s.comp.on, s.leveler.on, s.bass.on, s.dialog.on, s.crossfeed.on) = (true, true, true, true, true, true);
         s.speakers.on = true;
+        s.bass_boost = crate::BassBoost { on: true, amount: 1.0 };
         s.gate.on = true;
         let mut chain = Chain::new(&s, FS);
         for x in [f64::NAN, f64::INFINITY, -f64::INFINITY, 1e300, -1e300, 0.0, 1e-310] {

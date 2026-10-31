@@ -499,6 +499,12 @@ mod tests {
         assert!(!text.contains("20 dB"), "un id que no es GUID no se cuela en el archivo");
         assert!(!text.contains("Loudness"));
         assert!(!text.contains("VSTPlugin"), "con la dinámica apagada el plugin ni se carga");
+        // «Graves» con la rueda a 0 tampoco lo carga; en cuanto sube, sí
+        let mut boost = none;
+        boost.bass_boost = poxidsp::BassBoost { on: true, amount: 0.0 };
+        assert!(!out(&curves, false, &off, &boost, &live).contains("VSTPlugin"));
+        boost.bass_boost.amount = 0.3;
+        assert!(out(&curves, false, &off, &boost, &live).contains("VSTPlugin"));
         let on = Loudness { on: true, offset: -6.0, strength: 0.5 };
         assert!(out(&curves, false, &on, &none, &live).contains("LoudnessCorrection: State 1 ReferenceLevel 0 ReferenceOffset -6 Attenuation 0.50"));
         let mut dsp = none;
