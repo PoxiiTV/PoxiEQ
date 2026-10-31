@@ -1,0 +1,156 @@
+export default {
+  common: {
+    cancel: 'Cancel',
+    save: 'Save',
+    close: 'Close',
+    done: 'Done',
+    retry: 'Retry',
+    delete: 'Delete'
+  },
+  titlebar: {
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    close: 'Close',
+    settings: 'Settings',
+    bypassOn: 'EQ off · Ctrl+Alt+E to turn it on',
+    bypassOff: 'Turn the EQ off (bypass) · Ctrl+Alt+E',
+    device: 'Audio output'
+  },
+  tray: {
+    open: 'Open PoxiEQ',
+    bypass: 'EQ off (bypass)',
+    quit: 'Quit'
+  },
+  device: {
+    default: 'Default',
+    on: 'Active',
+    off: 'Not enabled',
+    none: 'No audio output connected'
+  },
+  setup: {
+    titleInstall: 'Install the PoxiEQ engine',
+    title: 'Enable PoxiEQ on {d}',
+    textInstall:
+      'PoxiEQ uses Equalizer APO, a free and open source engine that plugs into Windows audio: it equalizes games, music, calls and browser with no added delay.',
+    text: 'The engine is already installed. It just needs to be hooked to this output so its sound goes through PoxiEQ.',
+    noReboot: 'No PC restart: the sound only cuts out for a couple of seconds.',
+    uac: 'Windows will ask for administrator permission once.',
+    btnInstall: 'Install and enable',
+    btn: 'Enable',
+    download: 'Downloading the engine (12 MB)…',
+    install: 'Installing and enabling…',
+    ok: 'PoxiEQ is active on {d}',
+    partial: "Enabled, but Windows didn't confirm it. If you don't hear the EQ, restart your PC once.",
+    cancelled: 'Administrator permission is needed to enable it.'
+  },
+  eq: {
+    preamp: 'Preamp',
+    auto: 'Auto',
+    autoTip: 'Lowers the volume just enough so the curve never clips',
+    clip: 'May clip: lower the preamp or turn on Auto',
+    reset: 'Make flat',
+    copy: 'Copy curve (Equalizer APO format)',
+    copied: 'Curve copied',
+    add: 'Add band',
+    full: 'Up to {n} bands',
+    hint: 'Double click: add · Drag: move · Wheel: width · Right click: more',
+    freq: 'Frequency',
+    gain: 'Gain',
+    q: 'Width (Q)',
+    on: 'Turn this band on or off',
+    remove: 'Remove band',
+    bypassBanner: "The EQ is off. You're hearing the original sound.",
+    bypassResume: 'Turn on',
+    kinds: {
+      peak: 'Bell',
+      lowShelf: 'Low shelf',
+      highShelf: 'High shelf',
+      lowPass: 'Low pass',
+      highPass: 'High pass'
+    }
+  },
+  presets: {
+    title: 'Presets',
+    mine: 'My presets',
+    mineEmpty: 'Save your curves here to switch between them with one click.',
+    save: 'Save as preset',
+    saveTitle: 'Save preset',
+    name: 'Name',
+    namePh: 'My headphones, Movie night…',
+    saved: 'Preset saved',
+    deleted: 'Preset deleted',
+    undo: 'Undo',
+    autoeq: 'Import from AutoEq',
+    builtin: {
+      'b:flat': 'Flat',
+      'b:bass': 'More bass',
+      'b:voice': 'Clear voice',
+      'b:footsteps': 'Footsteps (gaming)',
+      'b:cinema': 'Cinema',
+      'b:music': 'Music',
+      'b:night': 'Night (soft)'
+    }
+  },
+  autoeq: {
+    title: 'Import from AutoEq',
+    text: 'AutoEq has corrections for thousands of headphones. Find yours on autoeq.app, choose “Equalizer APO” and paste the “ParametricEQ.txt” here (or drop the file).',
+    open: 'Open autoeq.app',
+    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
+    name: 'Save as preset (optional)',
+    namePh: 'E.g.: Sony WH-1000XM5',
+    import: 'Apply',
+    bad: "I can't find any filter in that text",
+    ok: '{n} filters imported'
+  },
+  settings: {
+    title: 'Settings',
+    cats: { general: 'General', engine: 'Audio engine', about: 'About' },
+    appearance: 'Appearance',
+    theme: 'Theme',
+    themes: { dark: 'Dark', light: 'Light', system: 'Like Windows' },
+    accent: 'Color',
+    lang: 'Language',
+    langSystem: 'Like Windows',
+    behaviour: 'Behaviour',
+    autostart: 'Start with Windows',
+    autostartHint: 'Opens in the tray, without a window.',
+    closeToTray: 'Close to tray',
+    closeToTrayHint: 'The X hides the window. The EQ keeps working even if you quit PoxiEQ completely.',
+    analyzer: 'Spectrum analyzer',
+    analyzerHint: 'Draws what is playing behind the curve. Only runs while the window is visible.',
+    hotkey: 'Bypass shortcut',
+    hotkeyHint: 'Ctrl+Alt+E turns the EQ on and off from anywhere, games included.',
+    engineStatus: 'Equalizer APO',
+    engineOn: 'Installed. PoxiEQ writes its configuration and it applies the sound.',
+    engineOff: 'Not installed.',
+    devices: 'Outputs with PoxiEQ',
+    devicesHint: 'Enable or remove PoxiEQ on each output. Applying cuts the sound for a couple of seconds.',
+    apply: 'Apply changes',
+    version: 'Version {v}',
+    updates: 'Check for updates',
+    upToDate: 'You have the latest version',
+    whatsNew: "What's new",
+    github: 'Code on GitHub',
+    credits: 'Sound is processed by Equalizer APO, by Jonas Thedering (GPL-2.0).'
+  },
+  update: {
+    title: 'PoxiEQ {v} available',
+    later: 'Later',
+    install: 'Update and restart',
+    downloading: 'Downloading… {p}%',
+    download: 'Download',
+    portable: "You're using the portable version: download the new one and replace the .exe."
+  },
+  whatsNew: { title: "What's new in PoxiEQ {v}" },
+  ctx: { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select all' },
+  err: {
+    unknown: 'Something went wrong',
+    'engine.write': "Couldn't write the engine configuration: {d}",
+    'engine.download': "Couldn't download the engine. Check your connection. ({d})",
+    'engine.hash': "The downloaded installer isn't the official one: it was not run",
+    'engine.elevation': 'Administrator permission is needed to enable it.',
+    'engine.setup': "Couldn't complete the setup",
+    'engine.badDevice': 'Invalid device',
+    'io.failed': "Couldn't save the change"
+  }
+}

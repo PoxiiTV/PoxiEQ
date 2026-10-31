@@ -1,0 +1,156 @@
+export default {
+  common: {
+    cancel: 'Cancelar',
+    save: 'Guardar',
+    close: 'Cerrar',
+    done: 'Listo',
+    retry: 'Reintentar',
+    delete: 'Eliminar'
+  },
+  titlebar: {
+    minimize: 'Minimizar',
+    maximize: 'Maximizar',
+    close: 'Cerrar',
+    settings: 'Ajustes',
+    bypassOn: 'EQ apagado · Ctrl+Alt+E para encenderlo',
+    bypassOff: 'Apagar el EQ (bypass) · Ctrl+Alt+E',
+    device: 'Salida de audio'
+  },
+  tray: {
+    open: 'Abrir PoxiEQ',
+    bypass: 'EQ apagado (bypass)',
+    quit: 'Salir'
+  },
+  device: {
+    default: 'Predeterminado',
+    on: 'Activo',
+    off: 'Sin activar',
+    none: 'No hay ninguna salida de audio conectada'
+  },
+  setup: {
+    titleInstall: 'Instala el motor de PoxiEQ',
+    title: 'Activa PoxiEQ en {d}',
+    textInstall:
+      'PoxiEQ usa Equalizer APO, un motor gratuito y de código abierto que se mete dentro del sonido de Windows: ecualiza juegos, música, llamadas y navegador sin añadir retraso.',
+    text: 'El motor ya está instalado. Solo falta engancharlo a esta salida para que su sonido pase por PoxiEQ.',
+    noReboot: 'Sin reiniciar el PC: solo se corta el sonido un par de segundos.',
+    uac: 'Windows te pedirá permiso de administrador una vez.',
+    btnInstall: 'Instalar y activar',
+    btn: 'Activar',
+    download: 'Descargando el motor (12 MB)…',
+    install: 'Instalando y activando…',
+    ok: 'PoxiEQ está activo en {d}',
+    partial: 'Activado, pero Windows no lo ha confirmado. Si no notas el EQ, reinicia el PC una vez.',
+    cancelled: 'Hace falta aceptar el permiso de administrador para activarlo.'
+  },
+  eq: {
+    preamp: 'Preamp',
+    auto: 'Auto',
+    autoTip: 'Baja el volumen lo justo para que la curva nunca sature',
+    clip: 'Puede saturar: baja el preamp o activa Auto',
+    reset: 'Dejar plano',
+    copy: 'Copiar curva (formato Equalizer APO)',
+    copied: 'Curva copiada',
+    add: 'Añadir banda',
+    full: 'Máximo {n} bandas',
+    hint: 'Doble clic: añadir · Arrastra: mover · Rueda: ancho · Clic derecho: más',
+    freq: 'Frecuencia',
+    gain: 'Ganancia',
+    q: 'Ancho (Q)',
+    on: 'Encender o apagar esta banda',
+    remove: 'Quitar banda',
+    bypassBanner: 'El EQ está apagado. Lo que oyes es el sonido original.',
+    bypassResume: 'Encender',
+    kinds: {
+      peak: 'Campana',
+      lowShelf: 'Graves',
+      highShelf: 'Agudos',
+      lowPass: 'Paso bajo',
+      highPass: 'Paso alto'
+    }
+  },
+  presets: {
+    title: 'Presets',
+    mine: 'Mis presets',
+    mineEmpty: 'Guarda aquí tus curvas para cambiar de una a otra con un clic.',
+    save: 'Guardar como preset',
+    saveTitle: 'Guardar preset',
+    name: 'Nombre',
+    namePh: 'Mis cascos, Noche de pelis…',
+    saved: 'Preset guardado',
+    deleted: 'Preset eliminado',
+    undo: 'Deshacer',
+    autoeq: 'Importar de AutoEq',
+    builtin: {
+      'b:flat': 'Plano',
+      'b:bass': 'Más graves',
+      'b:voice': 'Voz clara',
+      'b:footsteps': 'Pasos (gaming)',
+      'b:cinema': 'Cine',
+      'b:music': 'Música',
+      'b:night': 'Noche (suave)'
+    }
+  },
+  autoeq: {
+    title: 'Importar de AutoEq',
+    text: 'AutoEq tiene la corrección de miles de cascos. Busca el tuyo en autoeq.app, elige «Equalizer APO» y pega aquí el «ParametricEQ.txt» (o arrastra el archivo).',
+    open: 'Abrir autoeq.app',
+    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
+    name: 'Guardar como preset (opcional)',
+    namePh: 'Ej.: Sony WH-1000XM5',
+    import: 'Aplicar',
+    bad: 'No encuentro ningún filtro en ese texto',
+    ok: '{n} filtros importados'
+  },
+  settings: {
+    title: 'Ajustes',
+    cats: { general: 'General', engine: 'Motor de audio', about: 'Acerca de' },
+    appearance: 'Apariencia',
+    theme: 'Tema',
+    themes: { dark: 'Oscuro', light: 'Claro', system: 'Como Windows' },
+    accent: 'Color',
+    lang: 'Idioma',
+    langSystem: 'Como Windows',
+    behaviour: 'Funcionamiento',
+    autostart: 'Arrancar con Windows',
+    autostartHint: 'Se abre en la bandeja, sin ventana.',
+    closeToTray: 'Cerrar a la bandeja',
+    closeToTrayHint: 'La X esconde la ventana. El EQ sigue funcionando aunque cierres PoxiEQ del todo.',
+    analyzer: 'Analizador de espectro',
+    analyzerHint: 'Pinta lo que suena detrás de la curva. Solo trabaja con la ventana a la vista.',
+    hotkey: 'Atajo de bypass',
+    hotkeyHint: 'Ctrl+Alt+E enciende y apaga el EQ desde cualquier sitio, también en juegos.',
+    engineStatus: 'Equalizer APO',
+    engineOn: 'Instalado. PoxiEQ escribe en su configuración y él aplica el sonido.',
+    engineOff: 'Sin instalar.',
+    devices: 'Salidas con PoxiEQ',
+    devicesHint: 'Activa o quita PoxiEQ en cada salida. Al aplicar se corta el sonido un par de segundos.',
+    apply: 'Aplicar cambios',
+    version: 'Versión {v}',
+    updates: 'Buscar actualizaciones',
+    upToDate: 'Tienes la última versión',
+    whatsNew: 'Novedades',
+    github: 'Código en GitHub',
+    credits: 'El sonido lo procesa Equalizer APO, de Jonas Thedering (GPL-2.0).'
+  },
+  update: {
+    title: 'PoxiEQ {v} disponible',
+    later: 'Más tarde',
+    install: 'Actualizar y reiniciar',
+    downloading: 'Descargando… {p}%',
+    download: 'Descargar',
+    portable: 'Usas la versión portable: descarga la nueva y sustituye el .exe.'
+  },
+  whatsNew: { title: 'Novedades de PoxiEQ {v}' },
+  ctx: { cut: 'Cortar', copy: 'Copiar', paste: 'Pegar', selectAll: 'Seleccionar todo' },
+  err: {
+    unknown: 'Algo ha fallado',
+    'engine.write': 'No se ha podido escribir la configuración del motor: {d}',
+    'engine.download': 'No se ha podido descargar el motor. Revisa la conexión. ({d})',
+    'engine.hash': 'El instalador descargado no es el oficial: no se ha ejecutado',
+    'engine.elevation': 'Hace falta aceptar el permiso de administrador para activarlo.',
+    'engine.setup': 'No se ha podido completar la activación',
+    'engine.badDevice': 'Dispositivo no válido',
+    'io.failed': 'No se ha podido guardar el cambio'
+  }
+}

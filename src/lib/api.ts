@@ -1,0 +1,75 @@
+import { invoke } from '@tauri-apps/api/core'
+import type { Curve } from './eq'
+
+export type Accent = 'cyan' | 'blue' | 'emerald' | 'violet' | 'pink' | 'amber' | 'red'
+
+export interface Preset {
+  id: string
+  name: string
+  curve: Curve
+}
+
+export interface Config {
+  lang: 'es' | 'en' | null
+  theme: 'dark' | 'light' | 'system'
+  accent: Accent
+  closeToTray: boolean
+  bypass: boolean
+  bypassHotkey: boolean
+  analyzer: boolean
+  seenVersion: string
+  device: string | null
+  curves: Record<string, Curve>
+  presets: Preset[]
+}
+
+export interface Device {
+  id: string
+  name: string
+  device: string
+  default: boolean
+  enabled: boolean
+  unplugged: boolean
+}
+
+export interface EngineStatus {
+  installed: boolean
+  configDir: string | null
+  devices: Device[]
+}
+
+export interface Check {
+  id: string
+  preMix: boolean
+  postMix: boolean
+}
+
+export interface SetupReport {
+  error: string | null
+  checks: Check[]
+}
+
+export interface AppInfo {
+  version: string
+  portable: boolean
+  startHidden: boolean
+}
+
+export interface AppError {
+  code: string
+  detail?: string | null
+}
+
+export const api = {
+  appInfo: () => invoke<AppInfo>('app_info'),
+  configGet: () => invoke<Config>('config_get'),
+  configSet: (cfg: Config) => invoke<Config>('config_set', { cfg }),
+  engineStatus: () => invoke<EngineStatus>('engine_status'),
+  engineSetup: (enable: string[], disable: string[]) => invoke<SetupReport>('engine_setup', { enable, disable }),
+  autostartGet: () => invoke<boolean>('autostart_get'),
+  autostartSet: (on: boolean) => invoke<void>('autostart_set', { on }),
+  trayLabels: (labels: { open: string; bypass: string; quit: string }) => invoke<void>('tray_labels', { labels }),
+  analyzerStart: (device: string) => invoke<void>('analyzer_start', { device }),
+  analyzerStop: () => invoke<void>('analyzer_stop'),
+  appQuit: () => invoke<void>('app_quit')
+}
