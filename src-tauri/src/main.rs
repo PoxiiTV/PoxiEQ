@@ -8,7 +8,11 @@ fn main() {
     // Copia elevada de la app (UAC): hace lo que necesita admin, deja el resultado en un archivo y sale
     if let [flag, out, rest @ ..] = args.as_slice() {
         if flag == "--elevated" {
-            let report = setup(rest);
+            let report = if rest.first().is_some_and(|c| c == "uninstall") {
+                engine::SetupReport { error: engine::uninstall().err(), checks: vec![] }
+            } else {
+                setup(rest)
+            };
             let _ = std::fs::write(out, serde_json::to_string(&report).unwrap_or_default());
             return;
         }

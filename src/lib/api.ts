@@ -49,6 +49,13 @@ export interface SetupReport {
   checks: Check[]
 }
 
+export interface AutoEqEntry {
+  name: string
+  source: string
+  form: 'over-ear' | 'in-ear' | 'earbud'
+  path: string
+}
+
 export interface AppInfo {
   version: string
   portable: boolean
@@ -66,6 +73,9 @@ export const api = {
   configSet: (cfg: Config) => invoke<Config>('config_set', { cfg }),
   engineStatus: () => invoke<EngineStatus>('engine_status'),
   engineSetup: (enable: string[], disable: string[]) => invoke<SetupReport>('engine_setup', { enable, disable }),
+  engineUninstall: () => invoke<void>('engine_uninstall'),
+  autoeqIndex: (force = false) => invoke<AutoEqEntry[]>('autoeq_index', { force }),
+  autoeqFetch: (path: string) => invoke<string>('autoeq_fetch', { path }),
   autostartGet: () => invoke<boolean>('autostart_get'),
   autostartSet: (on: boolean) => invoke<void>('autostart_set', { on }),
   trayLabels: (labels: { open: string; bypass: string; quit: string }) => invoke<void>('tray_labels', { labels }),

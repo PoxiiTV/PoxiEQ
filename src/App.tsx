@@ -7,7 +7,8 @@ import { Sidebar } from './components/Sidebar'
 import { Editor } from './components/Editor'
 import { Setup } from './components/Setup'
 import { Settings } from './components/Settings'
-import { AutoEqModal, SavePresetModal, UpdateModal, WhatsNew } from './components/Overlays'
+import { SavePresetModal, UpdateModal, WhatsNew } from './components/Overlays'
+import { AutoEqModal } from './components/AutoEq'
 import { ContextMenu } from './components/ContextMenu'
 
 export function App(): React.JSX.Element {

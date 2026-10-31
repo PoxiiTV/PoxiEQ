@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { Download, ExternalLink, Sparkles } from 'lucide-react'
+import { Download, Sparkles } from 'lucide-react'
 import { changesFor } from '../lib/changelog'
-import { parseApo } from '../lib/eq'
-import { currentCurve, savePreset, setCurve, setState, toast, updateConfig, useStore } from '../lib/store'
+import { savePreset, setState, toast, updateConfig, useStore } from '../lib/store'
 import { installUpdate, isPortable, RELEASES, useUpdate } from '../lib/update'
 import { currentLang, errorText, useT } from '../i18n'
 import { Logo, Modal } from './ui'
@@ -35,69 +34,6 @@ export function SavePresetModal(): React.JSX.Element | null {
         </button>
         <button className="btn btn-primary" disabled={!name.trim()} onClick={save}>
           {t('common.save')}
-        </button>
-      </div>
-    </Modal>
-  )
-}
-
-export function AutoEqModal(): React.JSX.Element | null {
-  const t = useT()
-  const open = useStore((s) => s.modal === 'autoeq')
-  const [text, setText] = useState('')
-  const [name, setName] = useState('')
-  const [over, setOver] = useState(false)
-  useEffect(() => {
-    setText('')
-    setName('')
-  }, [open])
-  if (!open) return null
-  const apply = (): void => {
-    const r = parseApo(text)
-    if (!r) return toast(t('autoeq.bad'), 'err')
-    const c = currentCurve()
-    setCurve({ ...c, bands: r.bands, preamp: r.preamp })
-    if (name.trim()) savePreset(name.trim())
-    toast(t('autoeq.ok', { n: r.bands.length }))
-    setState({ selected: null })
-    close()
-  }
-  return (
-    <Modal onClose={close} wide>
-      <h2>{t('autoeq.title')}</h2>
-      <p>{t('autoeq.text')}</p>
-      <button className="btn btn-sm" style={{ marginBottom: 14 }} onClick={() => void openUrl('https://autoeq.app')}>
-        <ExternalLink size={14} /> {t('autoeq.open')}
-      </button>
-      <textarea
-        autoFocus
-        className={`textarea mono autoeq-text ${over ? 'over' : ''}`}
-        value={text}
-        placeholder={t('autoeq.ph')}
-        spellCheck={false}
-        onChange={(e) => setText(e.target.value)}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setOver(true)
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setOver(false)
-          const f = e.dataTransfer.files[0]
-          if (f && f.size < 256 * 1024) void f.text().then(setText)
-        }}
-      />
-      <label className="label" htmlFor="autoeq-name" style={{ marginTop: 14 }}>
-        {t('autoeq.name')}
-      </label>
-      <input id="autoeq-name" className="input" maxLength={48} value={name} placeholder={t('autoeq.namePh')} onChange={(e) => setName(e.target.value)} />
-      <div className="modal-actions">
-        <button className="btn btn-ghost" onClick={close}>
-          {t('common.cancel')}
-        </button>
-        <button className="btn btn-primary" disabled={!text.trim()} onClick={apply}>
-          {t('autoeq.import')}
         </button>
       </div>
     </Modal>

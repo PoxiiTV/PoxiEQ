@@ -99,8 +99,7 @@ pub struct Status {
 
 pub fn status() -> Status {
     let app = hklm().open_subkey(APP).ok();
-    let install_dir: Option<String> = app.as_ref().and_then(|k| k.get_value("InstallPath").ok());
-    let installed = install_dir.is_some_and(|d| PathBuf::from(d).join("EqualizerAPO.dll").exists());
+    let installed = install_dir().is_some_and(|d| d.join("EqualizerAPO.dll").exists());
     Status {
         installed,
         config_dir: app.and_then(|k| k.get_value("ConfigPath").ok()),
@@ -195,7 +194,7 @@ pub fn enable(id: &str) -> Result<()> {
                 create().map_err(err("FxProperties"))?
             }
         };
-        fx.set_value(FX_TITLE, &"Equalizer APO").map_err(err("FxProperties"))?;
+        fx.set_value(FX_TITLE, &"PoxiEQ").map_err(err("FxProperties"))?;
         orig.iter_mut().for_each(|o| *o = NO_KEY.into());
         fx
     };
@@ -361,6 +360,56 @@ pub fn install(installer: &str) -> Result<()> {
     }
 }
 
+/// El motor trabaja por debajo: fuera sus accesos del menú Inicio y su aviso de actualizaciones
+/// (las versiones las decide PoxiEQ). Se repite en cada activación por si se instaló antes.
+fn hide_engine() {
+    let menus = [std::env::var("ProgramData").map(|d| PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs")), std::env::var("APPDATA").map(|d| PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs"))];
+    for dir in menus.into_iter().flatten() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            if entry.file_name().to_string_lossy().starts_with("Equalizer APO") {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    if let Some(dir) = install_dir() {
+        let checker = dir.join("UpdateChecker.exe");
+        if checker.exists() {
+            let _ = hidden(&checker.to_string_lossy(), &["-u"]);
+        }
+    }
+    // Fuera de «Aplicaciones instaladas»: se desinstala desde PoxiEQ (Ajustes o al desinstalar PoxiEQ)
+    if let Ok((k, _)) = hklm().create_subkey(UNINSTALL) {
+        let _ = k.set_value("SystemComponent", &1u32);
+    }
+}
+
+const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\EqualizerAPO";
+
+fn install_dir() -> Option<PathBuf> {
+    hklm().open_subkey(APP).ok()?.get_value::<String, _>("InstallPath").ok().map(PathBuf::from)
+}
+
+/// Quita el motor por completo: restaura los efectos originales de cada salida, reinicia el audio
+/// (para soltar la DLL) y lanza su desinstalador en silencio. Requiere administrador.
+pub fn uninstall() -> Result<()> {
+    let Some(dir) = install_dir() else { return Ok(()) };
+    let ids: Vec<String> = hklm().open_subkey(CHILD).map(|k| k.enum_keys().flatten().collect()).unwrap_or_default();
+    for id in &ids {
+        disable(id)?;
+    }
+    restart_audio()?;
+    hidden(&dir.join("Uninstall.exe").to_string_lossy(), &["/S"]);
+    // El desinstalador de NSIS se copia a TEMP y vuelve al momento: se espera a que borre su registro
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while hklm().open_subkey(APP).is_ok_and(|k| k.get_raw_value("InstallPath").is_ok()) {
+        if Instant::now() > deadline {
+            return Err("el desinstalador del motor no ha terminado".into());
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    Ok(())
+}
+
 fn hidden(exe: &str, args: &[&str]) -> std::process::Output {
     use std::os::windows::process::CommandExt;
     Command::new(exe)
@@ -488,7 +537,7 @@ const INCLUDE: &str = "Include: poxieq.txt\r\n";
 
 /// Escribe nuestro archivo de filtros. Equalizer APO lo relee al vuelo: sin admin ni reinicios.
 pub fn write_config(text: &str) -> Result<()> {
-    let dir = status().config_dir.ok_or("Equalizer APO no está instalado")?;
+    let dir = status().config_dir.ok_or("el motor no está instalado")?;
     let dir = PathBuf::from(dir);
     let main = dir.join("config.txt");
     if std::fs::read_to_string(&main).ok().as_deref() != Some(INCLUDE) {
@@ -549,6 +598,7 @@ pub fn setup(installer: Option<&str>, enable_ids: &[String], disable_ids: &[Stri
                 install(path)?;
             }
         }
+        hide_engine();
         for id in disable_ids {
             disable(id)?;
         }

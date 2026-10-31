@@ -59,7 +59,8 @@
           "Spanish",
           "English"
         ],
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./windows/hooks.nsh"
       }
     }
   },

@@ -31,7 +31,7 @@ export default {
     titleInstall: 'Instala el motor de PoxiEQ',
     title: 'Activa PoxiEQ en {d}',
     textInstall:
-      'PoxiEQ usa Equalizer APO, un motor gratuito y de código abierto que se mete dentro del sonido de Windows: ecualiza juegos, música, llamadas y navegador sin añadir retraso.',
+      'El motor de PoxiEQ se mete dentro del sonido de Windows: ecualiza juegos, música, llamadas y navegador sin añadir retraso.',
     text: 'El motor ya está instalado. Solo falta engancharlo a esta salida para que su sonido pase por PoxiEQ.',
     noReboot: 'Sin reiniciar el PC: solo se corta el sonido un par de segundos.',
     uac: 'Windows te pedirá permiso de administrador una vez.',
@@ -49,7 +49,7 @@ export default {
     autoTip: 'Baja el volumen lo justo para que la curva nunca sature',
     clip: 'Puede saturar: baja el preamp o activa Auto',
     reset: 'Dejar plano',
-    copy: 'Copiar curva (formato Equalizer APO)',
+    copy: 'Copiar curva como texto',
     copied: 'Curva copiada',
     add: 'Añadir banda',
     full: 'Máximo {n} bandas',
@@ -80,7 +80,7 @@ export default {
     saved: 'Preset guardado',
     deleted: 'Preset eliminado',
     undo: 'Deshacer',
-    autoeq: 'Importar de AutoEq',
+    autoeq: 'Buscar mis cascos',
     builtin: {
       'b:flat': 'Plano',
       'b:bass': 'Más graves',
@@ -92,15 +92,25 @@ export default {
     }
   },
   autoeq: {
-    title: 'Importar de AutoEq',
-    text: 'AutoEq tiene la corrección de miles de cascos. Busca el tuyo en autoeq.app, elige «Equalizer APO» y pega aquí el «ParametricEQ.txt» (o arrastra el archivo).',
-    open: 'Abrir autoeq.app',
-    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
-    name: 'Guardar como preset (opcional)',
-    namePh: 'Ej.: Sony WH-1000XM5',
+    title: 'Buscar mis cascos',
+    text: 'Correcciones de AutoEq para más de 8.000 modelos: hacen que tus cascos suenen neutros, como deberían.',
+    search: 'Busca tu modelo: DT 770, WH-1000XM5, AirPods Pro…',
+    loading: 'Cargando la lista de cascos…',
+    empty: 'No encuentro ese modelo. Prueba con menos palabras.',
+    recommended: 'Recomendado',
+    forms: { 'over-ear': 'De diadema', 'in-ear': 'Intraurales', earbud: 'De botón' },
+    by: 'Medido por {s}',
+    back: 'Volver',
+    bass: 'Graves',
+    treble: 'Agudos',
+    tasteHint: 'A tu gusto: la corrección es neutra y a mucha gente le sabe a poco de graves.',
+    name: 'Guardar en Mis presets como',
     import: 'Aplicar',
+    manual: '¿Tienes el archivo? Pégalo a mano',
+    manualText: 'Pega aquí el texto de un «ParametricEQ.txt» o arrastra el archivo.',
+    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
     bad: 'No encuentro ningún filtro en ese texto',
-    ok: '{n} filtros importados'
+    ok: '{n} filtros aplicados'
   },
   settings: {
     title: 'Ajustes',
@@ -120,8 +130,8 @@ export default {
     analyzerHint: 'Pinta lo que suena detrás de la curva. Solo trabaja con la ventana a la vista.',
     hotkey: 'Atajo de bypass',
     hotkeyHint: 'Ctrl+Alt+E enciende y apaga el EQ desde cualquier sitio, también en juegos.',
-    engineStatus: 'Equalizer APO',
-    engineOn: 'Instalado. PoxiEQ escribe en su configuración y él aplica el sonido.',
+    engineStatus: 'Motor de PoxiEQ',
+    engineOn: 'Instalado y funcionando.',
     engineOff: 'Sin instalar.',
     devices: 'Salidas con PoxiEQ',
     devicesHint: 'Activa o quita PoxiEQ en cada salida. Al aplicar se corta el sonido un par de segundos.',
@@ -131,7 +141,11 @@ export default {
     upToDate: 'Tienes la última versión',
     whatsNew: 'Novedades',
     github: 'Código en GitHub',
-    credits: 'El sonido lo procesa Equalizer APO, de Jonas Thedering (GPL-2.0).'
+    uninstall: 'Desinstalar motor',
+    uninstallHint: 'Quita PoxiEQ de todas las salidas y deja el sonido de Windows como estaba.',
+    uninstallSure: '¿Seguro? Pulsa otra vez',
+    uninstalled: 'Motor desinstalado',
+    credits: 'Hecho con cariño por Poxi.'
   },
   update: {
     title: 'PoxiEQ {v} disponible',
@@ -151,6 +165,8 @@ export default {
     'engine.elevation': 'Hace falta aceptar el permiso de administrador para activarlo.',
     'engine.setup': 'No se ha podido completar la activación',
     'engine.badDevice': 'Dispositivo no válido',
+    'engine.uninstall': 'No se ha podido desinstalar el motor: {d}',
+    'autoeq.offline': 'No se puede conectar con AutoEq. Revisa la conexión.',
     'io.failed': 'No se ha podido guardar el cambio'
   }
 }

@@ -600,3 +600,126 @@
     animation-duration: 2s;
   }
 }
+
+/* ——— Buscador de AutoEq ——— */
+.modal.autoeq {
+  width: min(640px, 100%);
+}
+.finder-search {
+  position: relative;
+}
+.finder-search svg {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.finder-search .input {
+  padding-left: 40px;
+  height: 44px;
+  font-size: 15px;
+}
+.finder-list {
+  height: 300px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.finder-note {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+  text-align: center;
+  padding: 0 24px;
+}
+.finder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 50px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.finder-item.hl {
+  background: var(--surface-2);
+}
+.finder-item .txt {
+  flex: 1;
+  min-width: 0;
+}
+.finder-item b,
+.finder-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finder-item small {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 1px;
+}
+.finder-item .chip {
+  flex: none;
+}
+.preview {
+  width: 100%;
+  height: 150px;
+  margin: 8px 0 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.preview line {
+  stroke: var(--border);
+  vector-effect: non-scaling-stroke;
+}
+.preview line.zero {
+  stroke: var(--border-strong);
+}
+.preview .fill {
+  fill: var(--accent-soft);
+}
+.preview .stroke {
+  fill: none;
+  stroke: var(--accent-2);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+.taste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.taste-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.taste-row span {
+  width: 64px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.taste-row b {
+  width: 70px;
+  text-align: right;
+  font-weight: 800;
+}
+.modal-actions .spacer {
+  flex: 1;
+}

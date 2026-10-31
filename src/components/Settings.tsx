@@ -4,10 +4,10 @@ import { AudioLines, Info, LoaderCircle, Palette, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api, type Accent, type Config } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { setState, toast, updateConfig, useStore } from '../lib/store'
+import { refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
-import { useT } from '../i18n'
+import { errorText, useT } from '../i18n'
 import { Select } from './controls'
 import { Logo, Modal, Switch } from './ui'
 
@@ -167,7 +167,42 @@ function Engine(): React.JSX.Element {
           {t('settings.apply')}
         </button>
       </div>
+      {engine?.installed && <Uninstall />}
     </>
+  )
+}
+
+/** Dos pasos (sin diálogo nativo): el primer clic arma el botón, el segundo desinstala */
+function Uninstall(): React.JSX.Element {
+  const t = useT()
+  const [armed, setArmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const id = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(id)
+  }, [armed])
+  const run = async (): Promise<void> => {
+    if (!armed) return setArmed(true)
+    setBusy(true)
+    try {
+      await api.engineUninstall()
+      toast(t('settings.uninstalled'))
+    } catch (e) {
+      toast(errorText(e), 'err', { secs: 8 })
+    } finally {
+      setBusy(false)
+      setArmed(false)
+      await refreshEngine()
+    }
+  }
+  return (
+    <Row title={t('settings.uninstall')} hint={t('settings.uninstallHint')}>
+      <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => void run()}>
+        {busy && <LoaderCircle size={14} className="spin" />}
+        {armed ? t('settings.uninstallSure') : t('settings.uninstall')}
+      </button>
+    </Row>
   )
 }
 

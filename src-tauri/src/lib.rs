@@ -1,4 +1,5 @@
 mod analyzer;
+mod autoeq;
 pub mod engine;
 mod eq;
 
@@ -239,6 +240,31 @@ fn tray_labels(app: AppHandle, st: State<'_, AppState>, labels: TrayLabels) {
     refresh_tray(&app);
 }
 
+/// Quita el motor por completo (efectos originales restaurados). Un aviso de UAC.
+#[tauri::command]
+async fn engine_uninstall() -> Res<()> {
+    let out = tauri::async_runtime::spawn_blocking(|| engine::run_elevated(&["uninstall".to_string()]))
+        .await
+        .map_err(|_| problem("engine.setup", None))?
+        .map_err(|e| problem("engine.elevation", e))?;
+    let report: engine::SetupReport = serde_json::from_str(&out).map_err(|_| problem("engine.setup", None))?;
+    match report.error {
+        Some(e) => Err(problem("engine.uninstall", e)),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+async fn autoeq_index(app: AppHandle, force: bool) -> Res<Vec<autoeq::Entry>> {
+    let cache = app.path().app_data_dir().map_err(|e| problem("io.failed", e.to_string()))?.join("autoeq-index.md");
+    autoeq::index(&cache, force).await.map_err(|e| problem("autoeq.offline", e))
+}
+
+#[tauri::command]
+async fn autoeq_fetch(path: String) -> Res<String> {
+    autoeq::fetch(&path).await.map_err(|e| problem("autoeq.offline", e))
+}
+
 /// Analizador: solo con la ventana a la vista (la interfaz lo para al esconderse)
 #[tauri::command]
 fn analyzer_start(app: AppHandle, device: String) {
@@ -368,6 +394,9 @@ pub fn run() {
             config_set,
             engine_status,
             engine_setup,
+            engine_uninstall,
+            autoeq_index,
+            autoeq_fetch,
             autostart_get,
             autostart_set,
             tray_labels,

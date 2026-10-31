@@ -1,4 +1,4 @@
-import { Download, Headphones, Save, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Headphones, Save, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { BUILTIN, builtinCurve } from '../lib/eq'
 import { applyPreset, currentCurve, deletePreset, getState, setState, toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
@@ -49,7 +49,7 @@ export function Sidebar(): React.JSX.Element {
           <Save size={15} /> {t('presets.save')}
         </button>
         <button className="btn btn-sm btn-block" onClick={() => setState({ modal: 'autoeq' })}>
-          <Download size={15} /> {t('presets.autoeq')}
+          <Search size={15} /> {t('presets.autoeq')}
         </button>
       </div>
     </aside>

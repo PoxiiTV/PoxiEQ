@@ -31,7 +31,7 @@ export default {
     titleInstall: 'Install the PoxiEQ engine',
     title: 'Enable PoxiEQ on {d}',
     textInstall:
-      'PoxiEQ uses Equalizer APO, a free and open source engine that plugs into Windows audio: it equalizes games, music, calls and browser with no added delay.',
+      'The PoxiEQ engine plugs into Windows audio: it equalizes games, music, calls and browser with no added delay.',
     text: 'The engine is already installed. It just needs to be hooked to this output so its sound goes through PoxiEQ.',
     noReboot: 'No PC restart: the sound only cuts out for a couple of seconds.',
     uac: 'Windows will ask for administrator permission once.',
@@ -49,7 +49,7 @@ export default {
     autoTip: 'Lowers the volume just enough so the curve never clips',
     clip: 'May clip: lower the preamp or turn on Auto',
     reset: 'Make flat',
-    copy: 'Copy curve (Equalizer APO format)',
+    copy: 'Copy curve as text',
     copied: 'Curve copied',
     add: 'Add band',
     full: 'Up to {n} bands',
@@ -80,7 +80,7 @@ export default {
     saved: 'Preset saved',
     deleted: 'Preset deleted',
     undo: 'Undo',
-    autoeq: 'Import from AutoEq',
+    autoeq: 'Find my headphones',
     builtin: {
       'b:flat': 'Flat',
       'b:bass': 'More bass',
@@ -92,15 +92,25 @@ export default {
     }
   },
   autoeq: {
-    title: 'Import from AutoEq',
-    text: 'AutoEq has corrections for thousands of headphones. Find yours on autoeq.app, choose “Equalizer APO” and paste the “ParametricEQ.txt” here (or drop the file).',
-    open: 'Open autoeq.app',
-    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
-    name: 'Save as preset (optional)',
-    namePh: 'E.g.: Sony WH-1000XM5',
+    title: 'Find my headphones',
+    text: 'AutoEq corrections for over 8,000 models: they make your headphones sound neutral, as they should.',
+    search: 'Search your model: DT 770, WH-1000XM5, AirPods Pro…',
+    loading: 'Loading the headphone list…',
+    empty: "Can't find that model. Try fewer words.",
+    recommended: 'Recommended',
+    forms: { 'over-ear': 'Over-ear', 'in-ear': 'In-ear', earbud: 'Earbud' },
+    by: 'Measured by {s}',
+    back: 'Back',
+    bass: 'Bass',
+    treble: 'Treble',
+    tasteHint: 'To taste: the correction is neutral and many people find it light on bass.',
+    name: 'Save to My presets as',
     import: 'Apply',
+    manual: 'Got the file? Paste it by hand',
+    manualText: 'Paste the text of a “ParametricEQ.txt” here or drop the file.',
+    ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
     bad: "I can't find any filter in that text",
-    ok: '{n} filters imported'
+    ok: '{n} filters applied'
   },
   settings: {
     title: 'Settings',
@@ -120,8 +130,8 @@ export default {
     analyzerHint: 'Draws what is playing behind the curve. Only runs while the window is visible.',
     hotkey: 'Bypass shortcut',
     hotkeyHint: 'Ctrl+Alt+E turns the EQ on and off from anywhere, games included.',
-    engineStatus: 'Equalizer APO',
-    engineOn: 'Installed. PoxiEQ writes its configuration and it applies the sound.',
+    engineStatus: 'PoxiEQ engine',
+    engineOn: 'Installed and running.',
     engineOff: 'Not installed.',
     devices: 'Outputs with PoxiEQ',
     devicesHint: 'Enable or remove PoxiEQ on each output. Applying cuts the sound for a couple of seconds.',
@@ -131,7 +141,11 @@ export default {
     upToDate: 'You have the latest version',
     whatsNew: "What's new",
     github: 'Code on GitHub',
-    credits: 'Sound is processed by Equalizer APO, by Jonas Thedering (GPL-2.0).'
+    uninstall: 'Uninstall engine',
+    uninstallHint: 'Removes PoxiEQ from every output and leaves Windows audio as it was.',
+    uninstallSure: 'Sure? Click again',
+    uninstalled: 'Engine uninstalled',
+    credits: 'Made with love by Poxi.'
   },
   update: {
     title: 'PoxiEQ {v} available',
@@ -151,6 +165,8 @@ export default {
     'engine.elevation': 'Administrator permission is needed to enable it.',
     'engine.setup': "Couldn't complete the setup",
     'engine.badDevice': 'Invalid device',
+    'engine.uninstall': "Couldn't uninstall the engine: {d}",
+    'autoeq.offline': "Can't reach AutoEq. Check your connection.",
     'io.failed': "Couldn't save the change"
   }
 }
