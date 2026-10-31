@@ -8,7 +8,7 @@ import { refreshEngine, setState, toast, updateConfig, useStore } from '../lib/s
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, useT } from '../i18n'
-import { Select } from './controls'
+import { Range, Select } from './controls'
 import { Logo, Modal, Switch } from './ui'
 
 type Cat = 'general' | 'engine' | 'about'
@@ -130,6 +130,26 @@ function General(): React.JSX.Element {
       <Row title={t('settings.hotkey')} hint={t('settings.hotkeyHint')}>
         <Switch on={cfg.bypassHotkey} label={t('settings.hotkey')} onChange={(bypassHotkey) => set({ bypassHotkey })} />
       </Row>
+      <h3 style={{ marginTop: 22 }}>{t('settings.sound')}</h3>
+      <Row title={t('settings.loudness')} hint={t('settings.loudnessHint')}>
+        <Switch on={cfg.loudness.on} label={t('settings.loudness')} onChange={(on) => set({ loudness: { ...cfg.loudness, on } })} />
+      </Row>
+      {cfg.loudness.on && (
+        <>
+          <Row title={t('settings.loudnessStrength')}>
+            <div className="set-range">
+              <Range value={Math.round(cfg.loudness.strength * 100)} min={0} max={100} label={t('settings.loudnessStrength')} onChange={(v) => set({ loudness: { ...cfg.loudness, strength: v / 100 } })} />
+              <b className="num">{Math.round(cfg.loudness.strength * 100)} %</b>
+            </div>
+          </Row>
+          <Row title={t('settings.loudnessRef')} hint={t('settings.loudnessRefHint')}>
+            <div className="set-range">
+              <Range value={cfg.loudness.offset} min={-30} max={30} label={t('settings.loudnessRef')} onChange={(offset) => set({ loudness: { ...cfg.loudness, offset } })} />
+              <b className="num">{cfg.loudness.offset > 0 ? '+' : ''}{cfg.loudness.offset} dB</b>
+            </div>
+          </Row>
+        </>
+      )}
       <Row title={t('settings.analyzer')} hint={t('settings.analyzerHint')}>
         <Switch on={cfg.analyzer} label={t('settings.analyzer')} onChange={(analyzer) => set({ analyzer })} />
       </Row>

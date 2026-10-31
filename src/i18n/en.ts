@@ -59,6 +59,8 @@ export default {
     q: 'Width (Q)',
     on: 'Turn this band on or off',
     remove: 'Remove band',
+    abTip: 'Hold to hear the original at the same volume (space bar works too)',
+    abOriginal: 'Original',
     bypassBanner: "The EQ is off. You're hearing the original sound.",
     bypassResume: 'Turn on',
     kinds: {
@@ -68,6 +70,17 @@ export default {
       lowPass: 'Low pass',
       highPass: 'High pass'
     }
+  },
+  meter: {
+    title: 'Output',
+    clip: 'Clipping (click to clear)',
+    expand: 'Show meters',
+    collapse: 'Collapse meters',
+    shortTip: 'Short-term LUFS (3 s)',
+    intTip: 'Integrated LUFS since the last reset',
+    tpTip: 'Maximum true peak (dBTP). Red above −1',
+    corrTip: 'Phase correlation: +1 mono, 0 wide stereo, negative = phase issues',
+    reset: 'Reset'
   },
   presets: {
     title: 'Presets',
@@ -126,6 +139,12 @@ export default {
     autostartHint: 'Opens in the tray, without a window.',
     closeToTray: 'Close to tray',
     closeToTrayHint: 'The X hides the window. The EQ keeps working even if you quit PoxiEQ completely.',
+    sound: 'Sound',
+    loudness: 'Automatic loudness',
+    loudnessHint: 'Adds bass and treble as you turn the Windows volume down, like your ears need. Turn it off for mixing: it skews what you hear.',
+    loudnessStrength: 'Strength',
+    loudnessRef: 'Reference volume',
+    loudnessRefHint: 'Raise it if you hear too much bass at your usual volume; lower it if you miss some.',
     analyzer: 'Spectrum analyzer',
     analyzerHint: 'Draws what is playing behind the curve. Only runs while the window is visible.',
     hotkey: 'Bypass shortcut',

@@ -1,7 +1,10 @@
-//! Analizador de espectro: escucha la salida en modo loopback (lo mismo que suena) y manda a la
-//! interfaz ~30 veces por segundo el nivel por bandas en escala logarítmica.
+//! Analizador y medidores: escucha la salida en modo loopback (lo que suena, ya ecualizado) y manda a la
+//! interfaz ~30 veces por segundo el espectro por bandas y los niveles (pico, RMS, LUFS, true peak y
+//! correlación de fase).
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use ebur128::{EbuR128, Mode};
+use serde::Serialize;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use windows::core::HSTRING;
@@ -13,6 +16,37 @@ pub const BANDS: usize = 96;
 
 /// Cada arranque sube la generación; el hilo que ve una generación distinta a la suya se para.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+/// Pide poner a cero el LUFS integrado y el true peak máximo
+static RESET: AtomicBool = AtomicBool::new(false);
+
+pub fn reset() {
+    RESET.store(true, Ordering::SeqCst);
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Levels {
+    /// dBFS por canal (L, R) del último intervalo
+    peak: [f32; 2],
+    /// dBFS por canal, ventana de 300 ms
+    rms: [f32; 2],
+    momentary: f32,
+    short_term: f32,
+    integrated: f32,
+    /// dBTP del último intervalo y máximo desde el último reinicio
+    true_peak: f32,
+    true_peak_max: f32,
+    /// -1 (fase invertida) … +1 (mono)
+    correlation: f32,
+}
+
+const FLOOR: f32 = -120.0;
+fn db(x: f64) -> f32 {
+    if x.is_finite() && x > 0.0 { (20.0 * x.log10()) as f32 } else { FLOOR }
+}
+fn lufs(x: Result<f64, ebur128::Error>) -> f32 {
+    x.ok().filter(|v| v.is_finite()).map_or(FLOOR, |v| (v as f32).max(FLOOR))
+}
 
 pub fn stop() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
@@ -52,8 +86,24 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
     let mut pos = 0usize;
     let mut last = Instant::now();
 
+    let st = channels.min(2);
+    let mut meter = EbuR128::new(st as u32, rate as u32, Mode::M | Mode::S | Mode::I | Mode::TRUE_PEAK | Mode::SAMPLE_PEAK).ok();
+    let rms_len = (rate * 0.3) as usize;
+    // Ventana de 300 ms para RMS y correlación: L², R², L·R
+    let mut win: std::collections::VecDeque<[f32; 3]> = std::collections::VecDeque::with_capacity(rms_len + 1024);
+    let mut sums = [0f64; 3];
+    let mut stereo: Vec<f32> = Vec::with_capacity(8192);
+    let mut tp_max = FLOOR;
+
     while GENERATION.load(Ordering::SeqCst) == gen {
         std::thread::sleep(Duration::from_millis(10));
+        if RESET.swap(false, Ordering::SeqCst) {
+            if let Some(m) = meter.as_mut() {
+                m.reset();
+            }
+            tp_max = FLOOR;
+        }
+        stereo.clear();
         while capture.GetNextPacketSize()? > 0 {
             let mut data = std::ptr::null_mut();
             let mut frames = 0u32;
@@ -62,10 +112,40 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
             let samples = std::slice::from_raw_parts(data as *const f32, frames as usize * channels);
             let silent = flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0;
             for frame in samples.chunks_exact(channels) {
+                let (l, r) = if silent { (0.0, 0.0) } else { (frame[0], frame[st - 1]) };
                 ring[pos] = if silent { 0.0 } else { frame.iter().sum::<f32>() / channels as f32 };
                 pos = (pos + 1) % N;
+                stereo.push(l);
+                if st == 2 {
+                    stereo.push(r);
+                }
+                let v = [l * l, r * r, l * r];
+                for k in 0..3 {
+                    sums[k] += v[k] as f64;
+                }
+                win.push_back(v);
+                if win.len() > rms_len {
+                    if let Some(o) = win.pop_front() {
+                        for k in 0..3 {
+                            sums[k] -= o[k] as f64;
+                        }
+                    }
+                }
             }
             capture.ReleaseBuffer(frames)?;
+        }
+        let (mut peak, mut tp) = ([FLOOR; 2], FLOOR);
+        if let Some(m) = meter.as_mut() {
+            if !stereo.is_empty() && m.add_frames_f32(&stereo).is_ok() {
+                for c in 0..st {
+                    peak[c] = db(m.prev_sample_peak(c as u32).unwrap_or(0.0));
+                    tp = tp.max(db(m.prev_true_peak(c as u32).unwrap_or(0.0)));
+                }
+                if st == 1 {
+                    peak[1] = peak[0];
+                }
+                tp_max = tp_max.max(tp);
+            }
         }
         if last.elapsed() >= Duration::from_millis(33) {
             last = Instant::now();
@@ -73,6 +153,19 @@ unsafe fn run(app: &AppHandle, id: &str, gen: u64) -> windows::core::Result<()> 
             let mut im = vec![0f32; N];
             fft(&mut re, &mut im);
             let _ = app.emit("spectrum", levels(&re, &im, &edges));
+            let n = win.len().max(1) as f64;
+            let (ll, rr, lr) = (sums[0].max(0.0), sums[1].max(0.0), sums[2]);
+            let level = Levels {
+                peak,
+                rms: [db((ll / n).sqrt()), db((rr / n).sqrt())],
+                momentary: meter.as_ref().map_or(FLOOR, |m| lufs(m.loudness_momentary())),
+                short_term: meter.as_ref().map_or(FLOOR, |m| lufs(m.loudness_shortterm())),
+                integrated: meter.as_ref().map_or(FLOOR, |m| lufs(m.loudness_global())),
+                true_peak: tp,
+                true_peak_max: tp_max,
+                correlation: if ll * rr > 1e-12 { (lr / (ll * rr).sqrt()).clamp(-1.0, 1.0) as f32 } else { 1.0 },
+            };
+            let _ = app.emit("levels", level);
         }
     }
     let _ = client.Stop();

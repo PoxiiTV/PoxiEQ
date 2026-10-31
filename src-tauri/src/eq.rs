@@ -77,8 +77,33 @@ pub fn sanitize_presets(presets: &mut Vec<Preset>) {
     presets.retain(|p| !p.name.is_empty() && !p.id.is_empty());
 }
 
+/// Corrección de sonoridad del motor: más graves y agudos cuanto más bajo está el volumen de Windows
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Loudness {
+    pub on: bool,
+    /// dB que se suman al nivel de referencia (calibración a tu volumen de escucha habitual)
+    pub offset: f64,
+    /// 0…1: cuánto se aplica
+    pub strength: f64,
+}
+
+impl Default for Loudness {
+    fn default() -> Self {
+        Self { on: false, offset: 0.0, strength: 1.0 }
+    }
+}
+
+impl Loudness {
+    pub fn sanitize(&mut self) {
+        self.offset = clamp(self.offset, -30.0, 30.0, 0.0).round();
+        self.strength = clamp(self.strength, 0.0, 1.0, 1.0);
+    }
+}
+
 /// Texto de `poxieq.txt`: una sección `Device:` por dispositivo, nada si está en bypass.
-pub fn render(curves: &HashMap<String, Curve>, bypass: bool) -> String {
+/// `compare` (A/B): solo el preamp indicado, el original igualado en volumen a la curva.
+pub fn render(curves: &HashMap<String, Curve>, bypass: bool, loudness: &Loudness, compare: Option<f64>) -> String {
     let mut out = String::from("# PoxiEQ: archivo generado automáticamente, los cambios a mano se pierden\r\n");
     if bypass {
         out.push_str("# Bypass activado\r\n");
@@ -92,7 +117,18 @@ pub fn render(curves: &HashMap<String, Curve>, bypass: bool) -> String {
             continue;
         }
         let c = &curves[id];
-        out.push_str(&format!("\r\nDevice: {id}\r\nPreamp: {:.1} dB\r\n", c.preamp));
+        if let Some(g) = compare {
+            out.push_str(&format!("\r\nDevice: {id}\r\nPreamp: {:.1} dB\r\n", clamp(g, -30.0, 12.0, 0.0)));
+            continue;
+        }
+        out.push_str(&format!("\r\nDevice: {id}\r\n"));
+        if loudness.on {
+            out.push_str(&format!(
+                "LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset {} Attenuation {:.2}\r\n",
+                loudness.offset as i32, loudness.strength
+            ));
+        }
+        out.push_str(&format!("Preamp: {:.1} dB\r\n", c.preamp));
         for b in c.bands.iter().filter(|b| b.on) {
             let line = match b.kind {
                 Kind::Peak => format!("PK Fc {:.1} Hz Gain {:.1} dB Q {:.3}", b.freq, b.gain, b.q),
@@ -130,14 +166,20 @@ mod tests {
 
         let id = "{6af377fe-6370-495b-afe3-95fac2e918f7}".to_string();
         let mut curves = HashMap::from([(id.clone(), c), ("Device: all\r\nPreamp: 20 dB".into(), Curve::default())]);
-        let text = render(&curves, false);
+        let off = Loudness::default();
+        let text = render(&curves, false, &off, None);
         assert!(text.contains(&format!("Device: {id}\r\nPreamp: -30.0 dB")));
         assert!(text.contains("Filter: ON PK Fc 20.0 Hz Gain 3.0 dB Q 1.410"));
         assert!(text.contains("Filter: ON HPQ Fc 30.0 Hz Q 1.000"));
         assert!(!text.contains("LSC"), "las bandas apagadas no se escriben");
         assert!(!text.contains("20 dB"), "un id que no es GUID no se cuela en el archivo");
+        assert!(!text.contains("Loudness"));
+        let on = Loudness { on: true, offset: -6.0, strength: 0.5 };
+        assert!(render(&curves, false, &on, None).contains("LoudnessCorrection: State 1 ReferenceLevel 75 ReferenceOffset -6 Attenuation 0.50"));
+        let ab = render(&curves, false, &on, Some(-2.5));
+        assert!(ab.contains("Preamp: -2.5 dB") && !ab.contains("Filter") && !ab.contains("Loudness"));
 
         curves.clear();
-        assert!(!render(&curves, true).contains("Device"));
+        assert!(!render(&curves, true, &off, None).contains("Device"));
     }
 }

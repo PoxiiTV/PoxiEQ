@@ -9,6 +9,12 @@ export interface Preset {
   curve: Curve
 }
 
+export interface Loudness {
+  on: boolean
+  offset: number
+  strength: number
+}
+
 export interface Config {
   lang: 'es' | 'en' | null
   theme: 'dark' | 'light' | 'system'
@@ -21,6 +27,8 @@ export interface Config {
   device: string | null
   curves: Record<string, Curve>
   presets: Preset[]
+  loudness: Loudness
+  meterCollapsed: boolean
 }
 
 export interface Device {
@@ -81,5 +89,7 @@ export const api = {
   trayLabels: (labels: { open: string; bypass: string; quit: string }) => invoke<void>('tray_labels', { labels }),
   analyzerStart: (device: string) => invoke<void>('analyzer_start', { device }),
   analyzerStop: () => invoke<void>('analyzer_stop'),
+  compareSet: (gain: number | null) => invoke<void>('compare_set', { gain }),
+  meterReset: () => invoke<void>('meter_reset'),
   appQuit: () => invoke<void>('app_quit')
 }

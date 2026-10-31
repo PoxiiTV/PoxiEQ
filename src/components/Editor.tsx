@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy, Plus, Power, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
-import { clamp, fmtDb, hasGain, headroom, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo } from '../lib/eq'
+import { api } from '../lib/api'
+import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
 import { currentCurve, setCurve, setState, toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
@@ -51,6 +52,7 @@ export function Editor(): React.JSX.Element {
           )}
         </div>
         <div className="spacer" />
+        {!bypass && <AbButton curve={curve} />}
         <button className="icon-btn" data-tip={t('eq.reset')} aria-label={t('eq.reset')} onClick={() => setCurve({ ...curve, bands: tenBand() })}>
           <RotateCcw size={16} />
         </button>
@@ -70,6 +72,42 @@ export function Editor(): React.JSX.Element {
       <div className="hint-line small muted">{t('eq.hint')}</div>
       <Bands />
     </div>
+  )
+}
+
+const MID = logFreqs(60).filter((f) => f >= 100 && f <= 8000)
+
+/** Volumen medio de la curva donde está la música: el original se iguala a esto para no engañar al oído */
+function matchGain(c: Curve): number {
+  const avg = MID.reduce((a, f) => a + curveDb(c.bands, f), 0) / MID.length + c.preamp
+  return Math.round(avg * 10) / 10
+}
+
+/** A/B: mantén pulsado para oír el original al mismo volumen que tu curva */
+function AbButton({ curve }: { curve: Curve }): React.JSX.Element {
+  const t = useT()
+  const [on, setOn] = useState(false)
+  const start = (): void => {
+    setOn(true)
+    void api.compareSet(matchGain(curve))
+  }
+  const stop = (): void => {
+    if (!on) return
+    setOn(false)
+    void api.compareSet(null)
+  }
+  return (
+    <button
+      className={`btn btn-sm ab ${on ? 'on' : ''}`}
+      data-tip={t('eq.abTip')}
+      onPointerDown={start}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onKeyDown={(e) => e.key === ' ' && !e.repeat && start()}
+      onKeyUp={(e) => e.key === ' ' && stop()}
+    >
+      {on ? t('eq.abOriginal') : 'A/B'}
+    </button>
   )
 }
 

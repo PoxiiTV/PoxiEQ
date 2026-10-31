@@ -3,7 +3,7 @@ mod autoeq;
 pub mod engine;
 mod eq;
 
-use eq::{Curve, Preset};
+use eq::{Curve, Loudness, Preset};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -37,6 +37,8 @@ pub struct Config {
     /// Curva de cada dispositivo (por GUID)
     pub curves: HashMap<String, Curve>,
     pub presets: Vec<Preset>,
+    pub loudness: Loudness,
+    pub meter_collapsed: bool,
 }
 
 impl Default for Config {
@@ -53,6 +55,8 @@ impl Default for Config {
             device: None,
             curves: HashMap::new(),
             presets: vec![],
+            loudness: Loudness::default(),
+            meter_collapsed: false,
         }
     }
 }
@@ -75,6 +79,7 @@ impl Config {
         self.curves.retain(|id, _| id.len() <= 64);
         self.curves.values_mut().for_each(Curve::sanitize);
         eq::sanitize_presets(&mut self.presets);
+        self.loudness.sanitize();
     }
 }
 
@@ -83,6 +88,8 @@ pub struct AppState {
     config_path: PathBuf,
     start_hidden: bool,
     tray_labels: Mutex<TrayLabels>,
+    /// A/B en curso: ganancia del original igualado
+    compare: Mutex<Option<f64>>,
 }
 
 impl AppState {
@@ -145,15 +152,30 @@ fn config_set(app: AppHandle, st: State<'_, AppState>, mut cfg: Config) -> Res<C
     if changed_hotkey {
         register_hotkey(&app, cfg.bypass_hotkey);
     }
-    apply(&cfg)?;
+    let compare = *st.compare.lock().unwrap_or_else(|e| e.into_inner());
+    apply(&cfg, compare)?;
     Ok(cfg)
 }
 
-fn apply(cfg: &Config) -> Res<()> {
+fn apply(cfg: &Config, compare: Option<f64>) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    engine::write_config(&eq::render(&cfg.curves, cfg.bypass)).map_err(|e| problem("engine.write", e))
+    engine::write_config(&eq::render(&cfg.curves, cfg.bypass, &cfg.loudness, compare)).map_err(|e| problem("engine.write", e))
+}
+
+/// A/B igualado: mientras se mantiene pulsado suena el original con `gain` dB para compararlo al mismo volumen
+#[tauri::command]
+fn compare_set(st: State<'_, AppState>, gain: Option<f64>) -> Res<()> {
+    let gain = gain.filter(|g| g.is_finite());
+    *st.compare.lock().unwrap_or_else(|e| e.into_inner()) = gain;
+    let cfg = st.cfg().clone();
+    apply(&cfg, gain)
+}
+
+#[tauri::command]
+fn meter_reset() {
+    analyzer::reset();
 }
 
 #[tauri::command]
@@ -189,7 +211,7 @@ async fn engine_setup(app: AppHandle, enable: Vec<String>, disable: Vec<String>)
     let report: engine::SetupReport = serde_json::from_str(&out).map_err(|_| problem("engine.setup", None))?;
     // Recién instalado: escribir ya la curva que hubiera
     let cfg = app.state::<AppState>().cfg().clone();
-    let _ = apply(&cfg);
+    let _ = apply(&cfg, None);
     Ok(report)
 }
 
@@ -352,6 +374,7 @@ pub fn run() {
                 config_path,
                 start_hidden,
                 tray_labels: Mutex::new(TrayLabels { open: "Abrir PoxiEQ".into(), bypass: "Bypass".into(), quit: "Salir".into() }),
+                compare: Mutex::new(None),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -377,7 +400,7 @@ pub fn run() {
             refresh_tray(app.handle());
             register_hotkey(app.handle(), cfg.bypass_hotkey);
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
-            let _ = apply(&cfg);
+            let _ = apply(&cfg, None);
             Ok(())
         })
         .on_window_event(|w, ev| {
@@ -401,6 +424,8 @@ pub fn run() {
             autostart_set,
             tray_labels,
             analyzer_start,
+            compare_set,
+            meter_reset,
             analyzer_stop,
             app_quit,
         ])

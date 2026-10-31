@@ -59,6 +59,8 @@ export default {
     q: 'Ancho (Q)',
     on: 'Encender o apagar esta banda',
     remove: 'Quitar banda',
+    abTip: 'Mantén pulsado para oír el original al mismo volumen (también con la barra espaciadora)',
+    abOriginal: 'Original',
     bypassBanner: 'El EQ está apagado. Lo que oyes es el sonido original.',
     bypassResume: 'Encender',
     kinds: {
@@ -68,6 +70,17 @@ export default {
       lowPass: 'Paso bajo',
       highPass: 'Paso alto'
     }
+  },
+  meter: {
+    title: 'Salida',
+    clip: 'Saturación (pulsa para borrar)',
+    expand: 'Mostrar medidores',
+    collapse: 'Plegar medidores',
+    shortTip: 'LUFS a corto plazo (3 s)',
+    intTip: 'LUFS integrado desde el último reinicio',
+    tpTip: 'True peak máximo (dBTP). En rojo por encima de −1',
+    corrTip: 'Correlación de fase: +1 mono, 0 estéreo ancho, negativo = problemas de fase',
+    reset: 'Reiniciar'
   },
   presets: {
     title: 'Presets',
@@ -126,6 +139,12 @@ export default {
     autostartHint: 'Se abre en la bandeja, sin ventana.',
     closeToTray: 'Cerrar a la bandeja',
     closeToTrayHint: 'La X esconde la ventana. El EQ sigue funcionando aunque cierres PoxiEQ del todo.',
+    sound: 'Sonido',
+    loudness: 'Loudness automático',
+    loudnessHint: 'Añade graves y agudos cuando bajas el volumen de Windows, como hace el oído. Apágalo para mezclar: falsea la escucha.',
+    loudnessStrength: 'Intensidad',
+    loudnessRef: 'Volumen de referencia',
+    loudnessRefHint: 'Súbelo si notas demasiados graves a tu volumen habitual; bájalo si te faltan.',
     analyzer: 'Analizador de espectro',
     analyzerHint: 'Pinta lo que suena detrás de la curva. Solo trabaja con la ventana a la vista.',
     hotkey: 'Atajo de bypass',

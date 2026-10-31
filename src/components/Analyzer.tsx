@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
-import { api } from '../lib/api'
-import { currentDevice, useStore } from '../lib/store'
 
 const BANDS = 96
 // Frecuencia central de cada banda (igual reparto que en Rust: 20 Hz → 20 kHz logarítmico)
@@ -24,22 +22,9 @@ export function Analyzer({
   fullHeight: number
 }): React.JSX.Element {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const device = useStore((s) => currentDevice(s)?.id)
   const level = useRef(new Float32Array(BANDS).fill(FLOOR))
   const geo = useRef({ x, top, height })
   geo.current = { x, top, height }
-
-  // Solo escucha con la ventana a la vista: escondida en la bandeja no gasta CPU
-  useEffect(() => {
-    if (!device) return
-    const sync = (): void => void (document.hidden ? api.analyzerStop() : api.analyzerStart(device))
-    sync()
-    document.addEventListener('visibilitychange', sync)
-    return () => {
-      document.removeEventListener('visibilitychange', sync)
-      void api.analyzerStop()
-    }
-  }, [device])
 
   useEffect(() => {
     let frame = 0
