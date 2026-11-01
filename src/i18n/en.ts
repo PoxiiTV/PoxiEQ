@@ -233,7 +233,10 @@ export default {
     tpTip: 'Maximum true peak (dBTP). Red above −1',
     corrTip: 'Phase correlation: +1 mono, 0 wide stereo, negative = phase issues',
     grTip: 'Dynamics gain reduction · compressor {c} dB · limiter {l} dB',
-    reset: 'Reset'
+    reset: 'Reset',
+    lat: 'Latency',
+    latTip: "Output latency: how long it takes for what an app sends to be heard, not counting the app's own buffer. Windows, driver and device: {o} ms (measured with its clock) · PoxiEQ: {d} ms",
+    latBt: "Bluetooth: the codec adds another 100–300 ms the device doesn't always report"
   },
   presets: {
     title: 'Preset',

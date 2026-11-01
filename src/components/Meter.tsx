@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
-import { api } from '../lib/api'
-import { editingMic, micSettings, updateConfig, useStore } from '../lib/store'
+import { api, type OutputLatency } from '../lib/api'
+import { currentOutput, editingMic, micSettings, outputSettings, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 
 interface Levels {
@@ -28,6 +28,31 @@ const GR_HOLD_MS = 2000
 const frac = (db: number): number => Math.min(1, Math.max(0, (db - MIN) / -MIN))
 const fmt = (v: number): string => (v <= -119 ? '−∞' : v.toFixed(1).replace('-', '−'))
 
+/** Latencia de la salida que se ve (no en la página del micrófono). Solo se vuelve a medir al cambiar de salida o
+ *  lo que mete retardo en PoxiDSP (el limitador o la protección de los graves, `Chain::latency`); en bypass
+ *  PoxiDSP no se carga. */
+function useLatency(mic: boolean): OutputLatency | null {
+  const id = useStore((s) => currentOutput(s)?.id)
+  const bypass = useStore((s) => !!s.config?.bypass)
+  const dsp = useStore((s) => outputSettings(s).dsp)
+  const key = JSON.stringify([dsp.limiter.on, dsp.bassBoost])
+  const [lat, setLat] = useState<OutputLatency | null>(null)
+  useEffect(() => {
+    setLat(null)
+    if (mic || !id) return
+    let live = true
+    void api
+      .outputLatency(id, dsp)
+      .then((l) => live && setLat(l))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+    // `key` resume lo de `dsp` que cambia el retardo
+  }, [mic, id, key])
+  return lat && { ...lat, dsp: bypass ? 0 : lat.dsp }
+}
+
 /** Columna fija de medidores de lo que sale de verdad (después del EQ): pico, RMS, LUFS, true peak, fase y,
  *  cuando la dinámica actúa, su reducción de ganancia. Con un micrófono, lo que reciben las apps (ya procesado)
  *  y la raya del umbral de la puerta de ruido. */
@@ -40,6 +65,7 @@ export function Meter(): React.JSX.Element {
     return mic && g.on && !s.config?.mic.bypass ? g.threshold : null
   })
   const [lv, setLv] = useState<Levels | null>(null)
+  const lat = useLatency(mic)
   const [clip, setClip] = useState(false)
   const hold = useRef([{ v: MIN, at: 0 }, { v: MIN, at: 0 }])
   const grSeen = useRef(-GR_HOLD_MS)
@@ -151,6 +177,15 @@ export function Meter(): React.JSX.Element {
             <span>+1</span>
           </div>
         </div>
+        {lat && (
+          <div className="line num lat" data-tip={`${t('meter.latTip', { o: lat.output.toFixed(1), d: lat.dsp.toFixed(1) })}${lat.bluetooth ? `. ${t('meter.latBt')}` : ''}`}>
+            <span>{t('meter.lat')}</span>
+            <b>
+              {lat.bluetooth ? '≥ ' : ''}
+              {Math.round(lat.output + lat.dsp)} ms
+            </b>
+          </div>
+        )}
         <button className="btn btn-sm btn-ghost" onClick={reset}>
           <RotateCcw size={13} /> {t('meter.reset')}
         </button>

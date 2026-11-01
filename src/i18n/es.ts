@@ -233,7 +233,10 @@ export default {
     tpTip: 'True peak máximo (dBTP). En rojo por encima de −1',
     corrTip: 'Correlación de fase: +1 mono, 0 estéreo ancho, negativo = problemas de fase',
     grTip: 'Reducción de ganancia de la dinámica · compresor {c} dB · limitador {l} dB',
-    reset: 'Reiniciar'
+    reset: 'Reiniciar',
+    lat: 'Latencia',
+    latTip: 'Latencia de salida: lo que tarda en sonar lo que manda una app, sin contar su propio búfer. Windows, driver y aparato: {o} ms (medida con su reloj) · PoxiEQ: {d} ms',
+    latBt: 'Bluetooth: el códec suma además 100–300 ms que el aparato no siempre cuenta'
   },
   presets: {
     title: 'Preset',

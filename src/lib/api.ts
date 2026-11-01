@@ -18,6 +18,13 @@ export interface Loudness {
 }
 
 /** Dinámica y realces (PoxiDSP). Rangos: los de `Settings::sanitize` en `dsp/src/lib.rs` */
+/** Latencia de una salida en ms: Windows + driver + aparato (medida) y el lookahead de PoxiDSP */
+export interface OutputLatency {
+  output: number
+  dsp: number
+  bluetooth: boolean
+}
+
 export interface Dsp {
   limiter: { on: boolean; ceiling: number }
   comp: { on: boolean; threshold: number; ratio: number; attack: number; release: number; knee: number; makeup: number }
@@ -240,6 +247,7 @@ export const api = {
   studioSet: (studio: Studio) => invoke<void>('studio_set', { studio }),
   hearingSet: (on: boolean) => invoke<void>('hearing_set', { on }),
   meterReset: () => invoke<void>('meter_reset'),
+  outputLatency: (device: string, dsp: Dsp) => invoke<OutputLatency | null>('output_latency', { device, dsp }),
   appQuit: () => invoke<void>('app_quit'),
   hotkeyCheck: (keys: string) => invoke<string>('hotkey_check', { keys }),
   hotkeysPause: (paused: boolean) => invoke<void>('hotkeys_pause', { paused }),

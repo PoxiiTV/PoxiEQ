@@ -62,6 +62,8 @@ const DISABLE_ENHANCEMENTS: &str = "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5";
 const FX_TITLE: &str = "{b725f130-47ef-101a-a5f1-02608c9eebac},10";
 const CONNECTION_NAME: &str = "{a45c254e-df1c-4efd-8020-67d146a850e0},2";
 const DEVICE_NAME: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},6";
+/// Ruta del nodo de dispositivo: «{1}.USB\VID_…», «{1}.BTHENUM\…»
+const DEVICE_PATH: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},2";
 const COMBINED_DEVICE: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},41";
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -154,6 +156,15 @@ fn dev_path(id: &str) -> String {
     } else {
         format!(r"{CAPTURE}\{id}")
     }
+}
+
+/// La salida es Bluetooth: su nodo de dispositivo cuelga del bus BTHENUM (A2DP), BTHHFENUM (manos libres)
+/// o BTHLE (LE Audio)
+pub fn is_bluetooth(id: &str) -> bool {
+    hklm()
+        .open_subkey(format!(r"{RENDER}\{id}\Properties"))
+        .and_then(|p| p.get_value::<String, _>(DEVICE_PATH))
+        .is_ok_and(|v| v.to_ascii_uppercase().contains(".BTH"))
 }
 
 /// El GUID es de una entrada (micrófono)

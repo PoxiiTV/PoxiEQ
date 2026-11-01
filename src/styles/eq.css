@@ -1007,6 +1007,9 @@
   color: var(--muted);
   margin-top: 2px;
 }
+.meter-read .line.lat {
+  margin-top: 6px;
+}
 .meter-read .btn {
   margin-top: 4px;
 }

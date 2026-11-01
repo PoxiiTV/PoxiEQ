@@ -197,6 +197,87 @@ unsafe fn run(app: &AppHandle, id: &str, input: bool, gen: u64) -> windows::core
     Ok(())
 }
 
+/// Latencia de salida (ms): lo que tarda en sonar lo que manda una app, sin contar su propio búfer.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputLatency {
+    /// Motor de audio de Windows + driver + dispositivo, medido con su reloj
+    output: f32,
+    /// Lookahead de PoxiDSP con estos ajustes (0 si no hay limitador ni protección de graves)
+    dsp: f32,
+    /// Bluetooth: el códec puede añadir 100–300 ms que el reloj del dispositivo no siempre cuenta
+    bluetooth: bool,
+}
+
+/// Mide la latencia de una salida. En su propio hilo MTA: quien llama puede tener COM en otro modo (como
+/// `engine::default_device`).
+pub fn output_latency(id: &str, dsp: &poxidsp::Settings) -> Option<OutputLatency> {
+    let (id, dsp) = (id.to_string(), *dsp);
+    std::thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        measure(&id).map(|(output, rate)| OutputLatency {
+            output,
+            dsp: (poxidsp::dsp::Chain::new(&dsp, rate).latency() as f64 / rate * 1000.0) as f32,
+            bluetooth: crate::engine::is_bluetooth(&id),
+        })
+    })
+    .join()
+    .ok()
+    .flatten()
+}
+
+/// Reproduce 0,3 s de silencio (no suena nada ni hace clic: se mezcla con lo que haya) y compara lo que el motor
+/// ya ha cogido de nuestro búfer con lo que el dispositivo dice haber reproducido (`IAudioClock`): la diferencia
+/// es lo que tarda en sonar, motor + driver + aparato. Devuelve (ms, frecuencia de mezcla).
+unsafe fn measure(id: &str) -> Option<(f32, f64)> {
+    let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+    let client: IAudioClient = en.GetDevice(&crate::engine::endpoint_id(id, false)).ok()?.Activate(CLSCTX_ALL, None).ok()?;
+    let fmt = client.GetMixFormat().ok()?;
+    let rate = (*fmt).nSamplesPerSec as f64;
+    let init = client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 500_000, 0, fmt, None);
+    CoTaskMemFree(Some(fmt as _));
+    init.ok()?;
+    let size = client.GetBufferSize().ok()?;
+    let render: IAudioRenderClient = client.GetService().ok()?;
+    let clock: IAudioClock = client.GetService().ok()?;
+    let freq = clock.GetFrequency().ok()? as f64;
+    if rate <= 0.0 || freq <= 0.0 {
+        return None;
+    }
+    let mut written = 0u64;
+    let fill = |written: &mut u64| -> Option<()> {
+        let free = size - client.GetCurrentPadding().ok()?;
+        if free > 0 {
+            render.GetBuffer(free).ok()?;
+            render.ReleaseBuffer(free, AUDCLNT_BUFFERFLAGS_SILENT.0 as u32).ok()?;
+            *written += free as u64;
+        }
+        Some(())
+    };
+    fill(&mut written)?;
+    client.Start().ok()?;
+    let mut samples = Vec::with_capacity(30);
+    for i in 0..30 {
+        std::thread::sleep(Duration::from_millis(10));
+        if fill(&mut written).is_none() {
+            break;
+        }
+        let (Ok(padding), mut pos) = (client.GetCurrentPadding(), 0u64) else { break };
+        if clock.GetPosition(&mut pos, None).is_err() {
+            break;
+        }
+        // Los primeros 100 ms el dispositivo aún arranca
+        let played = pos as f64 / freq * rate;
+        let taken = (written - padding as u64) as f64;
+        if i >= 10 && played > 0.0 {
+            samples.push((taken - played) / rate * 1000.0);
+        }
+    }
+    let _ = client.Stop();
+    samples.sort_by(f64::total_cmp);
+    samples.get(samples.len() / 2).copied().filter(|v| v.is_finite() && *v >= 0.0).map(|v| (v as f32, rate))
+}
+
 /// Límites (en bins de la FFT) de cada banda, repartidas en escala logarítmica de 20 Hz a 20 kHz
 fn band_edges(rate: f32) -> Vec<(usize, usize)> {
     let bin = |f: f32| ((f / rate * N as f32).round() as usize).clamp(1, N / 2 - 1);
@@ -292,5 +373,18 @@ mod tests {
         assert!((re[0] - x.iter().sum::<f64>()).abs() < 1e-9);
         fft(&mut re, &mut im, true);
         assert!(re.iter().zip(&x).all(|(a, b)| (a - b).abs() < 1e-12) && im.iter().all(|v| v.abs() < 1e-12));
+    }
+}
+
+#[cfg(test)]
+mod latency_tests {
+    /// Mide la salida predeterminada de este PC (no suena nada): `cargo test latency -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn latency_of_default_output() {
+        let id = crate::engine::default_device(false).expect("sin salida predeterminada");
+        let l = super::output_latency(&id, &poxidsp::Settings::default());
+        println!("{id}: {l:?}");
+        assert!(l.is_some());
     }
 }

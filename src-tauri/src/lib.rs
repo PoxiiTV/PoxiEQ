@@ -470,6 +470,12 @@ fn reset_live(app: &AppHandle) {
     }
 }
 
+/// Latencia de la salida `device` con los ajustes de PoxiDSP `dsp` (mide con 0,3 s de silencio)
+#[tauri::command]
+async fn output_latency(device: String, dsp: poxidsp::Settings) -> Option<analyzer::OutputLatency> {
+    tauri::async_runtime::spawn_blocking(move || analyzer::output_latency(&device, &dsp)).await.ok().flatten()
+}
+
 #[tauri::command]
 fn meter_reset() {
     analyzer::reset();
@@ -1023,6 +1029,7 @@ pub fn run() {
             studio_set,
             hearing_set,
             meter_reset,
+            output_latency,
             analyzer_stop,
             app_quit,
             hotkey_check,
