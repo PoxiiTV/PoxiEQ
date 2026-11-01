@@ -138,6 +138,11 @@ export default {
     }
   },
   dsp: {
+    balance: 'Balance',
+    balanceHint: 'For headphones or speakers that are louder on one side, or for your ears. It only lowers the opposite channel: it never raises the level. Per output.',
+    left: 'Left',
+    right: 'Right',
+    center: 'Centered',
     install: "Dynamics needs PoxiEQ's processor. Windows will ask for administrator permission once.",
     installBtn: 'Install',
     update: "There's a new version of PoxiEQ's processor. Updating cuts the sound for a couple of seconds.",

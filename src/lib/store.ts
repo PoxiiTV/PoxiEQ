@@ -278,7 +278,7 @@ export function renamePreset(id: string, name: string): void {
 
 // ——— Ajustes de cada dispositivo: su PoxiDSP y el último preset de cada sección ———
 
-const NO_SETTINGS: DeviceSettings = Object.freeze({ dsp: DSP_DEFAULT, presets: { sound: null, phones: null, mic: null, plugins: null }, plugins: [], ir: null })
+const NO_SETTINGS: DeviceSettings = Object.freeze({ dsp: DSP_DEFAULT, presets: { sound: null, phones: null, mic: null, plugins: null }, plugins: [], ir: null, balance: 0 })
 
 /** Lo que recuerda un dispositivo; sin nada guardado, lo de serie (Natural, sin crossfeed, ningún preset) */
 export function settingsOf(s: Pick<State, 'config'>, id: string | null | undefined): DeviceSettings {

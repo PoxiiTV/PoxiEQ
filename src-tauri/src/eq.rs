@@ -367,6 +367,18 @@ pub struct DeviceSettings {
     pub plugins: Vec<PluginSlot>,
     /// Respuesta al impulso (convolución), justo después de la curva
     pub ir: Option<crate::ir::Ir>,
+    /// Balance en dB: positivo baja el canal izquierdo (se oye más a la derecha), negativo el derecho
+    pub balance: f64,
+}
+
+/// Línea del balance: solo baja un canal (nunca sube nada)
+fn balance_lines(b: f64) -> String {
+    let b = clamp(b, -12.0, 12.0, 0.0);
+    if b.abs() < 0.05 {
+        return String::new();
+    }
+    let ch = if b > 0.0 { "L" } else { "R" };
+    format!("Channel: {ch}\r\nPreamp: {:.1} dB\r\nChannel: all\r\n", -b.abs())
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -607,6 +619,7 @@ pub fn sanitize_devices(devices: &mut HashMap<String, DeviceSettings>, presets: 
     for d in devices.values_mut() {
         d.dsp.sanitize();
         sanitize_plugins(&mut d.plugins);
+        d.balance = (clamp(d.balance, -12.0, 12.0, 0.0) * 2.0).round() / 2.0;
         if d.ir.as_mut().is_some_and(|ir| !ir.valid()) {
             d.ir = None;
         }
@@ -668,7 +681,7 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
     // Con curva, con algo de PoxiDSP encendido o con plugins; ordenados para que el archivo no cambie sin motivo
     let ids: std::collections::BTreeSet<&String> = curves
         .keys()
-        .chain(devices.iter().filter(|(_, d)| d.dsp.active() || d.plugins.iter().any(|p| p.on) || d.ir.as_ref().is_some_and(|i| i.on)).map(|(id, _)| id))
+        .chain(devices.iter().filter(|(_, d)| d.dsp.active() || d.plugins.iter().any(|p| p.on) || d.ir.as_ref().is_some_and(|i| i.on) || d.balance.abs() >= 0.05).map(|(id, _)| id))
         .filter(|id| is_guid(id))
         .collect();
     let (inputs, outputs): (Vec<_>, Vec<_>) = ids
@@ -718,6 +731,7 @@ fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &DeviceSettings)],
             ));
         }
         out.push_str(&format!("Preamp: {:.1} dB\r\n", c.preamp));
+        out.push_str(&balance_lines(d.balance));
         out.push_str(&filters(&c.bands));
         // Cada oído lo suyo, antes de PoxiDSP para que el limitador siga siendo lo último
         if let Some(e) = c.ears.as_ref().filter(|e| e.left.iter().chain(&e.right).any(|b| b.on)) {
@@ -761,6 +775,17 @@ mod tests {
             state: poxidsp::base64(&[1, 2, 3]),
             latency: 0,
         }
+    }
+
+    #[test]
+    fn balance_solo_baja_un_canal() {
+        assert_eq!(balance_lines(0.0), "");
+        assert_eq!(balance_lines(3.0), "Channel: L\r\nPreamp: -3.0 dB\r\nChannel: all\r\n");
+        assert_eq!(balance_lines(-40.0), "Channel: R\r\nPreamp: -12.0 dB\r\nChannel: all\r\n");
+        let id = "{6af377fe-6370-495b-afe3-95fac2e918f7}".to_string();
+        let devices = HashMap::from([(id, DeviceSettings { balance: -2.0, ..DeviceSettings::default() })]);
+        let text = render(&HashMap::new(), &devices, false, &Loudness::default(), false, &Live::default(), |_| false);
+        assert!(text.contains("Preamp: 0.0 dB\r\nChannel: R\r\nPreamp: -2.0 dB\r\nChannel: all\r\n"));
     }
 
     #[test]

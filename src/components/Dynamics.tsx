@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
 import { soundOf, SOUNDS, withHeadphones, withSound, type Sound } from '../lib/dsp'
-import { micSettings, outputSettings, setMicDsp, setOutputDsp, toast, useStore } from '../lib/store'
+import { currentOutput, micSettings, outputSettings, setMicDsp, setOutputDsp, toast, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Knob, Range } from './controls'
 import { SectionPresets } from './Presets'
@@ -99,7 +99,37 @@ export function SoundPage(): React.JSX.Element {
           </Card>
         </div>
       </section>
+
+      <section>
+        <SectionHead n={4} label={t('dsp.balance')} />
+        <Balance />
+      </section>
     </div>
+  )
+}
+
+/** Balance izquierda/derecha de la salida: solo baja el canal contrario (nunca sube nada) */
+function Balance(): React.JSX.Element {
+  const t = useT()
+  const b = useStore((s) => outputSettings(s).balance)
+  const set = (balance: number): void => {
+    const s = useStore.getState()
+    const id = currentOutput(s)?.id
+    if (id && s.config) updateConfig({ perDevice: { ...s.config.perDevice, [id]: { ...outputSettings(s), balance } } })
+  }
+  return (
+    <>
+      <div className="tilt-row">
+        <span>{t('dsp.left')}</span>
+        <Range value={b} min={-12} max={12} step={0.5} label={t('dsp.balance')} onChange={set} />
+        <span>{t('dsp.right')}</span>
+        <b className="num">{b === 0 ? t('dsp.center') : `${b < 0 ? t('dsp.left') : t('dsp.right')} ${Math.abs(b).toFixed(1)} dB`}</b>
+        <button className="btn btn-sm btn-ghost" disabled={b === 0} onClick={() => set(0)}>
+          {t('dsp.center')}
+        </button>
+      </div>
+      <small className="studio-hint">{t('dsp.balanceHint')}</small>
+    </>
   )
 }
 

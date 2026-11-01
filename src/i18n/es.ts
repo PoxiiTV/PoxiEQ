@@ -138,6 +138,11 @@ export default {
     }
   },
   dsp: {
+    balance: 'Balance',
+    balanceHint: 'Para unos cascos o altavoces que suenan más por un lado, o para tu oído. Solo baja el canal contrario: nunca sube el nivel. Es de esta salida.',
+    left: 'Izquierda',
+    right: 'Derecha',
+    center: 'Centrado',
     install: 'La dinámica necesita el procesador de PoxiEQ. Windows te pedirá permiso de administrador una vez.',
     installBtn: 'Instalar',
     update: 'Hay una versión nueva del procesador de PoxiEQ. Al actualizar se corta el sonido un par de segundos.',

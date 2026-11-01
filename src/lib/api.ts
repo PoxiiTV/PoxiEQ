@@ -117,6 +117,8 @@ export interface DeviceSettings {
   plugins: PluginSlot[]
   /** Respuesta al impulso, justo después de la curva */
   ir: Ir | null
+  /** Balance en dB (±12): positivo baja el izquierdo, negativo el derecho */
+  balance: number
 }
 
 /** Atajos globales en el formato del registrador (`control+alt+Numpad0`); `null` = sin atajo */
