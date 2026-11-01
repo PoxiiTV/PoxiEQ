@@ -47,7 +47,8 @@ export default {
     on: 'Activo',
     off: 'Sin activar',
     none: 'No hay ninguna salida de audio conectada',
-    broken: 'Necesita reparar'
+    broken: 'Necesita reparar',
+    calls: 'también en llamadas'
   },
   diag: {
     title: '¿Por qué no suena?',

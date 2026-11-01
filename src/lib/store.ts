@@ -169,11 +169,17 @@ export function go(page: Page): void {
 
 type Sel = Pick<State, 'config' | 'engine' | 'page'>
 
-/** El elegido si está conectado y, si no, el predeterminado (o el primero) */
+/** El elegido si está conectado y, si no, el predeterminado (o el primero). El manos libres de unos cascos
+ *  Bluetooth cuenta como su estéreo (es el que se ajusta). */
 function pick(s: Pick<State, 'config' | 'engine'>, input: boolean, id: string | null | undefined): Device | null {
-  const list = s.engine?.devices.filter((d) => d.input === input && !d.unplugged) ?? []
-  return list.find((d) => d.id === id) ?? list.find((d) => d.default) ?? list[0] ?? null
+  const all = s.engine?.devices.filter((d) => d.input === input && !d.unplugged) ?? []
+  const list = all.filter(listed)
+  const main = (d: Device | undefined): Device | undefined => (d?.handsFree ? list.find((x) => x.id === d.pair) : d)
+  return main(all.find((d) => d.id === id)) ?? main(all.find((d) => d.default)) ?? list[0] ?? null
 }
+
+/** Sale en las listas: todo menos el manos libres de unos cascos Bluetooth (va con su estéreo) */
+export const listed = (d: Device): boolean => !d.handsFree
 
 /** Salida que se edita (la de la barra de título) */
 export const currentOutput = (s: Pick<State, 'config' | 'engine'> = getState()): Device | null => pick(s, false, s.config?.device)

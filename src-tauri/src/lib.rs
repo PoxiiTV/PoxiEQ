@@ -428,7 +428,14 @@ fn apply(cfg: &Config, live: &Live) -> Res<()> {
     if !engine::status().installed {
         return Ok(());
     }
-    let text = eq::render(&cfg.curves, &cfg.per_device, cfg.bypass, &cfg.loudness, cfg.mic.bypass, live, engine::is_input);
+    // El manos libres de unos cascos Bluetooth suena con la curva de su estéreo (sin PoxiDSP: es mono a 16 kHz)
+    let mut curves = cfg.curves.clone();
+    for (hf, stereo) in engine::bt_pairs() {
+        if let Some(c) = cfg.curves.get(&stereo) {
+            curves.insert(hf, Curve { ears: None, ..c.clone() });
+        }
+    }
+    let text = eq::render(&curves, &cfg.per_device, cfg.bypass, &cfg.loudness, cfg.mic.bypass, live, engine::is_input);
     engine::write_config(&text).map_err(|e| problem("engine.write", e))
 }
 
@@ -537,6 +544,8 @@ async fn engine_setup(app: AppHandle, enable: Vec<String>, disable: Vec<String>)
     if !enable.iter().chain(&disable).all(|id| engine::is_device_id(id)) {
         return Err(problem("engine.badDevice", None));
     }
+    // Unos cascos Bluetooth se activan enteros: estéreo y manos libres
+    let (enable, disable) = (engine::with_bt_halves(&enable), engine::with_bt_halves(&disable));
     let dsp = engine::dsp_state() != engine::DspState::Current;
     if enable.is_empty() && disable.is_empty() && !dsp {
         return Ok(engine::SetupReport::default());
@@ -957,7 +966,9 @@ fn follow_target(cfg: &Config, before: Option<&str>, now: Option<&str>) -> Optio
 /// salida que se edita). La interfaz recibe `devices` con la salida a la que se ha pasado (o nada) y refresca.
 fn devices_changed(app: &AppHandle) {
     let st = app.state::<AppState>();
-    let now = engine::default_device(false);
+    // Si Windows pasa al manos libres (una llamada), se sigue ajustando el estéreo de esos cascos
+    let pairs = engine::bt_pairs();
+    let now = engine::default_device(false).map(|n| pairs.iter().find(|(hf, _)| hf.eq_ignore_ascii_case(&n)).map_or(n, |(_, s)| s.clone()));
     let before = std::mem::replace(&mut *st.default_output(), now.clone());
     let cfg = st.cfg().clone();
     let target = follow_target(&cfg, before.as_deref(), now.as_deref());
@@ -984,7 +995,7 @@ fn check_engine(app: &AppHandle) -> bool {
         let live = *st.live();
         let _ = apply(&cfg, &live);
     }
-    let broken: Vec<engine::Device> = engine::status().devices.into_iter().filter(|d| d.broken.is_some() && !d.unplugged).collect();
+    let broken: Vec<engine::Device> = engine::status().devices.into_iter().filter(|d| d.broken.is_some() && !d.unplugged && !d.hands_free).collect();
     let (fresh, changed) = {
         let mut seen = st.broken();
         let ids: Vec<String> = broken.iter().map(|d| d.id.clone()).collect();

@@ -47,7 +47,8 @@ export default {
     on: 'Active',
     off: 'Not enabled',
     none: 'No audio output connected',
-    broken: 'Needs repair'
+    broken: 'Needs repair',
+    calls: 'also on calls'
   },
   diag: {
     title: "Why can't I hear it?",

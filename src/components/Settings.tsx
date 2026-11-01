@@ -4,7 +4,7 @@ import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Tra
 import type { LucideIcon } from 'lucide-react'
 import { api, type Accent, type AppRule, type Config, type Device, type OpenApp } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { allPresets, currentCurve, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, currentCurve, listed, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
@@ -277,14 +277,15 @@ function Engine(): React.JSX.Element {
   const engine = useStore((s) => s.engine)
   const step = useStore((s) => s.setup)
   const devices = engine?.devices ?? []
-  const outputs = devices.filter((d) => !d.input)
+  const outputs = devices.filter((d) => !d.input && listed(d))
   const inputs = devices.filter((d) => d.input)
   const [want, setWant] = useState<Record<string, boolean>>({})
   useEffect(() => setWant(Object.fromEntries(devices.map((d) => [d.id, d.enabled]))), [engine]) // eslint-disable-line react-hooks/exhaustive-deps
   // Uno roto que sigue marcado se vuelve a activar (es lo que lo repara)
   const enable = devices.filter((d) => want[d.id] && (!d.enabled || d.broken)).map((d) => d.id)
   const disable = devices.filter((d) => !want[d.id] && d.enabled).map((d) => d.id)
-  const hint = (d: Device): string => [d.device, d.default && t('device.default'), d.broken && t('device.broken')].filter(Boolean).join(' · ')
+  const hint = (d: Device): string =>
+    [d.device, d.default && t('device.default'), d.pair && t('device.calls'), d.broken && t('device.broken')].filter(Boolean).join(' · ')
   return (
     <>
       <h3>{t('settings.cats.engine')}</h3>

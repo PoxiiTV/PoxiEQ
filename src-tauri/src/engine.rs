@@ -65,6 +65,8 @@ const DEVICE_NAME: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},6";
 /// Ruta del nodo de dispositivo: «{1}.USB\VID_…», «{1}.BTHENUM\…»
 const DEVICE_PATH: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},2";
 const COMBINED_DEVICE: &str = "{b3f8fa53-0004-438e-9003-51a46e139bfc},41";
+/// Aparato físico al que pertenece el endpoint (PKEY_Device_ContainerId)
+const CONTAINER_ID: &str = "{8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c},2";
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -94,6 +96,10 @@ pub struct Device {
     pub input: bool,
     /// PoxiEQ lo activó, pero ya no pasa por el motor
     pub broken: Option<Broken>,
+    /// Cascos Bluetooth: la otra mitad (del estéreo, su manos libres; del manos libres, su estéreo)
+    pub pair: Option<String>,
+    /// Manos libres de unos cascos Bluetooth (mono, para llamadas): va con su estéreo, no se ajusta aparte
+    pub hands_free: bool,
 }
 
 /// Por qué un dispositivo que PoxiEQ activó ya no pasa por el motor. Se arregla con el mismo paso elevado
@@ -124,7 +130,7 @@ pub fn status() -> Status {
     Status {
         installed,
         config_dir: app.and_then(|k| k.get_value("ConfigPath").ok()),
-        devices: [devices(false, installed), devices(true, installed)].concat(),
+        devices: with_pairs([devices(false, installed), devices(true, installed)].concat()),
         dsp: DspState::Missing,
     }
 }
@@ -151,6 +157,8 @@ fn devices(input: bool, installed: bool) -> Vec<Device> {
             Some(Device {
                 default: default.as_deref().is_some_and(|d| d.eq_ignore_ascii_case(&id)),
                 broken: broken(&id, enabled, installed),
+                pair: None,
+                hands_free: false,
                 enabled,
                 name: props.get_value(CONNECTION_NAME).unwrap_or_default(),
                 device: props.get_value(DEVICE_NAME).unwrap_or_default(),
@@ -162,6 +170,61 @@ fn devices(input: bool, installed: bool) -> Vec<Device> {
         .collect();
     list.sort_by(|a, b| b.default.cmp(&a.default).then(a.unplugged.cmp(&b.unplugged)).then(a.name.cmp(&b.name)));
     list
+}
+
+/// Junta el estéreo y el manos libres de cada casco Bluetooth. Se activan y se reparan juntos, así que si el
+/// manos libres se rompe, se ve en el estéreo (que es el que sale en la interfaz).
+fn with_pairs(mut list: Vec<Device>) -> Vec<Device> {
+    for (hf, stereo) in bt_pairs() {
+        let hf_broken = list.iter().find(|d| d.id == hf).and_then(|d| d.broken);
+        for d in list.iter_mut() {
+            if d.id == hf {
+                d.pair = Some(stereo.clone());
+                d.hands_free = true;
+            } else if d.id == stereo {
+                d.pair = Some(hf.clone());
+                d.broken = d.broken.or(hf_broken);
+            }
+        }
+    }
+    list
+}
+
+/// Cascos Bluetooth: el estéreo (A2DP, nodo en BTHENUM) y el manos libres (BTHHFENUM) son dos salidas del mismo
+/// aparato (mismo ContainerId). Devuelve `(manos libres, estéreo)`.
+pub fn bt_pairs() -> Vec<(String, String)> {
+    let Ok(root) = hklm().open_subkey(RENDER) else { return vec![] };
+    let (mut stereo, mut hf) = (vec![], vec![]);
+    for id in root.enum_keys().flatten() {
+        let Ok(props) = root.open_subkey(format!(r"{id}\Properties")) else { continue };
+        let (Ok(path), Ok(container)) = (props.get_value::<String, _>(DEVICE_PATH), props.get_raw_value(CONTAINER_ID)) else { continue };
+        let path = path.to_ascii_uppercase();
+        if path.contains(".BTHENUM") {
+            stereo.push((id, container.bytes));
+        } else if path.contains(".BTHHFENUM") {
+            hf.push((id, container.bytes));
+        }
+    }
+    pair_up(&hf, &stereo)
+}
+
+fn pair_up(hf: &[(String, Vec<u8>)], stereo: &[(String, Vec<u8>)]) -> Vec<(String, String)> {
+    hf.iter().filter_map(|(h, c)| stereo.iter().find(|(_, s)| s == c).map(|(s, _)| (h.clone(), s.clone()))).collect()
+}
+
+/// Añade a la lista la otra mitad de cada casco Bluetooth (activar o quitar uno es activar o quitar los dos)
+pub fn with_bt_halves(ids: &[String]) -> Vec<String> {
+    let pairs = bt_pairs();
+    let mut out = ids.to_vec();
+    for id in ids {
+        for (hf, stereo) in &pairs {
+            let other = if id.eq_ignore_ascii_case(stereo) { hf } else if id.eq_ignore_ascii_case(hf) { stereo } else { continue };
+            if !out.iter().any(|o| o.eq_ignore_ascii_case(other)) {
+                out.push(other.clone());
+            }
+        }
+    }
+    out
 }
 
 /// Clave del dispositivo en el registro: en `Render` si es una salida y, si no, en `Capture`
@@ -991,6 +1054,14 @@ mod tests {
         process_replacing: usize,
         process_double_replacing: Process,
         future: [u8; 56],
+    }
+
+    #[test]
+    fn cascos_bluetooth_por_aparato() {
+        let c = |b: u8| vec![b; 16];
+        let hf = [("{h1}".to_string(), c(1)), ("{h2}".to_string(), c(9))];
+        let st = [("{s2}".to_string(), c(2)), ("{s1}".to_string(), c(1))];
+        assert_eq!(pair_up(&hf, &st), vec![("{h1}".to_string(), "{s1}".to_string())]);
     }
 
     #[test]

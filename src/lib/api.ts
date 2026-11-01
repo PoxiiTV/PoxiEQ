@@ -164,6 +164,10 @@ export interface Device {
   /** PoxiEQ lo activó, pero ya no pasa por el motor: se lo quitó Windows o el driver (`lost`, o falta el motor)
    *  o tiene las «mejoras de audio» desactivadas (`enhancements`). Se arregla activándolo otra vez. */
   broken: 'lost' | 'enhancements' | null
+  /** Cascos Bluetooth: la otra mitad (del estéreo, su manos libres; del manos libres, su estéreo) */
+  pair: string | null
+  /** Manos libres de unos cascos Bluetooth: va con su estéreo (misma curva) y no sale aparte */
+  handsFree: boolean
 }
 
 export interface EngineStatus {

@@ -1,7 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Power, Speaker, Square, X } from 'lucide-react'
 import { keyLabel } from '../lib/hotkeys'
-import { currentOutput, dismiss, setState, updateConfig, useStore, works } from '../lib/store'
+import { currentOutput, dismiss, setState, updateConfig, listed, useStore, works } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Logo } from './ui'
@@ -15,7 +15,7 @@ export function TitleBar(): React.JSX.Element {
   const device = useStore((s) => currentOutput(s))
   const off = useStore((s) => !!s.config?.bypass)
   const hotkey = useStore((s) => s.config?.hotkeys.bypass)
-  const list = (devices ?? []).filter((d) => !d.input && !d.unplugged)
+  const list = (devices ?? []).filter((d) => !d.input && !d.unplugged && listed(d))
   const toggle = (): void => {
     const cfg = useStore.getState().config
     if (cfg) updateConfig({ bypass: !cfg.bypass })
@@ -42,7 +42,7 @@ export function TitleBar(): React.JSX.Element {
             label={t('titlebar.device')}
             options={list.map((d) => ({
               value: d.id,
-              label: `${d.name} · ${d.device}${d.default ? ` (${t('device.default')})` : ''}`
+              label: `${d.name} · ${d.device}${d.default ? ` (${t('device.default')})` : ''}${d.pair ? ` (${t('device.calls')})` : ''}`
             }))}
             onChange={(id) => {
               setState({ selected: null })
