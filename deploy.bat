@@ -6,7 +6,7 @@ cd /d "%~dp0"
 
 echo.
 echo  ==========================================================
-echo    PoxiEQ  -  instalador (auto-update) + portable
+echo    PoxiEQ  -  instalador (auto-update)
 echo  ==========================================================
 echo.
 
@@ -79,14 +79,13 @@ mkdir "%OUT%"
 
 copy /y "%NSIS%\PoxiEQ_%VER%_x64-setup.exe" "%OUT%\PoxiEQ-Setup-%VER%.exe" >nul || goto :fin_error
 copy /y "%NSIS%\PoxiEQ_%VER%_x64-setup.exe.sig" "%OUT%\PoxiEQ-Setup-%VER%.exe.sig" >nul || goto :fin_error
-copy /y "%EXE%" "%OUT%\PoxiEQ-Portable-%VER%.exe" >nul || goto :fin_error
 call node scripts\latest.mjs "%OUT%"
 if errorlevel 1 goto :fin_error
 
 REM --------------------------------------------------------------------- pesos
 echo.
 echo  ==========================================================
-echo    Listo:  %OUT%   (sube los 4 archivos a la release v%VER%)
+echo    Listo:  %OUT%   (sube los 3 archivos a la release v%VER%)
 echo  ==========================================================
 powershell -NoProfile -Command "Get-ChildItem '%OUT%' | ForEach-Object { '   {0,-34} {1,8:N2} MB' -f $_.Name, ($_.Length/1MB) }"
 echo.

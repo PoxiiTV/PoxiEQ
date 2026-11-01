@@ -4,15 +4,18 @@
 
 <br />
 
-![Versión](https://img.shields.io/badge/versión-0.1.0-e879f9?style=flat-square)
-![Plataforma](https://img.shields.io/badge/Windows-10%20%7C%2011-34d399?style=flat-square)
-![Latencia](https://img.shields.io/badge/latencia-cero-ffd25f?style=flat-square)
-![Motor](https://img.shields.io/badge/motor-Equalizer%20APO-38bdf8?style=flat-square)
-![Licencia](https://img.shields.io/badge/licencia-PolyForm%20Noncommercial-ff6ec7?style=flat-square)
+![Versión](https://img.shields.io/badge/versión-0.1.0-e879f9?style=flat-square&labelColor=1a0f1d)
+![Plataforma](https://img.shields.io/badge/Windows%2010%20%7C%2011-64%20bits-5fd7ff?style=flat-square&labelColor=1a0f1d)
+![Latencia](https://img.shields.io/badge/latencia-cero-ffd25f?style=flat-square&labelColor=1a0f1d)
+![Sin reiniciar](https://img.shields.io/badge/sin-reiniciar-34d399?style=flat-square&labelColor=1a0f1d)
+![Licencia](https://img.shields.io/badge/licencia-PolyForm%20Noncommercial-ff6b5f?style=flat-square&labelColor=1a0f1d)
 
 **🇪🇸 Español** · [🇬🇧 English](#-english)
 
-### Ecualiza todo el sonido de Windows. Sin reiniciar, sin retraso, sin líos.
+### Ecualiza **todo** el sonido de Windows.
+
+Juegos, música, Discord, el navegador: todo pasa por tu curva, **sin retraso** y **sin reiniciar el PC**.
+Con medidores de estudio, dinámica, altavoces virtuales para cascos, corrección de sala y tu micrófono procesado.
 
 </div>
 
@@ -20,118 +23,377 @@
 
 ## 🎯 Qué es
 
-**PoxiEQ** es un ecualizador para la salida de audio de Windows: lo que ajustes se aplica a **todo** lo que suena
-(juegos, música, Discord, el navegador…). Mueves los puntos de la curva con el ratón y el sonido cambia al instante.
+**PoxiEQ** es un ecualizador para la salida de audio de Windows hecho por y para gente que escucha con atención:
+lo que ajustes se aplica a **todo lo que suena** en el PC. Arrastras un punto de la curva y el sonido cambia al
+instante, mientras ves el espectro y el volumen real (LUFS, true peak) de lo que está sonando.
 
-Por dentro usa **Equalizer APO**, un motor gratuito y de código abierto que se mete dentro del audio de Windows.
-PoxiEQ lo instala y lo activa por ti con un clic, **sin reiniciar el PC**.
+No es un «potenciador de sonido» de los que lo colorean todo: con todo apagado **no toca ni un bit**, y cada cosa
+que enciendes hace exactamente lo que dice. Por dentro usa un motor de audio de código abierto que se mete dentro
+de Windows; PoxiEQ lo instala, lo activa y lo esconde por ti con **un clic**.
 
-## ✨ Qué hace
+## 📸 Así se ve
 
-- 🧭 **Todo por tareas**: un menú lateral con **Ecualizador, Sonido, Cascos, Estudio, Sala y Micrófono**. Cada cosa está donde se usa y nada se esconde en «ajustes avanzados».
-- ⚡ **Activación en un clic**: descarga el motor oficial (comprobando su firma SHA-256), lo instala en silencio y lo engancha a tus cascos o altavoces. Solo se corta el sonido un par de segundos.
-- 🖱️ **Curva en vivo**: arrastra los puntos, la **rueda** cambia el ancho (Q), **doble clic** añade una banda y el **clic derecho** cambia el tipo (campana, graves, agudos, paso bajo, paso alto).
-- 📊 **Analizador en tiempo real** detrás de la curva: espectro con retención de picos o espectrograma, para ver lo que suena mientras ecualizas.
-- 🎧 **Buscar mis cascos**: escribe tu modelo y aplica su corrección de [AutoEq](https://autoeq.app) (miles de modelos), con graves y agudos a tu gusto. También vale pegar el archivo.
-- 🛡️ **Preamp automático**: baja lo justo para que la curva nunca sature.
-- 🔊 **Dinámica**: sonoridad igualada con un clic (Streaming −14 LUFS, Fuerte −9, Noche −23 para pelis sin molestar), limitador que nunca pasa de −1 dBTP, compresor, graves con una rueda (hasta +10 dB limpios y sin saturar nunca), armónicos de graves, realce de diálogos y crossfeed para cascos. Con todo apagado no toca ni un bit.
-- 🎧 **Altavoces virtuales**: con cascos, el estéreo suena desde dos altavoces delante de ti (±30°) en vez de dentro de la cabeza. Convolución con respuestas de cabeza reales (KEMAR del MIT) e intensidad regulable sin cambiar el timbre del centro.
-- 🎛️ **Herramientas de estudio**: mono, side, solo L / R, invertir polaridad e intercambiar canales, exactos y sin colorear. Y simulación de móvil, portátil, coche, auriculares de botón, tele y altavoz bluetooth para comprobar cómo traduce una mezcla. Momentáneas: se ve un aviso mientras están puestas y se quitan al cerrar la ventana.
-- 👂 **Test de audición**: mide en cada oído tu umbral en 10 frecuencias y crea el preset «Mi audición», una compensación suave (también por oído). No es una prueba médica.
-- 📐 **Corrección de sala** para altavoces: con un micrófono en tu sitio, barridos senoidales logarítmicos en varias posiciones, media, suavizado de 1/3 o 1/6 de octava y hasta 10 filtros calculados solos, sobre todo de corte (las subidas tienen tope y nunca por debajo de donde llega el altavoz). Por defecto solo corrige los graves (hasta 300–500 Hz) y el objetivo puede ser plano o con caída hacia agudos.
-- 🎙️ **Micrófono**: EQ propio, **puerta de ruido** y **compresor** antes de que el sonido llegue a Discord, OBS o cualquier app, con su medidor de entrada (y la raya del umbral de la puerta). Su propio bypass: el atajo del EQ no le quita la puerta en mitad de un directo.
-- 🎚️ **Presets**: Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos. Sonido, Cascos, Estudio y Micrófono tienen también sus propios presets. Compártelos con un código para pegar en un chat o como archivo `.poxieq` (arrástralo a la ventana para importarlo: va solo a su sección).
-- 🎯 **Preset por aplicación**: Spotify → Música, tu juego → Pasos. Cambia solo cuando la app pasa a primer plano y vuelve al que tenías al salir.
-- ⌨️ **Atajos a tu gusto**: bypass y nueve presets, cada uno con la combinación que grabes en Ajustes (por defecto `Ctrl+Alt+Num 0…9`). Rechaza las que chocan con AltGr (que te dejarían sin `€ | @ # ~`), las que no llevan modificador y las repetidas, y avisa si otro programa ya tiene esa combinación. Con un aviso en pantalla que no roba el foco.
-- ↩️ **Deshacer y rehacer** (`Ctrl+Z` / `Ctrl+Y`) de la curva y la dinámica: un arrastre entero es un solo paso.
-- 🔌 **Cada dispositivo con lo suyo**: cada salida guarda su curva, su Sonido, sus Cascos y el último preset de cada sección; cada micrófono, su EQ, puerta y compresor. Estudio empieza siempre en estéreo normal.
-- 🔁 **Sigue la salida de Windows**: al conectar unos cascos o un altavoz Bluetooth y pasar Windows a él, PoxiEQ cambia solo a su EQ (se puede apagar en Ajustes).
-- ⏯️ **Bypass** con **Ctrl+Alt+Num 0** (o el atajo que elijas) desde cualquier sitio, también en juegos, y desde la bandeja.
-- 🎨 Temas oscuro y claro, 7 colores, español e inglés. Arranca con Windows si quieres y se actualiza solo.
+<table>
+  <tr>
+    <td width="50%"><img src=".assets/eq.png" alt="Ecualizador con el analizador en vivo y los medidores" /></td>
+    <td width="50%"><img src=".assets/sonido.png" alt="Sonido: sonoridad y cadena de dinámica" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>🎚️ La curva en vivo, con el espectro de lo que suena y los medidores siempre a la vista</sub></td>
+    <td align="center"><sub>🔊 Sonoridad en un clic y la cadena nivelador → compresor → limitador</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src=".assets/cascos.png" alt="Cascos: buscador de AutoEq, crossfeed y altavoces virtuales" /></td>
+    <td width="50%"><img src=".assets/estudio.png" alt="Estudio: monitorización y simulaciones" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>🎧 Busca tus cascos entre más de 8.000 modelos, crossfeed y altavoces virtuales</sub></td>
+    <td align="center"><sub>🎛️ Mono, side, solo L / R, polaridad y cómo suena tu mezcla en un móvil o un coche</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src=".assets/sala.png" alt="Corrección de sala con el resultado medido" /></td>
+    <td width="50%"><img src=".assets/atajos.png" alt="Atajos de teclado a tu gusto" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>📐 Corrección de sala: mide tus altavoces y corta las resonancias de graves</sub></td>
+    <td align="center"><sub>⌨️ Bypass y nueve presets con el atajo que tú grabes</sub></td>
+  </tr>
+</table>
 
 ## 📥 Descarga
 
-Busca la última versión en **[Releases](../../releases/latest)**:
+### **[⬇️ Descargar PoxiEQ 0.1.0 para Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.1.0/PoxiEQ-Setup-0.1.0.exe)**
 
-| Archivo | Para qué |
-|---|---|
-| `PoxiEQ-Setup-x.y.z.exe` | **Instalador**. Se actualiza solo |
-| `PoxiEQ-Portable-x.y.z.exe` | **Portable**. Se ejecuta tal cual |
+Instalador de 2,5 MB: crea los accesos, arranca con Windows si quieres y **se actualiza solo**.
 
-Requiere Windows 10 u 11 (64 bits). La primera vez, PoxiEQ te ofrece instalar el motor: Windows pedirá permiso de
-administrador una sola vez.
+Todas las versiones y sus novedades, en [**Releases**](https://github.com/PoxiiTV/PoxiEQ/releases).
+Requiere **Windows 10 u 11 de 64 bits**.
 
-> 🛡️ Si Windows dice «Windows protegió tu PC», pulsa **Más información → Ejecutar de todas formas**. Sale con
-> todos los programas nuevos sin firma de pago; el código está aquí mismo.
+> 🛡️ La primera vez, PoxiEQ te ofrece activar su motor en tu salida de audio: Windows pide **permiso de
+> administrador una vez** (el motor vive dentro del audio de Windows) y el sonido se corta un par de segundos.
+> **No hace falta reiniciar.**
 
-## ❓ Preguntas
-
-- **¿Si cierro PoxiEQ deja de ecualizar?** No. El motor sigue aplicando la última curva. PoxiEQ solo hace falta para cambiarla.
-- **¿Cómo lo quito de un dispositivo?** Ajustes → Motor → apaga esa salida → Aplicar. Se restauran los efectos originales del dispositivo.
-- **¿Cómo proceso mi micrófono?** Ve a la sección **Micrófono**, elige tu micro en su selector y actívalo. Lo que ajustes ahí lo reciben todas las apps que usen ese micrófono.
-- **¿Y si ya usaba Equalizer APO?** PoxiEQ guarda tu `config.txt` como `config.antes-de-poxieq.txt` antes de tocarlo.
-
-## 🛠️ Desarrollo
-
-Tauri 2 + Rust (motor, registro de Windows, analizador) y React + TypeScript (la interfaz).
-
-- `start.bat`: modo desarrollo.
-- `deploy.bat`: instalador firmado + portable + `latest.json` en `deploy-hosting\`.
-- `cd src-tauri && cargo test`, `cd dsp && cargo test` y `npm test`: tests del núcleo (también las reglas por app, las herramientas de estudio, los atajos y la corrección de sala: deconvolución, suavizado y ajuste de filtros), de la dinámica, la puerta de ruido y los altavoces virtuales (PoxiDSP, el plugin propio que carga el motor), de la matemática del EQ y del test de audición, del historial de deshacer y del formato para compartir presets.
-- `node scripts/hrir.mjs <elev0/H0e030a.wav>`: regenera `dsp/src/hrir.rs` desde el `diffuse.zip` del KEMAR del MIT.
-
-## 📄 Licencia
-
-[PolyForm Noncommercial 1.0.0](LICENSE): úsalo, estúdialo y modifícalo gratis para uso no comercial.
-Equalizer APO es de Jonas Thedering (GPL-2.0); las respuestas de cabeza de los altavoces virtuales son del KEMAR del
-MIT Media Lab (Bill Gardner y Keith Martin); ver [THIRD-PARTY.md](THIRD-PARTY.md).
+> ℹ️ Como el `.exe` aún no está firmado, Windows puede enseñar el aviso azul de SmartScreen:
+> **Más información → Ejecutar de todas formas.**
 
 ---
 
-## 🇬🇧 English
+## 🌟 Lo que lo hace distinto
 
-**PoxiEQ** is an equalizer for the Windows audio output: whatever you set applies to **everything** that plays
-(games, music, Discord, the browser…). Drag the points on the curve and the sound changes instantly.
+| | |
+|---|---|
+| ⚡ **Sin reiniciar, en un clic** | Descarga el motor oficial (comprobando su huella SHA-256), lo instala en silencio y lo engancha a tus cascos o altavoces. Lo de siempre con estos ecualizadores era reiniciar el PC; aquí solo se corta el sonido un par de segundos |
+| 🎯 **Fiel por defecto** | Con todo apagado es **bit-transparente**. Preamp automático para que la curva nunca sature, limitador de **true peak** y nada que se encienda solo: el loudness automático viene **apagado** |
+| 📊 **Medidores de estudio, siempre a la vista** | Pico y RMS por canal, **LUFS** momentáneo, corto e integrado, **true peak**, correlación de fase y la reducción de ganancia del compresor y el limitador. Miden **después** del EQ: lo que de verdad oyes |
+| 🎧 **Tus cascos, corregidos** | Escribe tu modelo y aplica su corrección de [AutoEq](https://github.com/jaakkopasanen/AutoEq) (más de 8.000 modelos) sin salir de la app, con graves y agudos a tu gusto |
+| 🔁 **Cada dispositivo con lo suyo** | Cada salida guarda su curva, su Sonido y sus Cascos; cada micrófono, lo suyo. Conectas unos cascos o un altavoz Bluetooth, Windows cambia a él y **PoxiEQ cambia solo a su EQ** |
+| 🎙️ **Tu micrófono, procesado** | EQ, **puerta de ruido** y **compresor** antes de que llegue a Discord, OBS o cualquier app |
+| 🙈 **Limpio** | El motor no deja accesos en el menú Inicio ni avisos suyos. Se quita desde **Ajustes → Motor** o al desinstalar PoxiEQ, y devuelve cada dispositivo a como estaba |
 
-Under the hood it uses **Equalizer APO**, a free and open source engine that plugs into Windows audio. PoxiEQ installs
-and enables it for you with one click, **without restarting your PC**.
+## 🎚️ Ecualizador
 
-### ✨ Features
+| | |
+|---|---|
+| 🖱️ **Curva en vivo** | Arrastra los puntos, la **rueda** cambia el ancho (Q), **doble clic** añade una banda y el **clic derecho** cambia el tipo: campana, graves, agudos, paso bajo y paso alto |
+| 📈 **Analizador detrás de la curva** | Espectro con retención de picos o **espectrograma**, para ver lo que suena mientras ecualizas |
+| 🅰️🅱️ **A/B igualado** | Compara con y sin tu curva al **mismo volumen**: sin que «más alto» parezca «mejor» |
+| 🗂️ **Presets** | Plano, Más graves, Voz clara, Pasos (gaming), Cine, Música, Noche… y los tuyos |
+| ↩️ **Deshacer** | `Ctrl+Z` / `Ctrl+Y` en la curva y la dinámica: un arrastre entero es un solo paso |
 
-- 🧭 **Organized by task**: a side menu with **Equalizer, Sound, Headphones, Studio, Room and Microphone**. Everything is where you use it and nothing hides in "advanced settings".
-- ⚡ **One-click setup**: downloads the official engine (checking its SHA-256), installs it silently and hooks it to your headphones or speakers. The sound only cuts out for a couple of seconds.
-- 🖱️ **Live curve**: drag the points, the **wheel** changes the width (Q), **double click** adds a band and **right click** changes the type (bell, low shelf, high shelf, low pass, high pass).
-- 📊 **Real-time analyzer** behind the curve: spectrum with peak hold, or spectrogram.
-- 🎧 **Find my headphones**: type your model and apply its [AutoEq](https://autoeq.app) correction (thousands of models), with bass and treble to taste. Pasting the file works too.
-- 🛡️ **Automatic preamp** so the curve never clips.
-- 🔊 **Dynamics**: one-click loudness matching (Streaming −14 LUFS, Loud −9, Night −23 for movies without disturbing anyone), a limiter that never goes above −1 dBTP, compressor, bass on a knob (up to +10 dB, clean and never clipping), bass harmonics, dialogue enhancer and headphone crossfeed. With everything off it doesn't touch a single bit.
-- 🎧 **Virtual speakers**: on headphones, stereo plays from two speakers in front of you (±30°) instead of inside your head. Convolution with real head responses (MIT KEMAR) and adjustable intensity without changing the tone of the center.
-- 🎛️ **Studio tools**: mono, side, solo L / R, polarity invert and channel swap, exact and uncolored. Plus phone, laptop, car, earbuds, TV and Bluetooth speaker simulation to check how a mix translates. Momentary: a notice shows while they're on and they turn off when you close the window.
-- 👂 **Hearing test**: measures your threshold at 10 frequencies in each ear and creates the "My hearing" preset, a gentle compensation (per ear too). Not a medical test.
-- 📐 **Room correction** for speakers: with a microphone at your seat, logarithmic sine sweeps at several positions, averaging, 1/3 or 1/6 octave smoothing and up to 10 automatically fitted filters, mostly cuts (boosts are capped and never below where the speaker reaches). By default it only corrects the bass (up to 300–500 Hz) and the target can be flat or tilted towards the treble.
-- 🎙️ **Microphone**: its own EQ, **noise gate** and **compressor** before the sound reaches Discord, OBS or any app, with an input meter (showing the gate threshold). Its own bypass: the EQ shortcut won't remove the gate in the middle of a stream.
-- 🎚️ **Presets**: Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own. Sound, Headphones, Studio and Microphone have their own presets too. Share them as a code to paste in a chat or as a `.poxieq` file (drop it on the window to import it: it goes to its own section).
-- 🎯 **Preset per app**: Spotify → Music, your game → Footsteps. It switches when the app comes to the foreground and goes back to yours when you leave.
-- ⌨️ **Your own shortcuts**: bypass and nine presets, each with the combination you record in Settings (by default `Ctrl+Alt+Num 0…9`). It rejects those that clash with AltGr (which would cost you `€ | @ # ~`), those without a modifier and duplicates, and warns if another program already owns the combination. With an on-screen notice that doesn't steal focus.
-- ↩️ **Undo and redo** (`Ctrl+Z` / `Ctrl+Y`) for the curve and dynamics: a whole drag is a single step.
-- 🔌 **Each device keeps its own**: every output keeps its curve, Sound, Headphones settings and the last preset of each section; every microphone its EQ, gate and compressor. Studio always starts in normal stereo.
-- 🔁 **Follows the Windows output**: when you plug in headphones or a Bluetooth speaker and Windows switches to it, PoxiEQ switches to its EQ (you can turn this off in Settings).
-- ⏯️ **Bypass** with **Ctrl+Alt+Num 0** (or the shortcut you choose) from anywhere, games included, and from the tray.
-- 🎨 Dark and light themes, 7 colors, Spanish and English. Optional start with Windows, updates itself.
+## 🔊 Sonido
 
-### 📥 Download
+| | |
+|---|---|
+| 🎛️ **Sonoridad en un clic** | **Natural** (sin procesar), **Streaming** (−14 LUFS, como Spotify o YouTube), **Fuerte** (−9) y **Noche** (−23: explosiones bajas y diálogos claros) |
+| ⛓️ **Cadena de dinámica** | Nivelador por LUFS → compresor → limitador de true peak (nunca pasa de −1 dBTP), con todos los controles a la vista |
+| 🔈 **Graves** | Una rueda: hasta **+10 dB** de graves limpios y con pegada, sin embarrar los medios y con protección para que nunca sature |
+| ✨ **Realces** | Armónicos de graves (para altavoces pequeños) y realce de diálogos |
 
-Get the latest version from **[Releases](../../releases/latest)**: `PoxiEQ-Setup-x.y.z.exe` (installer, updates
-itself) or `PoxiEQ-Portable-x.y.z.exe` (portable). Windows 10 or 11, 64-bit.
+## 🎧 Cascos
 
-### ❓ FAQ
+| | |
+|---|---|
+| 🔎 **Buscar mis cascos** | Corrección de AutoEq para tu modelo; también vale pegar su archivo |
+| 🔀 **Crossfeed** | Un poco de cada canal al otro oído, como con altavoces: menos fatiga en sesiones largas |
+| 🔊 **Altavoces virtuales** | El estéreo suena desde dos altavoces delante de ti (±30°) en vez de dentro de la cabeza. Respuestas de cabeza reales (KEMAR del MIT), con la intensidad regulable sin cambiar el timbre del centro |
+| 👂 **Test de audición** | Mide tu umbral en 10 frecuencias en cada oído y crea «Mi audición», una compensación suave por oído. No es una prueba médica |
 
-- **Does the EQ stop if I close PoxiEQ?** No. The engine keeps applying the last curve; PoxiEQ is only needed to change it.
-- **How do I remove it from a device?** Settings → Engine → turn that output off → Apply. The device's original effects are restored.
-- **How do I process my microphone?** Go to the **Microphone** section, pick your mic in its selector and enable it. What you set there is what every app using that microphone receives.
+## 🎛️ Estudio
+
+| | |
+|---|---|
+| 🎚️ **Monitorización** | Mono, side, solo L / R, invertir la polaridad de cada canal e intercambiarlos. Exactos y sin colorear, también con el EQ apagado |
+| 📱 **Simular otros sistemas** | Móvil, portátil, coche, auriculares de botón, tele y altavoz Bluetooth, para comprobar cómo traduce una mezcla. Nunca suben el volumen |
+| ⏱️ **Momentáneo** | Mientras algo de Estudio está puesto se ve un aviso, y al cerrar la ventana todo vuelve a estéreo normal |
+
+## 📐 Sala y 🎙️ Micrófono
+
+| | |
+|---|---|
+| 📐 **Corrección de sala** | Con un micrófono en tu sitio: barridos en varias posiciones, media y hasta 10 filtros calculados solos, sobre todo de **corte** (las subidas tienen tope y nunca por debajo de donde llega tu altavoz). Unos 3 minutos |
+| 🎙️ **Micrófono** | Su EQ, puerta de ruido con histéresis y compresor, con medidor de entrada y la raya del umbral de la puerta. Tiene **su propio bypass**: el atajo del EQ no te quita la puerta en mitad de un directo |
+
+## ☕ Para el día a día
+
+| | |
+|---|---|
+| 🎯 **Preset por aplicación** | Spotify → Música, tu juego → Pasos. Cambia cuando la app pasa a primer plano y vuelve al que tenías al salir |
+| ⌨️ **Atajos a tu gusto** | Bypass y nueve presets, cada uno con la combinación que grabes (por defecto `Ctrl+Alt+Num 0…9`). Rechaza las que chocan con **AltGr** (que te dejarían sin `€ \| @ # ~`) y avisa si otro programa ya tiene esa combinación. Con un aviso en pantalla que **no roba el foco** al juego |
+| 🗂️ **Presets en todas las secciones** | Sonido, Cascos, Estudio y Micrófono tienen sus propios presets, y cada salida recuerda el último de cada una |
+| 🔗 **Compartir** | Cualquier preset como **código** para pegar en un chat o como archivo **`.poxieq`**: arrástralo a la ventana y va a su sección |
+| 🧺 **Bandeja** | Bypass y cambio de preset sin abrir la ventana. Al cerrar, PoxiEQ se queda en la bandeja; aunque lo cierres del todo, el EQ sigue sonando |
+| 🎨 **A tu gusto** | Tema oscuro y claro, 7 colores, español e inglés |
+
+## 🔄 Siempre al día
+
+- **Se actualiza solo:** busca versiones nuevas al abrir y cada 6 horas, se descarga, se instala en unos segundos **y se vuelve a abrir**.
+- **Novedades dentro de la app** después de cada actualización.
+
+## 🛡️ Privacidad y seguridad
+
+- 🏠 **Todo pasa en tu PC.** No hay cuentas ni servidor propio, y no envía nada de lo que escuchas.
+- 🌐 Solo se conecta para tres cosas: comprobar si hay versión nueva (GitHub), bajar la lista y las correcciones de AutoEq (GitHub, con caché semanal) y descargar el motor la primera vez (su web oficial).
+- ✅ El motor se comprueba **por su huella SHA-256** antes de instalarlo, y las actualizaciones de PoxiEQ van **firmadas**.
+- 🔐 Lo que necesita administrador (activar el motor en un dispositivo) va en un paso aparte con **un solo aviso** de Windows, y nunca sin pulsar el botón.
+
+## ❓ Preguntas
+
+- **¿Si cierro PoxiEQ deja de ecualizar?** No. El motor sigue aplicando lo último que pusiste; PoxiEQ solo hace falta para cambiarlo.
+- **¿Cómo lo quito de un dispositivo?** **Ajustes → Motor**: apaga esa salida y aplica. Vuelven sus efectos originales.
+- **¿Y para quitarlo del todo?** Desinstala PoxiEQ: se lleva el motor con él. O quita solo el motor desde **Ajustes → Motor**.
+- **¿Cómo proceso mi micrófono?** En **Micrófono**, elige tu micro y actívalo. Lo que ajustes ahí lo reciben todas las apps que lo usen.
+- **¿Y si ya usaba Equalizer APO?** PoxiEQ guarda tu `config.txt` como `config.antes-de-poxieq.txt` antes de tocarlo.
+
+---
+
+## 🔧 Compilar
+
+Necesitas [Node.js](https://nodejs.org) 20 o superior y [Rust](https://rustup.rs) (stable, MSVC).
+
+```bat
+start.bat       :: modo desarrollo
+deploy.bat      :: instalador firmado + latest.json en deploy-hosting\
+```
+
+Antes de cada commit:
+
+```bat
+cd src-tauri && cargo test && cargo clippy --all-targets
+cd dsp && cargo test && cargo clippy --all-targets
+npx tsc --noEmit -p . && npm test && npm run check
+```
+
+Variables del `.env` (no se sube nunca al repo):
+
+| Variable | Qué es |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Clave privada que firma las actualizaciones (la pública va en `tauri.conf.json`) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Su contraseña |
+
+### 🗃️ Estructura
+
+```
+src-tauri/src/   la app (Rust): motor y registro de Windows, analizador y medidores, AutoEq, atajos,
+                 preset por app, aviso en pantalla y corrección de sala
+dsp/             PoxiDSP: el plugin propio que carga el motor (dinámica, graves, crossfeed,
+                 altavoces virtuales, puerta de ruido)
+src/             la interfaz (React + TypeScript), textos en ES/EN
+scripts/         icono, latest.json, comprobación de textos y respuestas de cabeza (KEMAR)
+```
+
+## 🙏 Gracias a
+
+- **[Equalizer APO](https://sourceforge.net/projects/equalizerapo/)** de Jonas Thedering: el motor que hace sonar todo. PoxiEQ no lo incluye ni lo modifica: descarga su instalador oficial.
+- **[AutoEq](https://github.com/jaakkopasanen/AutoEq)** de Jaakko Pasanen: las correcciones de cascos.
+- **[KEMAR del MIT Media Lab](https://sound.media.mit.edu/resources/KEMAR.html)** (Bill Gardner y Keith Martin): las respuestas de cabeza de los altavoces virtuales.
+- **[bs2b](https://bs2b.sourceforge.net/)** de Boris Mikhaylov: los filtros del crossfeed.
+- **[Tauri](https://tauri.app)**, **[ebur128](https://github.com/sdroege/ebur128)** y **[lucide](https://lucide.dev)**.
+
+Todos los créditos y licencias en [`THIRD-PARTY.md`](THIRD-PARTY.md).
+
+## 📜 Licencia
+
+[PolyForm Noncommercial 1.0.0](LICENSE).
+
+Puedes **usarlo, estudiarlo, modificarlo y compartirlo libremente** mientras el uso **no sea comercial**: uso
+personal, aprendizaje, proyectos de aficionado, centros educativos y organizaciones sin ánimo de lucro.
+
+¿Tu propia versión? Adelante, pero **cambia el nombre, el logo y la clave de firma** por los tuyos.
+
+Para cualquier otra cosa: **alexissjuarezz10@gmail.com**
+
+<div align="center">
+
+---
+
+hecho con 💜 por [poxi](https://github.com/PoxiiTV)
+
+</div>
+
+---
+
+<div align="center">
+
+# 🇬🇧 English
+
+### Equalize **all** of Windows' sound.
+
+Games, music, Discord, the browser: everything goes through your curve, **with zero latency** and **without
+restarting your PC**. With studio meters, dynamics, virtual speakers for headphones, room correction and your
+microphone processed.
+
+</div>
+
+## 🎯 What it is
+
+**PoxiEQ** is an equalizer for the Windows audio output, made by and for people who listen carefully: whatever you
+set applies to **everything that plays** on the PC. Drag a point on the curve and the sound changes instantly, while
+you see the spectrum and the real loudness (LUFS, true peak) of what's playing.
+
+It isn't a "sound enhancer" that colors everything: with everything off it **doesn't touch a single bit**, and each
+thing you turn on does exactly what it says. Under the hood it uses an open source audio engine that plugs into
+Windows; PoxiEQ installs, enables and hides it for you in **one click**.
+
+## 📥 Download
+
+### **[⬇️ Download PoxiEQ 0.1.0 for Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.1.0/PoxiEQ-Setup-0.1.0.exe)**
+
+A 2.5 MB installer: creates shortcuts, optionally starts with Windows and **updates itself**.
+
+Every version and its changes, in [**Releases**](https://github.com/PoxiiTV/PoxiEQ/releases).
+Requires **64-bit Windows 10 or 11**.
+
+> 🛡️ The first time, PoxiEQ offers to enable its engine on your audio output: Windows asks for **administrator
+> permission once** (the engine lives inside Windows audio) and the sound cuts out for a couple of seconds.
+> **No restart needed.**
+
+> ℹ️ The `.exe` isn't signed yet, so Windows may show the blue SmartScreen warning:
+> **More info → Run anyway.**
+
+## 🌟 What makes it different
+
+| | |
+|---|---|
+| ⚡ **No restart, one click** | Downloads the official engine (checking its SHA-256 hash), installs it silently and hooks it to your headphones or speakers. These equalizers used to need a PC restart; here the sound only cuts out for a couple of seconds |
+| 🎯 **Faithful by default** | With everything off it's **bit-transparent**. Automatic preamp so the curve never clips, a **true peak** limiter and nothing that turns itself on: automatic loudness comes **off** |
+| 📊 **Studio meters, always visible** | Per-channel peak and RMS, momentary, short-term and integrated **LUFS**, **true peak**, phase correlation and the compressor and limiter gain reduction. They measure **after** the EQ: what you actually hear |
+| 🎧 **Your headphones, corrected** | Type your model and apply its [AutoEq](https://github.com/jaakkopasanen/AutoEq) correction (over 8,000 models) without leaving the app, with bass and treble to taste |
+| 🔁 **Each device keeps its own** | Every output keeps its curve, Sound and Headphones settings; every microphone, its own. Plug in headphones or a Bluetooth speaker, Windows switches to it and **PoxiEQ switches to its EQ** |
+| 🎙️ **Your microphone, processed** | EQ, **noise gate** and **compressor** before it reaches Discord, OBS or any app |
+| 🙈 **Clean** | The engine leaves no Start menu shortcuts or notifications of its own. Remove it from **Settings → Engine** or by uninstalling PoxiEQ, and every device goes back to how it was |
+
+## 🎚️ Equalizer
+
+| | |
+|---|---|
+| 🖱️ **Live curve** | Drag the points, the **wheel** changes the width (Q), **double click** adds a band and **right click** changes the type: bell, low shelf, high shelf, low pass and high pass |
+| 📈 **Analyzer behind the curve** | Spectrum with peak hold or **spectrogram**, to see what's playing while you EQ |
+| 🅰️🅱️ **Level-matched A/B** | Compare with and without your curve at **the same volume**, so "louder" doesn't pass for "better" |
+| 🗂️ **Presets** | Flat, More bass, Clear voice, Footsteps (gaming), Cinema, Music, Night… and your own |
+| ↩️ **Undo** | `Ctrl+Z` / `Ctrl+Y` for the curve and dynamics: a whole drag is a single step |
+
+## 🔊 Sound
+
+| | |
+|---|---|
+| 🎛️ **One-click loudness** | **Natural** (unprocessed), **Streaming** (−14 LUFS, like Spotify or YouTube), **Loud** (−9) and **Night** (−23: quiet explosions, clear dialogue) |
+| ⛓️ **Dynamics chain** | LUFS leveler → compressor → true peak limiter (never above −1 dBTP), with every control in sight |
+| 🔈 **Bass** | One knob: up to **+10 dB** of clean, punchy bass that doesn't muddy the mids, protected so it never clips |
+| ✨ **Enhancers** | Bass harmonics (for small speakers) and dialogue enhancer |
+
+## 🎧 Headphones
+
+| | |
+|---|---|
+| 🔎 **Find my headphones** | AutoEq correction for your model; pasting its file works too |
+| 🔀 **Crossfeed** | A bit of each channel into the other ear, like speakers: less fatigue in long sessions |
+| 🔊 **Virtual speakers** | Stereo plays from two speakers in front of you (±30°) instead of inside your head. Real head responses (MIT KEMAR), with adjustable intensity that doesn't change the tone of the center |
+| 👂 **Hearing test** | Measures your threshold at 10 frequencies in each ear and creates "My hearing", a gentle per-ear compensation. Not a medical test |
+
+## 🎛️ Studio
+
+| | |
+|---|---|
+| 🎚️ **Monitoring** | Mono, side, solo L / R, per-channel polarity invert and channel swap. Exact and uncolored, even with the EQ off |
+| 📱 **Simulate other systems** | Phone, laptop, car, earbuds, TV and Bluetooth speaker, to check how a mix translates. They never raise the volume |
+| ⏱️ **Momentary** | While anything in Studio is on a notice shows, and closing the window puts everything back to normal stereo |
+
+## 📐 Room and 🎙️ Microphone
+
+| | |
+|---|---|
+| 📐 **Room correction** | With a microphone at your seat: sweeps at several positions, averaging and up to 10 automatically fitted filters, mostly **cuts** (boosts are capped and never below where your speaker reaches). About 3 minutes |
+| 🎙️ **Microphone** | Its own EQ, a noise gate with hysteresis and a compressor, with an input meter showing the gate threshold. It has **its own bypass**: the EQ shortcut won't remove the gate in the middle of a stream |
+
+## ☕ Everyday
+
+| | |
+|---|---|
+| 🎯 **Preset per app** | Spotify → Music, your game → Footsteps. It switches when the app comes to the foreground and goes back to yours when you leave |
+| ⌨️ **Your own shortcuts** | Bypass and nine presets, each with the combination you record (by default `Ctrl+Alt+Num 0…9`). It rejects those that clash with **AltGr** (which would cost you `€ \| @ # ~`) and warns if another program already owns the combination. With an on-screen notice that **doesn't steal focus** from your game |
+| 🗂️ **Presets in every section** | Sound, Headphones, Studio and Microphone have their own presets, and each output remembers the last one of each |
+| 🔗 **Sharing** | Any preset as a **code** to paste in a chat or as a **`.poxieq`** file: drop it on the window and it goes to its section |
+| 🧺 **Tray** | Bypass and preset switching without opening the window. Closing keeps PoxiEQ in the tray; even if you quit it, the EQ keeps playing |
+| 🎨 **Your style** | Dark and light themes, 7 colors, Spanish and English |
+
+## 🔄 Always up to date
+
+- **Updates itself:** it checks for new versions on launch and every 6 hours, downloads, installs in a few seconds **and reopens**.
+- **What's new inside the app** after each update.
+
+## 🛡️ Privacy and security
+
+- 🏠 **Everything happens on your PC.** No accounts, no server of its own, and nothing about what you listen to is sent anywhere.
+- 🌐 It only connects for three things: checking for a new version (GitHub), fetching the AutoEq list and corrections (GitHub, cached weekly) and downloading the engine the first time (its official site).
+- ✅ The engine is checked **by its SHA-256 hash** before installing, and PoxiEQ updates are **signed**.
+- 🔐 What needs administrator rights (enabling the engine on a device) runs as a separate step with **a single** Windows prompt, and never without pressing the button.
+
+## ❓ FAQ
+
+- **Does the EQ stop if I close PoxiEQ?** No. The engine keeps applying your last settings; PoxiEQ is only needed to change them.
+- **How do I remove it from a device?** **Settings → Engine**: turn that output off and apply. Its original effects come back.
+- **And to remove it completely?** Uninstall PoxiEQ: it takes the engine with it. Or remove just the engine from **Settings → Engine**.
+- **How do I process my microphone?** In **Microphone**, pick your mic and enable it. What you set there is what every app using it receives.
 - **I already used Equalizer APO.** PoxiEQ saves your `config.txt` as `config.antes-de-poxieq.txt` before touching it.
 
-### 📄 License
+## 🔧 Building
 
-[PolyForm Noncommercial 1.0.0](LICENSE). Equalizer APO is by Jonas Thedering (GPL-2.0); the virtual speakers' head
-responses are from the MIT Media Lab KEMAR (Bill Gardner and Keith Martin); see [THIRD-PARTY.md](THIRD-PARTY.md).
+You need [Node.js](https://nodejs.org) 20 or newer and [Rust](https://rustup.rs) (stable, MSVC).
+
+```bat
+start.bat       :: development mode
+deploy.bat      :: signed installer + latest.json in deploy-hosting\
+```
+
+Before every commit: `cargo test` and `cargo clippy --all-targets` in `src-tauri` and `dsp`, then
+`npx tsc --noEmit -p .`, `npm test` and `npm run check`. The `.env` variables are listed in the Spanish section above
+(it's never committed).
+
+## 🙏 Thanks to
+
+- **[Equalizer APO](https://sourceforge.net/projects/equalizerapo/)** by Jonas Thedering: the engine that makes it all sound. PoxiEQ doesn't bundle or modify it: it downloads the official installer.
+- **[AutoEq](https://github.com/jaakkopasanen/AutoEq)** by Jaakko Pasanen: the headphone corrections.
+- **[MIT Media Lab KEMAR](https://sound.media.mit.edu/resources/KEMAR.html)** (Bill Gardner and Keith Martin): the head responses behind the virtual speakers.
+- **[bs2b](https://bs2b.sourceforge.net/)** by Boris Mikhaylov: the crossfeed filters.
+- **[Tauri](https://tauri.app)**, **[ebur128](https://github.com/sdroege/ebur128)** and **[lucide](https://lucide.dev)**.
+
+All credits and licenses in [`THIRD-PARTY.md`](THIRD-PARTY.md).
+
+## 📜 License
+
+[PolyForm Noncommercial 1.0.0](LICENSE).
+
+You can **use, study, modify and share it freely** as long as it's **not commercial**: personal use, learning,
+hobby projects, schools and non-profits.
+
+Your own version? Go ahead, but **change the name, logo and signing key** to your own.
+
+For anything else: **alexissjuarezz10@gmail.com**
+
+<div align="center">
+
+---
+
+made with 💜 by [poxi](https://github.com/PoxiiTV)
+
+</div>

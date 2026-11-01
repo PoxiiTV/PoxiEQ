@@ -29,5 +29,5 @@
 
 ## Otras / Others
 
-Tauri, React, Zustand, lucide-react, Nunito (Fontsource), winreg, windows-rs, reqwest, sha2 y serde, cada una con su
+Tauri, React, Zustand, lucide-react, ebur128, Nunito (Fontsource), winreg, windows-rs, reqwest, sha2 y serde, cada una con su
 licencia MIT / Apache-2.0 / ISC / OFL. / Each under its own MIT / Apache-2.0 / ISC / OFL license.
