@@ -781,6 +781,76 @@ unsafe fn listen(name: &HSTRING, tx: mpsc::Sender<String>) {
     }
 }
 
+// -------------------------------------------------------------- diagnóstico
+
+/// «¿Por qué no suena?»: lo que se ve sin admin ni sonido. El resto (activado, roto, bypass, salida
+/// predeterminada, PoxiDSP viejo) ya lo sabe la interfaz.
+#[derive(Serialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnosis {
+    /// Audio espacial de Windows (Windows Sonic, Dolby Atmos, DTS) activo: se salta el post-mix
+    pub spatial: bool,
+    /// Una app la usa en modo exclusivo: lo que suena por ella no pasa por el motor
+    pub exclusive: bool,
+    /// Silenciada en Windows
+    pub muted: bool,
+    /// Efectos del fabricante que siguen en la cadena (los APO originales que guardamos al activar)
+    pub vendor: Vec<String>,
+}
+
+pub fn diagnose(id: &str) -> Diagnosis {
+    let input = is_input(id);
+    let mut d = Diagnosis { vendor: vendor_effects(id), ..Default::default() };
+    let id = id.to_string();
+    // COM multihilo en un hilo propio (ver `default_device`)
+    let (spatial, exclusive, muted) = std::thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return (false, false, false) };
+        let Ok(dev) = en.GetDevice(&endpoint_id(&id, input)) else { return (false, false, false) };
+        // Sin audio espacial la salida no da objetos dinámicos (o ni deja crear el cliente)
+        let spatial = !input && dev.Activate::<ISpatialAudioClient>(CLSCTX_ALL, None).and_then(|c| c.GetMaxDynamicObjectCount()).is_ok_and(|n| n > 0);
+        // Solo se prepara el flujo (sin arrancarlo): no suena nada
+        let exclusive = open_stream(&en, &id, input).is_err_and(|e| e.code() == AUDCLNT_E_DEVICE_IN_USE);
+        let muted = dev
+            .Activate::<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume>(CLSCTX_ALL, None)
+            .and_then(|v| v.GetMute())
+            .is_ok_and(|m| m.as_bool());
+        (spatial, exclusive, muted)
+    })
+    .join()
+    .unwrap_or_default();
+    (d.spatial, d.exclusive, d.muted) = (spatial, exclusive, muted);
+    d
+}
+
+/// Nombres de los efectos originales que el motor sigue llamando (`PreMixChild`/`PostMixChild`)
+fn vendor_effects(id: &str) -> Vec<String> {
+    let Ok(child) = hklm().open_subkey(format!(r"{CHILD}\{id}")) else { return vec![] };
+    let mut names: Vec<String> = ["PreMixChild", "PostMixChild"]
+        .iter()
+        .filter_map(|v| child.get_value::<String, _>(v).ok())
+        .filter(|clsid| !clsid.is_empty())
+        .map(|clsid| apo_name(&clsid))
+        .collect();
+    names.dedup();
+    names
+}
+
+fn apo_name(clsid: &str) -> String {
+    hklm()
+        .open_subkey(format!(r"SOFTWARE\Classes\AudioEngine\AudioProcessingObjects\{clsid}"))
+        .and_then(|k| k.get_value::<String, _>("FriendlyName"))
+        .or_else(|_| hklm().open_subkey(format!(r"SOFTWARE\Classes\CLSID\{clsid}")).and_then(|k| k.get_value::<String, _>("")))
+        .ok()
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| clsid.to_string())
+}
+
+/// Configuración de sonido de Windows (para quitar el audio espacial)
+pub fn open_sound_settings() {
+    let _ = Command::new("explorer").arg("ms-settings:sound").spawn();
+}
+
 // --------------------------------------------------------------- configuración
 
 const INCLUDE: &str = "Include: poxieq.txt\r\n";

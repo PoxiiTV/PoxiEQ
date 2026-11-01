@@ -4,7 +4,7 @@ import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Tra
 import type { LucideIcon } from 'lucide-react'
 import { api, type Accent, type AppRule, type Config, type Device, type OpenApp } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { allPresets, currentCurve, refreshEngine, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, currentCurve, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
@@ -290,6 +290,11 @@ function Engine(): React.JSX.Element {
       <h3>{t('settings.cats.engine')}</h3>
       <Row title={t('settings.engineStatus')} hint={engine?.installed ? t('settings.engineOn') : t('settings.engineOff')}>
         <span className={`chip ${engine?.installed ? 'ok' : ''}`}>{engine?.installed ? t('device.on') : t('device.off')}</span>
+      </Row>
+      <Row title={t('diag.title')} hint={t('diag.rowHint')}>
+        <button className="btn btn-sm" onClick={() => setState({ modal: 'diagnose' })}>
+          {t('diag.btn')}
+        </button>
       </Row>
       <h3 style={{ marginTop: 22 }}>{t('settings.devices')}</h3>
       <div className="hint" style={{ marginBottom: 6 }}>

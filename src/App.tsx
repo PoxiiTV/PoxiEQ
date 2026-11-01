@@ -16,6 +16,7 @@ import { Meter } from './components/Meter'
 import { Setup } from './components/Setup'
 import { ImportModal, SavePresetModal, ShareModal, UpdateModal, WhatsNew } from './components/Overlays'
 import { HearingModal } from './components/Hearing'
+import { DiagnoseModal } from './components/Diagnose'
 import { ContextMenu } from './components/ContextMenu'
 
 export function App(): React.JSX.Element {
@@ -68,6 +69,7 @@ export function App(): React.JSX.Element {
       <ImportModal />
       <HearingModal />
       <RoomModal />
+      <DiagnoseModal />
       <UpdateModal />
       <WhatsNew />
       <ContextMenu />

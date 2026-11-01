@@ -31,7 +31,7 @@ interface State {
   page: Page
   /** Herramientas de estudio puestas ahora (momentáneas, no van a la configuración) */
   studio: Studio
-  modal: 'savePreset' | 'import' | 'hearing' | 'room' | null
+  modal: 'savePreset' | 'import' | 'hearing' | 'room' | 'diagnose' | null
   /** Sección del preset que se guarda (ventana de guardar) */
   saveFor: ShareSection
   /** Preset que se está compartiendo, con su código (ventana de compartir abierta) */

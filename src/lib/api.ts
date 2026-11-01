@@ -174,6 +174,14 @@ export interface EngineStatus {
   dsp: 'missing' | 'old' | 'current'
 }
 
+/** «¿Por qué no suena?»: lo que Rust ve sin permisos ni sonido */
+export interface Diagnosis {
+  spatial: boolean
+  exclusive: boolean
+  muted: boolean
+  vendor: string[]
+}
+
 export interface Check {
   id: string
   preMix: boolean
@@ -238,6 +246,9 @@ export const api = {
   engineStatus: () => invoke<EngineStatus>('engine_status'),
   engineSetup: (enable: string[], disable: string[]) => invoke<SetupReport>('engine_setup', { enable, disable }),
   engineUninstall: () => invoke<void>('engine_uninstall'),
+  engineDiagnose: (device: string) => invoke<Diagnosis>('engine_diagnose', { device }),
+  engineCheck: (device: string) => invoke<Check>('engine_check', { device }),
+  soundSettings: () => invoke<void>('sound_settings'),
   autoeqIndex: (force = false) => invoke<AutoEqEntry[]>('autoeq_index', { force }),
   autoeqFetch: (path: string) => invoke<string>('autoeq_fetch', { path }),
   autostartGet: () => invoke<boolean>('autostart_get'),

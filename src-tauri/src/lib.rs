@@ -498,6 +498,38 @@ async fn engine_status() -> engine::Status {
     })
 }
 
+/// «¿Por qué no suena?» de un dispositivo (sin admin ni sonido)
+#[tauri::command]
+async fn engine_diagnose(device: String) -> Res<engine::Diagnosis> {
+    if !engine::is_device_id(&device) {
+        return Err(problem("engine.badDevice", None));
+    }
+    tauri::async_runtime::spawn_blocking(move || engine::diagnose(&device)).await.map_err(|_| problem("engine.setup", None))
+}
+
+/// Comprobación a fondo: ¿carga el motor de verdad? (abre el dispositivo y escucha su tubería; un UAC)
+#[tauri::command]
+async fn engine_check(device: String) -> Res<engine::Check> {
+    if !engine::is_device_id(&device) {
+        return Err(problem("engine.badDevice", None));
+    }
+    let args = vec!["check".to_string(), device];
+    let out = tauri::async_runtime::spawn_blocking(move || engine::run_elevated(&args))
+        .await
+        .map_err(|_| problem("engine.setup", None))?
+        .map_err(|e| problem("engine.elevation", e))?;
+    let report: engine::SetupReport = serde_json::from_str(&out).map_err(|_| problem("engine.setup", None))?;
+    match report.error {
+        Some(e) => Err(problem("engine.setup", e)),
+        None => report.checks.into_iter().next().ok_or_else(|| problem("engine.setup", None)),
+    }
+}
+
+#[tauri::command]
+fn sound_settings() {
+    engine::open_sound_settings();
+}
+
 /// Instala el motor si falta (descarga + hash) y PoxiDSP si falta o es de otra versión, activa/quita
 /// dispositivos, reinicia el audio y comprueba. Un solo aviso de UAC.
 #[tauri::command]
@@ -1106,6 +1138,9 @@ pub fn run() {
             config_set,
             engine_status,
             engine_setup,
+            engine_diagnose,
+            engine_check,
+            sound_settings,
             engine_uninstall,
             autoeq_index,
             autoeq_fetch,

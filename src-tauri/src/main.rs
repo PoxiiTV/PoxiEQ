@@ -10,6 +10,13 @@ fn main() {
         if flag == "--elevated" {
             let report = if rest.first().is_some_and(|c| c == "uninstall") {
                 engine::SetupReport { error: engine::uninstall().err(), checks: vec![] }
+            } else if rest.first().is_some_and(|c| c == "check") {
+                // Solo GUID de dispositivo: es lo único que se acepta en la copia elevada
+                let ids: Vec<String> = rest[1..].iter().filter(|id| engine::is_device_id(id)).cloned().collect();
+                match engine::check(&ids) {
+                    Ok(checks) => engine::SetupReport { error: None, checks },
+                    Err(e) => engine::SetupReport { error: Some(e), checks: vec![] },
+                }
             } else {
                 setup(rest)
             };
