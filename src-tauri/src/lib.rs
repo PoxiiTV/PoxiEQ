@@ -643,6 +643,7 @@ async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
         "wav" => &[("WAV", "*.wav")],
         "cal" => &[("Calibración", "*.cal;*.txt;*.frd"), ("*", "*.*")],
         "eq" => &[("EQ", "*.txt;*.json;*.req"), ("*", "*.*")],
+        "plugin" => &[("VST", "*.vst3;*.dll")],
         _ => return None,
     };
     let owner = app.get_webview_window("main").and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
@@ -1206,17 +1207,51 @@ async fn plugins_scan(app: AppHandle, force: bool) -> Res<ScanResult> {
         if let Ok(json) = serde_json::to_string(&all) {
             let _ = std::fs::write(&cache_path, json);
         }
-        let mut plugins: Vec<plughost::Found> = all.iter().flat_map(|c| c.found.clone()).collect();
-        plugins.sort_by_key(|p| p.name.to_lowercase());
-        // Las DLL que no son plugins (librerías de apoyo) no se cuentan como fallos
-        let failed = all
-            .into_iter()
-            .filter_map(|c| c.error.filter(|e| e != "no es un plugin VST2").map(|error| ScanFailure { path: c.path, error }))
-            .collect();
-        ScanResult { plugins, failed }
+        scan_result(all)
     })
     .await
     .map_err(|_| problem("plugins.scan", None))
+}
+
+fn scan_result(all: Vec<ScanCache>) -> ScanResult {
+    let mut plugins: Vec<plughost::Found> = all.iter().flat_map(|c| c.found.clone()).collect();
+    plugins.sort_by_key(|p| p.name.to_lowercase());
+    // Las DLL que no son plugins (librerías de apoyo) no se cuentan como fallos
+    let failed = all
+        .into_iter()
+        .filter_map(|c| c.error.filter(|e| e != "no es un plugin VST2").map(|error| ScanFailure { path: c.path, error }))
+        .collect();
+    ScanResult { plugins, failed }
+}
+
+/// Lo de la última búsqueda, sin cargar ningún plugin (al abrir la página no se busca nada solo)
+#[tauri::command]
+fn plugins_cached(app: AppHandle) -> ScanResult {
+    let all: Vec<ScanCache> = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .and_then(|d| std::fs::read_to_string(d.join("plugins.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    scan_result(all)
+}
+
+/// Un archivo elegido a mano (`.dll` de VST2 o `.vst3`): se carga en un proceso aparte y se dice qué trae
+#[tauri::command]
+async fn plugin_scan_file(path: String) -> Res<Vec<plughost::Found>> {
+    let lower = path.to_ascii_lowercase();
+    if !(lower.ends_with(".dll") || lower.ends_with(".vst3")) || !std::path::Path::new(&path).exists() {
+        return Err(problem("plugins.notPlugin", None));
+    }
+    let p = std::path::Path::new(&path);
+    if lower.ends_with(".dll") && !is_x64_dll(p) {
+        return Err(problem("plugins.x86", None));
+    }
+    tauri::async_runtime::spawn_blocking(move || scan_one(&path))
+        .await
+        .map_err(|_| problem("plugins.scan", None))?
+        .map_err(|e| problem("plugins.load", e))
 }
 
 /// Abre la ventana de edición de un plugin de la cadena de `device` (en un proceso aparte). Lo que se toca allí
@@ -1714,6 +1749,8 @@ pub fn run() {
             engine_setup,
             engine_diagnose,
             plugins_scan,
+            plugins_cached,
+            plugin_scan_file,
             plugin_edit,
             engine_check,
             sound_settings,

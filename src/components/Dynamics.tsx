@@ -125,7 +125,7 @@ function Balance(): React.JSX.Element {
         <span>{t('dsp.right')}</span>
         <b className="num">{b === 0 ? t('dsp.center') : `${b < 0 ? t('dsp.left') : t('dsp.right')} ${Math.abs(b).toFixed(1)} dB`}</b>
         <button className="btn btn-sm btn-ghost" disabled={b === 0} onClick={() => set(0)}>
-          {t('dsp.center')}
+          {t('dsp.centerBtn')}
         </button>
       </div>
       <small className="studio-hint">{t('dsp.balanceHint')}</small>

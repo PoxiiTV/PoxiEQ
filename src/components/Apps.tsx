@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AppWindow, LoaderCircle, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { api, type AppRule, type OpenApp, type Voice } from '../lib/api'
 import { currentCurve, listed, updateConfig, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Range, Select, type Option } from './controls'
-import { SectionHead } from './Dynamics'
+import { SectionHead, Slider } from './Dynamics'
 import { presetOptions } from './Settings'
 import { Switch } from './ui'
 
@@ -86,7 +86,9 @@ function AppPicker({ taken, onPick }: { taken: string[]; onPick: (a: OpenApp) =>
 function Rules(): React.JSX.Element {
   const t = useT()
   const cfg = useStore((s) => s.config!)
-  const outputs = useStore((s) => (s.engine?.devices ?? []).filter((d) => !d.input && listed(d)))
+  // El selector devuelve la lista tal cual: si filtrara dentro, cada lectura sería otra y React entraría en bucle
+  const devices = useStore((s) => s.engine?.devices)
+  const outputs = useMemo(() => (devices ?? []).filter((d) => !d.input && listed(d)), [devices])
   const rules = cfg.appRules
   const setRules = (appRules: AppRule[]): void => updateConfig({ appRules })
   const edit = (i: number, patch: Partial<AppRule>): void => setRules(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -129,8 +131,10 @@ function Duck(): React.JSX.Element {
           <b>{t('apps.duckOn')}</b>
           <small>{t('apps.duckAmount', { n: v.duckDb })}</small>
         </div>
-        <Range value={v.duckDb} min={3} max={30} step={1} label={t('apps.duckDb')} onChange={(duckDb) => set({ duckDb })} />
         <Switch on={v.duck} label={t('apps.duckOn')} onChange={(duck) => set({ duck })} />
+      </div>
+      <div className="duck-amount">
+        <Slider label={t('apps.duckDb')} value={v.duckDb} min={3} max={30} fmt={(n) => `−${n} dB`} onChange={(duckDb) => set({ duckDb })} />
       </div>
       <div className="voice-apps">
         <b>{t('apps.voiceApps')}</b>

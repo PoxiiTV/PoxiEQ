@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
-import { ArrowDown, ArrowUp, FolderPlus, LoaderCircle, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, TriangleAlert, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, FolderPlus, LoaderCircle, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, TriangleAlert, X } from 'lucide-react'
 import { api, type FoundPlugin, type PluginSlot, type ScanResult } from '../lib/api'
 import { go, pluginsDevice, pluginsSettings, setPlugins, setState, toast, updateConfig, useStore, works } from '../lib/store'
 import { errorText, useT } from '../i18n'
@@ -123,6 +123,7 @@ function Chain(): React.JSX.Element {
 }
 
 const MAX = 16
+const NO_FOLDERS: string[] = []
 
 function Library(): React.JSX.Element {
   const t = useT()
@@ -132,7 +133,7 @@ function Library(): React.JSX.Element {
   const [q, setQ] = useState('')
   const [folder, setFolder] = useState('')
   const list = useStore((s) => pluginsSettings(s).plugins)
-  const folders = useStore((s) => s.config?.pluginFolders ?? [])
+  const folders = useStore((s) => s.config?.pluginFolders ?? NO_FOLDERS)
 
   const scan = async (force: boolean): Promise<void> => {
     setBusy(true)
@@ -148,9 +149,36 @@ function Library(): React.JSX.Element {
       setProgress(null)
     }
   }
+  // Al abrir no se busca nada: solo lo de la última búsqueda (sin cargar ningún plugin)
   useEffect(() => {
-    if (!library) void scan(false)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!library)
+      void api.pluginsCached().then((r) => {
+        library = r
+        setLib(r)
+      })
+  }, [])
+  const [picking, setPicking] = useState(false)
+  /** El plugin que quieras, eligiendo su archivo (un VST3 puede traer varios: van a la lista para elegir) */
+  const fromFile = async (): Promise<void> => {
+    const path = await api.pickFile('plugin')
+    if (!path) return
+    setPicking(true)
+    try {
+      const found = await api.pluginScanFile(path)
+      if (found.length === 1) add(found[0])
+      else {
+        const known = library?.plugins ?? []
+        library = { plugins: [...found, ...known.filter((k) => !found.some((f) => f.path === k.path && f.cid === k.cid))], failed: library?.failed ?? [] }
+        setLib(library)
+        setQ(found[0]?.vendor ?? '')
+        toast(t('plugins.pickOne', { n: found.length }), 'info')
+      }
+    } catch (e) {
+      toast(errorText(e), 'err', { secs: 8 })
+    } finally {
+      setPicking(false)
+    }
+  }
 
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)
@@ -173,7 +201,11 @@ function Library(): React.JSX.Element {
   return (
     <section>
       <SectionHead n={2} label={t('plugins.library')}>
-        <button className="btn btn-sm" disabled={busy} onClick={() => void scan(true)}>
+        <button className="btn btn-sm btn-primary" disabled={picking || busy} onClick={() => void fromFile()}>
+          {picking ? <LoaderCircle size={14} className="spin" /> : <FileUp size={14} />}
+          {t('plugins.fromFile')}
+        </button>
+        <button className="btn btn-sm" disabled={busy || picking} onClick={() => void scan(false)} data-tip={t('plugins.scanTip')}>
           {busy ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
           {busy && progress ? t('plugins.scanning', { n: progress[0], t: progress[1] }) : t('plugins.scan')}
         </button>
@@ -183,8 +215,8 @@ function Library(): React.JSX.Element {
         <input className="input" value={q} placeholder={t('plugins.search')} onChange={(e) => setQ(e.target.value)} aria-label={t('plugins.search')} />
       </div>
       <div className="plugin-lib">
-        {!lib && busy && <div className="plugins-empty">{t('plugins.scanFirst')}</div>}
-        {lib && shown.length === 0 && <div className="plugins-empty">{t(lib.plugins.length ? 'plugins.noMatch' : 'plugins.none')}</div>}
+        {busy && !lib?.plugins.length && <div className="plugins-empty">{t('plugins.scanFirst')}</div>}
+        {!busy && lib && shown.length === 0 && <div className="plugins-empty">{t(lib.plugins.length ? 'plugins.noMatch' : 'plugins.none')}</div>}
         {shown.map((p) => (
           <button key={`${p.path}|${p.cid}`} className="plugin-found" onClick={() => add(p)} data-tip={p.path}>
             <Plus size={14} />
