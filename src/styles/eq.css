@@ -1627,6 +1627,49 @@
   min-width: 0;
 }
 
+/* ——— Convolución ——— */
+.ir-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ir-curve {
+  flex: none;
+  width: 200px;
+  height: 64px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.ir-curve line {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.ir-curve polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.ir-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ir-meta b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ir-meta small {
+  color: var(--muted);
+}
+.ir-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ——— Apps ——— */
 .app-rule .dd {
   min-width: 0;

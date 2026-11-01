@@ -8,6 +8,7 @@ import { Range, Select } from './controls'
 import { Preview } from './AutoEq'
 import { SectionHead, Slider } from './Dynamics'
 import { Modal } from './ui'
+import { ConvolutionCard } from './Convolution'
 
 /** Rango del nivel del barrido (dBFS de pico): el mismo tope que pone Rust (`room::MAX_LEVEL`) */
 const MIN_LEVEL = -40
@@ -69,6 +70,10 @@ export function RoomPage(): React.JSX.Element {
         ) : (
           <small className="studio-hint">{t('room.none', { d: output?.name ?? '' })}</small>
         )}
+      </section>
+      <section>
+        <SectionHead label={t('ir.section')} />
+        <ConvolutionCard hint={t('ir.roomHint')} />
       </section>
     </div>
   )

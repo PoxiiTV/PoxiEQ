@@ -4,6 +4,7 @@ mod autoeq;
 pub mod engine;
 mod eq;
 mod hotkeys;
+mod ir;
 mod osd;
 pub mod plughost;
 mod room;
@@ -150,6 +151,13 @@ impl Config {
         self.voice.sanitize();
     }
 
+    /// Archivos de respuesta al impulso que usa algún dispositivo
+    fn ir_files(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.per_device.values().filter_map(|d| d.ir.as_ref().map(|i| i.file.clone())).collect();
+        v.sort();
+        v
+    }
+
     /// Algún plugin del usuario encendido en algún dispositivo
     fn plugins_on(&self) -> bool {
         self.per_device.values().any(|d| d.plugins.iter().any(|p| p.on))
@@ -292,10 +300,17 @@ fn config_set(app: AppHandle, st: State<'_, AppState>, cfg: Config) -> Res<Confi
 fn store(app: &AppHandle, mut cfg: Config) -> Config {
     let st = app.state::<AppState>();
     cfg.sanitize();
-    let (tray, keys, rules, voice) = {
+    let (tray, keys, rules, voice, irs) = {
         let old = st.cfg();
-        (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone(), old.voice.clone())
+        (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone(), old.voice.clone(), old.ir_files())
     };
+    // Respuestas al impulso que ya no usa nadie: fuera de la carpeta del motor
+    if irs != cfg.ir_files() {
+        if let Some(dir) = engine::status().config_dir {
+            let used = cfg.ir_files();
+            ir::clean(std::path::Path::new(&dir), &used.iter().map(String::as_str).collect::<Vec<_>>());
+        }
+    }
     if voice != cfg.voice {
         sessions::update(&cfg.voice);
     }
@@ -556,6 +571,30 @@ async fn engine_check(device: String) -> Res<engine::Check> {
         Some(e) => Err(problem("engine.setup", e)),
         None => report.checks.into_iter().next().ok_or_else(|| problem("engine.setup", None)),
     }
+}
+
+/// Diálogo «Abrir» de Windows para un tipo de archivo (`wav`, `cal` o `eq`)
+#[tauri::command]
+async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
+    let filters: &[(&str, &str)] = match kind.as_str() {
+        "wav" => &[("WAV", "*.wav")],
+        "cal" => &[("Calibración", "*.cal;*.txt;*.frd"), ("*", "*.*")],
+        "eq" => &[("EQ", "*.txt;*.json;*.req"), ("*", "*.*")],
+        _ => return None,
+    };
+    let owner = app.get_webview_window("main").and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
+    tauri::async_runtime::spawn_blocking(move || ir::pick_file(owner, filters)).await.ok().flatten().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Carga una respuesta al impulso (la valida y la copia a la carpeta del motor). La interfaz la guarda en el
+/// dispositivo.
+#[tauri::command]
+async fn ir_load(path: String) -> Res<ir::Ir> {
+    let dir = engine::status().config_dir.ok_or_else(|| problem("ir.noEngine", None))?;
+    tauri::async_runtime::spawn_blocking(move || ir::load(std::path::Path::new(&path), std::path::Path::new(&dir)))
+        .await
+        .map_err(|_| problem("ir.read", None))?
+        .map_err(|code| problem(code, None))
 }
 
 #[tauri::command]
@@ -1491,6 +1530,8 @@ pub fn run() {
             plugin_edit,
             engine_check,
             sound_settings,
+            pick_file,
+            ir_load,
             engine_uninstall,
             autoeq_index,
             autoeq_fetch,

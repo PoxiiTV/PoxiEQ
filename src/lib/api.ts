@@ -93,6 +93,20 @@ export interface SectionPreset {
 
 export type SectionPresets = Record<Section, SectionPreset[]>
 
+/** Respuesta al impulso de una salida (convolución) */
+export interface Ir {
+  file: string
+  name: string
+  on: boolean
+  channels: number
+  rate: number
+  seconds: number
+  /** ms hasta el pico */
+  latency: number
+  /** dB del primer canal, de 20 Hz a 20 kHz en escala logarítmica */
+  response: number[]
+}
+
 /** Lo que recuerda cada dispositivo aparte de su curva */
 export interface DeviceSettings {
   /** En una salida, Sonido y Cascos; en un micrófono, su puerta y su compresor */
@@ -101,6 +115,8 @@ export interface DeviceSettings {
   presets: { sound: string | null; phones: string | null; mic: string | null; plugins: string | null }
   /** Plugins del usuario, en orden (después de la curva y antes de PoxiDSP) */
   plugins: PluginSlot[]
+  /** Respuesta al impulso, justo después de la curva */
+  ir: Ir | null
 }
 
 /** Atajos globales en el formato del registrador (`control+alt+Numpad0`); `null` = sin atajo */
@@ -305,6 +321,8 @@ export const api = {
   engineDiagnose: (device: string) => invoke<Diagnosis>('engine_diagnose', { device }),
   engineCheck: (device: string) => invoke<Check>('engine_check', { device }),
   soundSettings: () => invoke<void>('sound_settings'),
+  pickFile: (kind: 'wav' | 'cal' | 'eq') => invoke<string | null>('pick_file', { kind }),
+  irLoad: (path: string) => invoke<Ir>('ir_load', { path }),
   pluginsScan: (force: boolean) => invoke<ScanResult>('plugins_scan', { force }),
   pluginEdit: (device: string, id: string) => invoke<void>('plugin_edit', { device, id }),
   autoeqIndex: (force = false) => invoke<AutoEqEntry[]>('autoeq_index', { force }),

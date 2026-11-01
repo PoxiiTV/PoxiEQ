@@ -500,6 +500,17 @@ export default {
       empty: 'Guarda aquí tus cadenas de plugins para cambiar entre ellas con un clic.'
     }
   },
+  ir: {
+    section: 'Convolución',
+    title: 'Respuesta al impulso',
+    phonesHint: 'Carga un BRIR (HeSuVi, Impulcifer…) para que tus cascos suenen como una sala o unos altavoces medidos. Es una por salida (la misma que en Sala).',
+    roomHint: 'Carga el filtro FIR que exportes de REW o rePhase (WAV) para corregir la sala con fase incluida. Es uno por salida (el mismo que en Cascos).',
+    load: 'Cargar WAV',
+    replace: 'Cambiar',
+    remove: 'Quitar',
+    loaded: 'Respuesta al impulso cargada',
+    meta: '{c} canales · {r} kHz · {s} s · retardo {l} ms'
+  },
   apps: {
     rules: 'Por aplicación',
     rulesHint: 'Cuando una app pasa a primer plano suena su preset; al cambiar a otra sin regla vuelve el que tenías. Si tocas la curva mientras tanto, se queda la tuya.',
@@ -584,6 +595,13 @@ export default {
     'plugins.missing': 'Ese plugin ya no está en la cadena',
     'plugins.open': 'No se ha podido abrir la ventana del plugin',
     'plugins.scan': 'No se ha podido buscar plugins',
+    'ir.notWav': 'No es un archivo WAV válido',
+    'ir.format': 'Formato de WAV no admitido (usa PCM de 16/24/32 bits o flotante)',
+    'ir.channels': 'Como mucho 8 canales',
+    'ir.length': 'Como mucho 10 segundos',
+    'ir.read': 'No se ha podido leer el archivo',
+    'ir.write': 'No se ha podido copiar a la carpeta del motor',
+    'ir.noEngine': 'Instala antes el motor de PoxiEQ',
     'engine.setup': 'No se ha podido completar la activación',
     'engine.badDevice': 'Dispositivo no válido',
     'engine.uninstall': 'No se ha podido desinstalar el motor: {d}',

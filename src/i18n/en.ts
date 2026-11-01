@@ -500,6 +500,17 @@ export default {
       empty: 'Save your plugin chains here to switch between them with one click.'
     }
   },
+  ir: {
+    section: 'Convolution',
+    title: 'Impulse response',
+    phonesHint: 'Load a BRIR (HeSuVi, Impulcifer…) so your headphones sound like a measured room or speakers. One per output (the same as in Room).',
+    roomHint: 'Load the FIR filter you export from REW or rePhase (WAV) to correct the room, phase included. One per output (the same as in Headphones).',
+    load: 'Load WAV',
+    replace: 'Change',
+    remove: 'Remove',
+    loaded: 'Impulse response loaded',
+    meta: '{c} channels · {r} kHz · {s} s · delay {l} ms'
+  },
   apps: {
     rules: 'Per app',
     rulesHint: "When an app comes to the front its preset plays; switching to one without a rule brings back the one you had. If you touch the curve meanwhile, yours stays.",
@@ -584,6 +595,13 @@ export default {
     'plugins.missing': "That plugin isn't in the chain anymore",
     'plugins.open': "Couldn't open the plugin window",
     'plugins.scan': "Couldn't search for plugins",
+    'ir.notWav': "It's not a valid WAV file",
+    'ir.format': 'Unsupported WAV format (use 16/24/32-bit PCM or float)',
+    'ir.channels': 'At most 8 channels',
+    'ir.length': 'At most 10 seconds',
+    'ir.read': "Couldn't read the file",
+    'ir.write': "Couldn't copy it to the engine folder",
+    'ir.noEngine': 'Install the PoxiEQ engine first',
     'engine.setup': "Couldn't complete the setup",
     'engine.badDevice': 'Invalid device',
     'engine.uninstall': "Couldn't uninstall the engine: {d}",

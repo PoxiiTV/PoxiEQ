@@ -5,6 +5,7 @@ import { useT } from '../i18n'
 import { AutoEqPanel, Preview } from './AutoEq'
 import { HeadphoneCards, Install, SectionHead } from './Dynamics'
 import { SectionPresets } from './Presets'
+import { ConvolutionCard } from './Convolution'
 
 const NONE: Preset[] = []
 
@@ -27,6 +28,10 @@ export function PhonesPage(): React.JSX.Element {
       <section>
         <SectionHead n={3} label={t('hearing.title')} />
         <HearingCard />
+      </section>
+      <section>
+        <SectionHead n={4} label={t('ir.section')} />
+        <ConvolutionCard hint={t('ir.phonesHint')} />
       </section>
     </div>
   )

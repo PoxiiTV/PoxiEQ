@@ -341,6 +341,8 @@ pub struct DeviceSettings {
     pub presets: Picks,
     /// Plugins del usuario, en orden (después de la curva y antes de PoxiDSP)
     pub plugins: Vec<PluginSlot>,
+    /// Respuesta al impulso (convolución), justo después de la curva
+    pub ir: Option<crate::ir::Ir>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -581,6 +583,9 @@ pub fn sanitize_devices(devices: &mut HashMap<String, DeviceSettings>, presets: 
     for d in devices.values_mut() {
         d.dsp.sanitize();
         sanitize_plugins(&mut d.plugins);
+        if d.ir.as_mut().is_some_and(|ir| !ir.valid()) {
+            d.ir = None;
+        }
         let p = &mut d.presets;
         for (section, pick) in [(Section::Sound, &mut p.sound), (Section::Phones, &mut p.phones), (Section::Mic, &mut p.mic), (Section::Plugins, &mut p.plugins)] {
             if pick.as_deref().is_some_and(|id| !presets.has(section, id)) {
@@ -624,7 +629,7 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
     // Con curva, con algo de PoxiDSP encendido o con plugins; ordenados para que el archivo no cambie sin motivo
     let ids: std::collections::BTreeSet<&String> = curves
         .keys()
-        .chain(devices.iter().filter(|(_, d)| d.dsp.active() || d.plugins.iter().any(|p| p.on)).map(|(id, _)| id))
+        .chain(devices.iter().filter(|(_, d)| d.dsp.active() || d.plugins.iter().any(|p| p.on) || d.ir.as_ref().is_some_and(|i| i.on)).map(|(id, _)| id))
         .filter(|id| is_guid(id))
         .collect();
     let (inputs, outputs): (Vec<_>, Vec<_>) = ids
@@ -678,6 +683,10 @@ fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &DeviceSettings)],
         // Cada oído lo suyo, antes de PoxiDSP para que el limitador siga siendo lo último
         if let Some(e) = c.ears.as_ref().filter(|e| e.left.iter().chain(&e.right).any(|b| b.on)) {
             out.push_str(&format!("Channel: L\r\n{}Channel: R\r\n{}Channel: all\r\n", filters(&e.left), filters(&e.right)));
+        }
+        // La convolución en post-mix (en pre-mix el motor la estropea) y antes de los plugins y de PoxiDSP
+        if let Some(ir) = d.ir.as_ref().filter(|i| i.on) {
+            out.push_str(&crate::ir::line(ir));
         }
         plugin_lines(out, &d.plugins, "L R");
         if dsp.active() {
