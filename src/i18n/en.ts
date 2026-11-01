@@ -35,6 +35,7 @@ export default {
     now: 'Now playing through {d}'
   },
   tray: {
+    mini: 'Mini bar',
     open: 'Open PoxiEQ',
     bypass: 'EQ off (bypass)',
     quit: 'Quit',
@@ -543,6 +544,10 @@ export default {
     remove: 'Remove',
     loaded: 'Impulse response loaded',
     meta: '{c} channels · {r} kHz · {s} s · delay {l} ms'
+  },
+  mini: {
+    prev: 'Previous preset',
+    next: 'Next preset'
   },
   apps: {
     rules: 'Per app',

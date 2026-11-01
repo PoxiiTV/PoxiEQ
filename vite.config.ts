@@ -7,5 +7,5 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true, watch: { ignored: ['**/src-tauri/**'] } },
   // Dos páginas: la app y el aviso en pantalla (ventana `osd`, ligera: no carga React)
-  build: { target: 'es2022', chunkSizeWarningLimit: 1500, rollupOptions: { input: { main: 'index.html', osd: 'osd.html' } } }
+  build: { target: 'es2022', chunkSizeWarningLimit: 1500, rollupOptions: { input: { main: 'index.html', osd: 'osd.html', mini: 'mini.html' } } }
 })

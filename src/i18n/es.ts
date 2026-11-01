@@ -35,6 +35,7 @@ export default {
     now: 'Ahora suena por {d}'
   },
   tray: {
+    mini: 'Mini barra',
     open: 'Abrir PoxiEQ',
     bypass: 'EQ apagado (bypass)',
     quit: 'Salir',
@@ -542,6 +543,10 @@ export default {
     remove: 'Quitar',
     loaded: 'Respuesta al impulso cargada',
     meta: '{c} canales · {r} kHz · {s} s · retardo {l} ms'
+  },
+  mini: {
+    prev: 'Preset anterior',
+    next: 'Preset siguiente'
   },
   apps: {
     rules: 'Por aplicación',

@@ -45,7 +45,7 @@ export function App(): React.JSX.Element {
 
   // El menú de la bandeja y el aviso en pantalla, en el idioma de la app
   useEffect(() => {
-    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff'), broken: t('tray.broken'), repair: t('tray.repair'), pluginsOff: t('tray.pluginsOff'), game: t('apps.game'), chat: t('apps.chat') })
+    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff'), broken: t('tray.broken'), repair: t('tray.repair'), pluginsOff: t('tray.pluginsOff'), game: t('apps.game'), chat: t('apps.chat'), mini: t('tray.mini') })
   }, [lang, t])
 
   // Rust aplica presets sin la interfaz (atajos, bandeja, preset por app): se le mandan ya resueltos

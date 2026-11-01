@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE};
+use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE};
 
 /// Tamaño lógico de la ventana (el aviso va centrado dentro, con margen para la sombra y la animación)
 const W: f64 = 380.0;
@@ -37,6 +37,46 @@ struct Payload<'a> {
 pub fn init(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("osd") {
         let _ = w.set_ignore_cursor_events(true);
+    }
+}
+
+// ------------------------------------------------------------ mini-barra
+
+/// La mini-barra no se activa al pulsarla (`WS_EX_NOACTIVATE`): sus botones no le quitan el foco al juego
+pub fn init_mini(app: &AppHandle) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE};
+    if let Some(Ok(hwnd)) = app.get_webview_window("mini").map(|w| w.hwnd()) {
+        unsafe {
+            let h = HWND(hwnd.0);
+            SetWindowLongPtrW(h, GWL_EXSTYLE, GetWindowLongPtrW(h, GWL_EXSTYLE) | WS_EX_NOACTIVATE.0 as isize);
+        }
+    }
+}
+
+/// Enseña (arriba en el centro de la pantalla principal, la primera vez) o esconde la mini-barra sin activarla
+pub fn set_mini(app: &AppHandle, on: bool) {
+    let Some(win) = app.get_webview_window("mini") else { return };
+    let Ok(hwnd) = win.hwnd() else { return };
+    let h = HWND(hwnd.0);
+    if !on {
+        unsafe {
+            let _ = ShowWindow(h, SW_HIDE);
+        }
+        return;
+    }
+    static PLACED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let (mut x, mut y, mut flags) = (0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOSIZE);
+    if !PLACED.swap(true, Ordering::SeqCst) {
+        if let (Some(m), Ok(size)) = (app.primary_monitor().ok().flatten(), win.outer_size()) {
+            let area = m.work_area();
+            x = area.position.x + (area.size.width as i32 - size.width as i32) / 2;
+            y = area.position.y + (16.0 * m.scale_factor()).round() as i32;
+        }
+    } else {
+        flags |= windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE;
+    }
+    unsafe {
+        let _ = SetWindowPos(h, Some(HWND_TOPMOST), x, y, 0, 0, flags);
     }
 }
 

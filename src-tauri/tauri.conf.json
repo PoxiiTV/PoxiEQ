@@ -43,6 +43,23 @@
         "visible": false,
         "dragDropEnabled": false,
         "create": false
+      },
+      {
+        "label": "mini",
+        "url": "mini.html",
+        "title": "PoxiEQ",
+        "width": 420,
+        "height": 64,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "visible": false,
+        "dragDropEnabled": false,
+        "create": false
       }
     ],
     "security": {

@@ -760,6 +760,8 @@ pub struct TrayLabels {
     /// «Juego» y «Chat» (aviso del mezclador)
     game: String,
     chat: String,
+    /// «Mini barra»
+    mini: String,
 }
 
 #[tauri::command]
@@ -818,9 +820,16 @@ async fn autoeq_fit(req: AutoEqFit) -> Res<Vec<eq::Band>> {
 
 /// Analizador: solo con la ventana a la vista (la interfaz lo para al esconderse). De una salida mide lo que
 /// suena; de un micrófono, lo que llega de él ya procesado.
+/// Ventanas que quieren el analizador (la principal y la mini-barra) y de qué dispositivo: se para cuando
+/// ninguna lo quiere y, si quedan varias, manda la última que lo pidió
+static ANALYZER_WANT: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
 #[tauri::command]
-fn analyzer_start(app: AppHandle, device: String) {
+fn analyzer_start(app: AppHandle, window: tauri::Window, device: String) {
     if engine::is_device_id(&device) {
+        let mut want = ANALYZER_WANT.lock().unwrap_or_else(|e| e.into_inner());
+        want.retain(|(w, _)| w != window.label());
+        want.push((window.label().to_string(), device.clone()));
         let input = engine::is_input(&device);
         analyzer::start(app, device, input);
     }
@@ -950,8 +959,23 @@ async fn room_fit(app: AppHandle, mut params: room::FitParams) -> Res<room::Fit>
 }
 
 #[tauri::command]
-fn analyzer_stop() {
-    analyzer::stop();
+fn analyzer_stop(app: AppHandle, window: tauri::Window) {
+    let mut want = ANALYZER_WANT.lock().unwrap_or_else(|e| e.into_inner());
+    want.retain(|(w, _)| w != window.label());
+    match want.last() {
+        None => analyzer::stop(),
+        Some((_, device)) => analyzer::start(app, device.clone(), engine::is_input(device)),
+    }
+}
+
+/// Mini-barra: siempre encima, sin quitar el foco (desde la bandeja o su propio botón de cerrar)
+static MINI: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
+fn mini_set(app: AppHandle, on: bool) {
+    MINI.store(on, Ordering::SeqCst);
+    osd::set_mini(&app, on);
+    refresh_tray(&app);
 }
 
 #[tauri::command]
@@ -995,9 +1019,10 @@ fn refresh_tray(app: &AppHandle) {
         let sub = Submenu::with_items(app, &l.presets, !refs.is_empty(), &refs)?;
         // Si un plugin deja sin sonido, aquí se apagan todos sin abrir la ventana
         let off = MenuItem::with_id(app, "plugins_off", &l.plugins_off, true, None::<&str>)?;
+        let mini = CheckMenuItem::with_id(app, "mini", &l.mini, true, MINI.load(Ordering::SeqCst), None::<&str>)?;
         let sep = PredefinedMenuItem::separator(app)?;
         let quit = MenuItem::with_id(app, "quit", &l.quit, true, None::<&str>)?;
-        let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![&open, &by, &sub];
+        let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![&open, &by, &sub, &mini];
         if plugins {
             items.push(&off);
         }
@@ -1619,6 +1644,7 @@ pub fn run() {
                     plugins_off: "Apagar mis plugins".into(),
                     game: "Juego".into(),
                     chat: "Chat".into(),
+                    mini: "Mini barra".into(),
                 }),
                 live: Mutex::new(live),
                 presets: Mutex::new(vec![]),
@@ -1643,6 +1669,7 @@ pub fn run() {
                     "open" => show_window(app),
                     "bypass" => toggle_bypass(app, false),
                     "plugins_off" => plugins_off(app),
+                    "mini" => mini_set(app.clone(), !MINI.load(Ordering::SeqCst)),
                     "quit" => app.exit(0),
                     id => {
                         if let Some(id) = id.strip_prefix("preset:") {
@@ -1659,6 +1686,7 @@ pub fn run() {
             refresh_tray(app.handle());
             register_hotkeys(app.handle(), &cfg);
             osd::init(app.handle());
+            osd::init_mini(app.handle());
             let _ = app.state::<AppState>().watcher.set(watch_foreground(app.handle().clone()));
             let handle = app.handle().clone();
             engine::watch_devices(move || devices_changed(&handle));
@@ -1712,6 +1740,7 @@ pub fn run() {
             meter_reset,
             output_latency,
             analyzer_stop,
+            mini_set,
             app_quit,
             hotkey_check,
             hotkeys_pause,

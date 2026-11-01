@@ -1,0 +1,128 @@
+/* Mini-barra: pastilla glass de la suite sobre una ventana transparente, siempre encima */
+@import './tokens.css';
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+}
+
+.mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100vw - 12px);
+  height: calc(100vh - 12px);
+  box-sizing: border-box;
+  padding: 0 8px 0 10px;
+  border-radius: var(--r-lg);
+  /* Sin desenfoque posible (la ventana no ve lo que hay detrás): vidrio casi opaco */
+  background: var(--glass-strong);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.08) inset;
+}
+
+.mini button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 8px;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 120ms ease;
+}
+.mini button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mini button:active {
+  transform: scale(0.94);
+}
+
+.mini-power {
+  width: 30px;
+  height: 30px;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.mini-power.off {
+  background: rgba(245, 158, 11, 0.14) !important;
+  color: var(--warning) !important;
+}
+
+.mini-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.mini-preset {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.mini-preset b {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-meter {
+  flex: none;
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mini-meter i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--success), var(--warning) 80%, var(--danger));
+  transform-origin: left center;
+  transition: transform 60ms linear;
+}
+
+.mini-lufs {
+  flex: none;
+  min-width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.mini-lufs small {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-meter i {
+    transition: none;
+  }
+}

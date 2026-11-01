@@ -225,6 +225,7 @@ export interface TrayLabels {
   pluginsOff: string
   game: string
   chat: string
+  mini: string
 }
 
 export interface Device {
@@ -337,6 +338,7 @@ export const api = {
   engineCheck: (device: string) => invoke<Check>('engine_check', { device }),
   soundSettings: () => invoke<void>('sound_settings'),
   autoEnableSet: (on: boolean) => invoke<void>('auto_enable_set', { on }),
+  miniSet: (on: boolean) => invoke<void>('mini_set', { on }),
   pickFile: (kind: 'wav' | 'cal' | 'eq') => invoke<string | null>('pick_file', { kind }),
   irLoad: (path: string) => invoke<Ir>('ir_load', { path }),
   textRead: (path: string) => invoke<string>('text_read', { path }),
