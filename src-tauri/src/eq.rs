@@ -339,6 +339,108 @@ pub struct DeviceSettings {
     pub dsp: poxidsp::Settings,
     /// Último preset elegido en cada sección
     pub presets: Picks,
+    /// Plugins del usuario, en orden (después de la curva y antes de PoxiDSP)
+    pub plugins: Vec<PluginSlot>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginFormat {
+    Vst2,
+    Vst3,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// Un plugin del usuario en la cadena de un dispositivo. Lo carga una instancia de PoxiDSP en modo host
+/// (`poxidsp::host`), con su estado dentro del ChunkData.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSlot {
+    /// Único en la cadena (para saber a qué hueco va lo que cambia en su editor)
+    pub id: String,
+    pub format: PluginFormat,
+    pub path: String,
+    /// Clase dentro de un VST3 (32 cifras hex); en VST2, vacío
+    #[serde(default)]
+    pub cid: String,
+    pub name: String,
+    #[serde(default)]
+    pub vendor: String,
+    #[serde(default = "yes")]
+    pub on: bool,
+    /// Estado del plugin en base64 (vacío: el inicial)
+    #[serde(default)]
+    pub state: String,
+    /// Muestras de retardo que añade (a 48 kHz)
+    #[serde(default)]
+    pub latency: u32,
+}
+
+/// Plugins como mucho en una cadena
+pub const MAX_PLUGINS: usize = 16;
+
+impl PluginSlot {
+    fn cid_bytes(&self) -> Option<[u8; 16]> {
+        if self.cid.is_empty() {
+            return (self.format == PluginFormat::Vst2).then_some([0; 16]);
+        }
+        let mut out = [0u8; 16];
+        for (i, o) in out.iter_mut().enumerate() {
+            *o = u8::from_str_radix(self.cid.get(i * 2..i * 2 + 2)?, 16).ok()?;
+        }
+        Some(out)
+    }
+
+    pub fn spec(&self) -> Option<poxidsp::host::Spec> {
+        Some(poxidsp::host::Spec {
+            format: if self.format == PluginFormat::Vst2 { poxidsp::host::Format::Vst2 } else { poxidsp::host::Format::Vst3 },
+            path: self.path.clone(),
+            cid: self.cid_bytes()?,
+            state: poxidsp::unbase64(&self.state)?,
+        })
+    }
+
+    /// Ruta absoluta de un `.dll` o `.vst3`, clase válida, estado en base64 dentro del tope, textos acotados
+    fn valid(&mut self) -> bool {
+        self.id = self.id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(40).collect();
+        self.name = clean_name(&self.name);
+        self.vendor = clean_name(&self.vendor);
+        self.latency = self.latency.min(1 << 20);
+        let path = self.path.to_ascii_lowercase();
+        let b = path.as_bytes();
+        let absolute = b.len() > 3 && b[0].is_ascii_alphabetic() && &path[1..3] == ":\\";
+        let ext = match self.format {
+            PluginFormat::Vst2 => path.ends_with(".dll"),
+            PluginFormat::Vst3 => path.ends_with(".vst3"),
+        };
+        !self.id.is_empty()
+            && absolute
+            && ext
+            && self.path.len() <= 1024
+            && !self.path.contains(['"', '\r', '\n'])
+            && self.state.len() <= poxidsp::host::MAX_STATE / 3 * 4 + 4
+            && self.spec().is_some()
+    }
+}
+
+/// Deja una cadena válida: solo huecos que se pueden cargar, ids sin repetir, como mucho `MAX_PLUGINS`
+pub fn sanitize_plugins(list: &mut Vec<PluginSlot>) {
+    let mut seen = std::collections::HashSet::new();
+    list.retain_mut(|p| p.valid() && seen.insert(p.id.clone()));
+    list.truncate(MAX_PLUGINS);
+}
+
+/// Una línea de PoxiDSP en modo host por cada plugin encendido. `channels`: `L R` en salidas, `all` en micros.
+fn plugin_lines(out: &mut String, plugins: &[PluginSlot], channels: &str) {
+    for p in plugins.iter().filter(|p| p.on) {
+        if let Some(spec) = p.spec() {
+            let chunk = poxidsp::base64(&spec.chunk());
+            out.push_str(&format!("Channel: {channels}\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
+        }
+    }
 }
 
 /// Id del último preset elegido en cada sección (`None`: ninguno)
@@ -348,6 +450,7 @@ pub struct Picks {
     pub sound: Option<String>,
     pub phones: Option<String>,
     pub mic: Option<String>,
+    pub plugins: Option<String>,
 }
 
 /// Secciones con presets propios (los del Ecualizador son [`Preset`])
@@ -357,6 +460,7 @@ pub enum Section {
     Phones,
     Studio,
     Mic,
+    Plugins,
 }
 
 /// Preset de una sección. Cada una guarda solo lo suyo (lo demás no se escribe y se descarta al validar):
@@ -373,6 +477,8 @@ pub struct SectionPreset {
     pub curve: Option<Curve>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub studio: Option<Studio>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugins: Option<Vec<PluginSlot>>,
 }
 
 /// Presets propios de cada sección
@@ -383,6 +489,7 @@ pub struct SectionPresets {
     pub phones: Vec<SectionPreset>,
     pub studio: Vec<SectionPreset>,
     pub mic: Vec<SectionPreset>,
+    pub plugins: Vec<SectionPreset>,
 }
 
 /// Presets como mucho en cada sección
@@ -400,13 +507,19 @@ pub fn section_dsp(dsp: &poxidsp::Settings, section: Section) -> poxidsp::Settin
         Section::Sound => poxidsp::Settings { leveler: dsp.leveler, comp: dsp.comp, limiter: dsp.limiter, bass_boost: dsp.bass_boost, bass: dsp.bass, dialog: dsp.dialog, ..d },
         Section::Phones => poxidsp::Settings { crossfeed: dsp.crossfeed, speakers: dsp.speakers, ..d },
         Section::Mic => poxidsp::Settings { gate: dsp.gate, comp: dsp.comp, ..d },
-        Section::Studio => d,
+        Section::Studio | Section::Plugins => d,
     }
 }
 
 impl SectionPresets {
-    fn lists(&mut self) -> [(Section, &mut Vec<SectionPreset>); 4] {
-        [(Section::Sound, &mut self.sound), (Section::Phones, &mut self.phones), (Section::Studio, &mut self.studio), (Section::Mic, &mut self.mic)]
+    fn lists(&mut self) -> [(Section, &mut Vec<SectionPreset>); 5] {
+        [
+            (Section::Sound, &mut self.sound),
+            (Section::Phones, &mut self.phones),
+            (Section::Studio, &mut self.studio),
+            (Section::Mic, &mut self.mic),
+            (Section::Plugins, &mut self.plugins),
+        ]
     }
 
     /// Ids propios válidos, nombres limpios, sin repetidos, rangos de cada ajuste y solo lo de su sección
@@ -421,7 +534,7 @@ impl SectionPresets {
                     d.sanitize();
                     section_dsp(&d, section)
                 });
-                let (curve, studio) = (p.curve.take(), p.studio.take());
+                let (curve, studio, plugins) = (p.curve.take(), p.studio.take(), p.plugins.take());
                 match section {
                     Section::Sound | Section::Phones => p.dsp = dsp,
                     Section::Mic => {
@@ -432,11 +545,18 @@ impl SectionPresets {
                         });
                     }
                     Section::Studio => p.studio = studio,
+                    Section::Plugins => {
+                        p.plugins = plugins.map(|mut l| {
+                            sanitize_plugins(&mut l);
+                            l
+                        })
+                    }
                 }
                 keep && match section {
                     Section::Sound | Section::Phones => p.dsp.is_some(),
                     Section::Mic => p.dsp.is_some() && p.curve.is_some(),
                     Section::Studio => p.studio.is_some(),
+                    Section::Plugins => p.plugins.is_some(),
                 }
             });
             list.truncate(MAX_SECTION_PRESETS);
@@ -449,6 +569,7 @@ impl SectionPresets {
             Section::Phones => &self.phones,
             Section::Studio => &self.studio,
             Section::Mic => &self.mic,
+            Section::Plugins => &self.plugins,
         };
         list.iter().any(|p| p.id == id)
     }
@@ -459,8 +580,9 @@ pub fn sanitize_devices(devices: &mut HashMap<String, DeviceSettings>, presets: 
     devices.retain(|id, _| id.len() == 38 && is_guid(id));
     for d in devices.values_mut() {
         d.dsp.sanitize();
+        sanitize_plugins(&mut d.plugins);
         let p = &mut d.presets;
-        for (section, pick) in [(Section::Sound, &mut p.sound), (Section::Phones, &mut p.phones), (Section::Mic, &mut p.mic)] {
+        for (section, pick) in [(Section::Sound, &mut p.sound), (Section::Phones, &mut p.phones), (Section::Mic, &mut p.mic), (Section::Plugins, &mut p.plugins)] {
             if pick.as_deref().is_some_and(|id| !presets.has(section, id)) {
                 *pick = None;
             }
@@ -498,16 +620,16 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
         return out;
     }
     let flat = Curve::default();
-    let none = poxidsp::Settings::default();
-    // Con curva o con algo de PoxiDSP encendido; ordenados para que el archivo no cambie sin motivo
+    let none = DeviceSettings::default();
+    // Con curva, con algo de PoxiDSP encendido o con plugins; ordenados para que el archivo no cambie sin motivo
     let ids: std::collections::BTreeSet<&String> = curves
         .keys()
-        .chain(devices.iter().filter(|(_, d)| d.dsp.active()).map(|(id, _)| id))
+        .chain(devices.iter().filter(|(_, d)| d.dsp.active() || d.plugins.iter().any(|p| p.on)).map(|(id, _)| id))
         .filter(|id| is_guid(id))
         .collect();
     let (inputs, outputs): (Vec<_>, Vec<_>) = ids
         .into_iter()
-        .map(|id| (id.as_str(), curves.get(id).unwrap_or(&flat), devices.get(id).map_or(&none, |d| &d.dsp)))
+        .map(|id| (id.as_str(), curves.get(id).unwrap_or(&flat), devices.get(id).unwrap_or(&none)))
         .partition(|(id, _, _)| is_input(id));
     if live.hearing {
         out.push_str("# Test de audición: todo en plano\r\n");
@@ -520,9 +642,11 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
         }
     }
     if !mic_bypass {
-        for (id, c, dsp) in inputs {
+        for (id, c, d) in inputs {
+            let dsp = &d.dsp;
             out.push_str(&format!("\r\nDevice: {id}\r\nStage: capture\r\nPreamp: {:.1} dB\r\n", c.preamp));
             out.push_str(&filters(&c.bands));
+            plugin_lines(&mut out, &d.plugins, "all");
             // Todos los canales (un micro mono es «C», no «L R»): el motor reparte de dos en dos
             if dsp.active() {
                 let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
@@ -533,8 +657,9 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
     out
 }
 
-fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &poxidsp::Settings)], loudness: &Loudness, live: &Live) {
-    for &(id, c, dsp) in outputs {
+fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &DeviceSettings)], loudness: &Loudness, live: &Live) {
+    for &(id, c, d) in outputs {
+        let dsp = &d.dsp;
         if let Some(g) = live.compare {
             out.push_str(&format!("\r\nDevice: {id}\r\nPreamp: {:.1} dB\r\n", clamp(g, -30.0, 12.0, 0.0)));
             continue;
@@ -554,6 +679,7 @@ fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &poxidsp::Settings
         if let Some(e) = c.ears.as_ref().filter(|e| e.left.iter().chain(&e.right).any(|b| b.on)) {
             out.push_str(&format!("Channel: L\r\n{}Channel: R\r\n{}Channel: all\r\n", filters(&e.left), filters(&e.right)));
         }
+        plugin_lines(out, &d.plugins, "L R");
         if dsp.active() {
             let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
             out.push_str(&format!("Channel: L R\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
@@ -573,6 +699,52 @@ mod tests {
 
     fn with_dsp(dsp: poxidsp::Settings) -> DeviceSettings {
         DeviceSettings { dsp, ..DeviceSettings::default() }
+    }
+
+    fn slot(id: &str) -> PluginSlot {
+        PluginSlot {
+            id: id.into(),
+            format: PluginFormat::Vst3,
+            path: r"C:\Program Files\Common Files\VST3\Algo.vst3".into(),
+            cid: "00112233445566778899aabbccddeeff".into(),
+            name: "Algo".into(),
+            vendor: "Alguien".into(),
+            on: true,
+            state: poxidsp::base64(&[1, 2, 3]),
+            latency: 0,
+        }
+    }
+
+    #[test]
+    fn plugins_del_usuario_en_su_sitio() {
+        let id = "{6af377fe-6370-495b-afe3-95fac2e918f7}".to_string();
+        let mut dsp = poxidsp::Settings::default();
+        dsp.limiter.on = true;
+        let mut d = DeviceSettings { dsp, plugins: vec![slot("a"), PluginSlot { on: false, ..slot("b") }], ..DeviceSettings::default() };
+        sanitize_plugins(&mut d.plugins);
+        assert_eq!(d.plugins.len(), 2);
+        let devices = HashMap::from([(id.clone(), d.clone())]);
+        let text = render(&HashMap::new(), &devices, false, &Loudness::default(), false, &Live::default(), |_| false);
+        // Un plugin encendido (el apagado no se escribe), antes del limitador de PoxiDSP
+        let host = poxidsp::base64(&d.plugins[0].spec().unwrap().chunk());
+        let at = text.find(&host).expect("plugin escrito");
+        assert!(at < text.rfind("VSTPlugin").unwrap());
+        assert_eq!(text.matches("VSTPlugin").count(), 2);
+        assert_eq!(poxidsp::host::Spec::from_chunk(&poxidsp::unbase64(&host).unwrap()).unwrap().state, vec![1, 2, 3]);
+        // Con bypass no suena nada
+        let off = render(&HashMap::new(), &devices, true, &Loudness::default(), false, &Live::default(), |_| false);
+        assert!(!off.contains("VSTPlugin"));
+        // Fuera: rutas relativas, extensiones que no tocan, estado roto, comillas y repetidos
+        let mut bad = vec![
+            PluginSlot { path: "Algo.vst3".into(), ..slot("c") },
+            PluginSlot { path: r"C:\x\algo.exe".into(), ..slot("d") },
+            PluginSlot { state: "no!".into(), ..slot("e") },
+            PluginSlot { path: r#"C:\a"b.vst3"#.into(), ..slot("f") },
+            PluginSlot { format: PluginFormat::Vst2, path: r"C:\x\a.dll".into(), cid: String::new(), ..slot("g") },
+            slot("g"),
+        ];
+        sanitize_plugins(&mut bad);
+        assert_eq!(bad.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["g"]);
     }
 
     #[test]
@@ -652,14 +824,19 @@ mod tests {
     fn presets_de_seccion_validados() {
         let mut dsp = poxidsp::Settings::default();
         (dsp.comp.on, dsp.comp.ratio, dsp.crossfeed.on, dsp.gate.on) = (true, 99.0, true, true);
-        let p = |id: &str, name: &str| SectionPreset { id: id.into(), name: name.into(), dsp: Some(dsp), curve: Some(Curve::default()), studio: Some(Studio::default()) };
+        let p = |id: &str, name: &str| SectionPreset { id: id.into(), name: name.into(), dsp: Some(dsp), curve: Some(Curve::default()), studio: Some(Studio::default()), plugins: None };
         let mut presets = SectionPresets {
             sound: vec![p("u:a", "  Noche\u{7} "), p("u:a", "Repetido"), p("b:flat", "De serie"), p("u:mal id", "X"), p("u:b", "   "), SectionPreset { dsp: None, ..p("u:c", "Sin ajustes") }],
             phones: (0..150).map(|i| p(&format!("u:{i}"), "P")).collect(),
             studio: vec![p("u:s", "Mono"), SectionPreset { studio: None, ..p("u:t", "Vacío") }],
             mic: vec![p("u:m", "Voz"), SectionPreset { curve: None, ..p("u:n", "Sin EQ") }],
+            plugins: vec![p("u:sin", "Sin plugins"), SectionPreset { plugins: Some(vec![slot("a"), PluginSlot { path: "relativo.dll".into(), ..slot("b") }]), ..p("u:pl", "Cadena") }],
         };
         presets.sanitize();
+        // Cadena: solo el preset con plugins y, de ellos, solo el que tiene ruta absoluta
+        assert_eq!(presets.plugins.len(), 1);
+        assert_eq!(presets.plugins[0].plugins.as_ref().map(|l| l.len()), Some(1));
+        assert!(presets.plugins[0].dsp.is_none() && presets.plugins[0].curve.is_none());
         // Solo el primero de Sonido es válido: nombre limpio, rangos recortados y solo sus partes
         assert_eq!(presets.sound.len(), 1);
         let s = &presets.sound[0];
@@ -679,9 +856,9 @@ mod tests {
         assert!(md.gate.on && md.comp.on && !md.crossfeed.on && presets.mic[0].curve.is_some());
 
         // El último preset de cada dispositivo solo si existe
-        let picks = Picks { sound: Some("u:a".into()), phones: Some("u:borrado".into()), mic: None };
+        let picks = Picks { sound: Some("u:a".into()), phones: Some("u:borrado".into()), mic: None, plugins: None };
         let mut devices = HashMap::from([
-            ("{00000000-0000-0000-0000-00000000000a}".to_string(), DeviceSettings { dsp, presets: picks }),
+            ("{00000000-0000-0000-0000-00000000000a}".to_string(), DeviceSettings { dsp, presets: picks, ..DeviceSettings::default() }),
             ("../x".to_string(), DeviceSettings::default()),
         ]);
         sanitize_devices(&mut devices, &presets);

@@ -50,7 +50,9 @@ function useLatency(mic: boolean): OutputLatency | null {
     }
     // `key` resume lo de `dsp` que cambia el retardo
   }, [mic, id, key])
-  return lat && { ...lat, dsp: bypass ? 0 : lat.dsp }
+  // Lo que añaden los plugins del usuario (muestras a 48 kHz, lo que dijeron al escanearlos)
+  const plugins = useStore((s) => outputSettings(s).plugins.reduce((ms, p) => ms + (p.on ? p.latency / 48 : 0), 0))
+  return lat && { ...lat, dsp: bypass ? 0 : lat.dsp + plugins }
 }
 
 /** Columna fija de medidores de lo que sale de verdad (después del EQ): pico, RMS, LUFS, true peak, fase y,

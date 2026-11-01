@@ -11,11 +11,13 @@ name = "poxidsp"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# La app usa los ajustes con serde; el plugin se compila sin dependencias
+# La app usa los ajustes con serde
 serde = ["dep:serde"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
+# Bindings de VST3 (generados de las cabeceras del SDK, MIT): para alojar plugins VST3 del usuario
+vst3 = "0.3"
 
 [dev-dependencies]
 ebur128 = "0.1"

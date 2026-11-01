@@ -59,8 +59,8 @@ export type Part = keyof Dsp
 /** Lo que se ajusta en la página «Sonido»: la cadena de volumen y los realces */
 export const SOUND_PARTS = ['leveler', 'comp', 'limiter', 'bassBoost', 'bass', 'dialog'] as const satisfies readonly Part[]
 
-/** Partes de PoxiDSP que guarda el preset de cada sección (Estudio no usa PoxiDSP) */
-export const SECTION_PARTS: Record<Exclude<Section, 'studio'>, readonly Part[]> = {
+/** Partes de PoxiDSP que guarda el preset de cada sección (Estudio y Plugins no usan PoxiDSP) */
+export const SECTION_PARTS: Record<Exclude<Section, 'studio' | 'plugins'>, readonly Part[]> = {
   sound: SOUND_PARTS,
   phones: ['crossfeed', 'speakers'],
   mic: ['gate', 'comp']

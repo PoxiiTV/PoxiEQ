@@ -11,6 +11,7 @@ import { PhonesPage } from './components/Phones'
 import { StudioPage } from './components/Studio'
 import { RoomModal, RoomPage } from './components/Room'
 import { MicPage } from './components/Mic'
+import { PluginsPage } from './components/Plugins'
 import { SettingsPage } from './components/Settings'
 import { Meter } from './components/Meter'
 import { Setup } from './components/Setup'
@@ -43,7 +44,7 @@ export function App(): React.JSX.Element {
 
   // El menú de la bandeja y el aviso en pantalla, en el idioma de la app
   useEffect(() => {
-    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff'), broken: t('tray.broken'), repair: t('tray.repair') })
+    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff'), broken: t('tray.broken'), repair: t('tray.repair'), pluginsOff: t('tray.pluginsOff') })
   }, [lang, t])
 
   // Rust aplica presets sin la interfaz (atajos, bandeja, preset por app): se le mandan ya resueltos
@@ -84,6 +85,7 @@ function Page(): React.JSX.Element {
   const ready = useStore((s) => !!s.engine?.installed && works(currentOutput(s)))
   if (page === 'settings') return <SettingsPage />
   if (page === 'mic') return <MicPage />
+  if (page === 'plugins') return <PluginsPage />
   if (!ready) return <Setup />
   return (
     <>

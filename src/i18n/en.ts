@@ -25,6 +25,7 @@ export default {
     studio: 'Studio',
     room: 'Room',
     mic: 'Microphone',
+    plugins: 'Plugins',
     settings: 'Settings',
     on: 'Something is on',
     warn: 'Studio listening on'
@@ -40,7 +41,8 @@ export default {
     eqOn: 'EQ on',
     eqOff: 'EQ off',
     broken: 'PoxiEQ stopped working on {d}',
-    repair: 'Open PoxiEQ and click Repair'
+    repair: 'Open PoxiEQ and click Repair',
+    pluginsOff: 'Turn my plugins off'
   },
   device: {
     default: 'Default',
@@ -487,7 +489,48 @@ export default {
       saves: 'Saves everything for the microphone: its EQ, the noise gate and the compressor.',
       namePh: 'Live, Podcast…',
       empty: 'Save your mic settings here (EQ, gate and compressor) to switch with one click.'
+    },
+    plugins: {
+      saves: 'Saves the chain: which plugins, in what order, which are on and how each one is set.',
+      namePh: 'Mixing, Live voice…',
+      empty: 'Save your plugin chains here to switch between them with one click.'
     }
+  },
+  plugins: {
+    for: 'Chain for',
+    output: 'Output',
+    mic: 'Microphone',
+    micOff: 'First enable PoxiEQ on your microphone (Microphone page) to add plugins to it.',
+    chain: 'Your chain',
+    chainHint: 'They play in this order, after your EQ and before Sound and Headphones (so the limiter is still last). Each device has its own chain.',
+    empty: 'No plugins yet. Add yours from the library below.',
+    latency: '+{ms} ms',
+    edit: 'Edit',
+    editing: 'Open',
+    up: 'Move up',
+    down: 'Move down',
+    remove: 'Remove from the chain',
+    unreadable: "It's outside Program Files: Windows audio (another account) may not be able to read it, and it won't play.",
+    risks:
+      "Plugins run inside Windows audio, which uses another account: those that need a license (iLok, vendor account) or read files from your user may not start. If an output goes silent, turn them off here or from the tray icon.",
+    library: 'Library',
+    scan: 'Find plugins',
+    scanning: 'Searching… {n}/{t}',
+    scanFirst: 'Looking for your plugins…',
+    search: 'Search by name or vendor',
+    none: 'No 64-bit plugins found. Add the folder where you keep them.',
+    noMatch: 'Nothing matches the search.',
+    failed: "{n} files couldn't be loaded",
+    timeout: 'took too long to load',
+    crash: 'closed while loading',
+    added: '"{n}" added to the chain',
+    full: 'At most {n} plugins per chain.',
+    folders: 'Folders',
+    foldersHint: "Standard VST2 and VST3 folders are searched automatically. If you keep plugins somewhere else, add that folder.",
+    folderAdd: 'Add folder',
+    folderBad: 'Type the full path of a folder (e.g. D:\Plugins).',
+    noEditor: "This plugin has no editor window.",
+    openFail: "Couldn't open the plugin: {e}"
   },
   share: {
     title: 'Share preset',
@@ -514,6 +557,9 @@ export default {
     'engine.download': "Couldn't download the engine. Check your connection. ({d})",
     'engine.hash': "The downloaded installer isn't the official one: it was not run",
     'engine.elevation': 'Administrator permission is needed to enable it.',
+    'plugins.missing': "That plugin isn't in the chain anymore",
+    'plugins.open': "Couldn't open the plugin window",
+    'plugins.scan': "Couldn't search for plugins",
     'engine.setup': "Couldn't complete the setup",
     'engine.badDevice': 'Invalid device',
     'engine.uninstall': "Couldn't uninstall the engine: {d}",

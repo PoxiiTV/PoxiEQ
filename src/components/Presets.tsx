@@ -48,7 +48,8 @@ function PresetMenu({
   empty: string
   onPick: (id: string) => void
   onRename: (id: string, name: string) => void
-  onShare: (id: string) => void
+  /** Sin él, el preset no se comparte (p. ej. una cadena de plugins: las rutas son de este PC) */
+  onShare?: (id: string) => void
   onDelete: (id: string) => void
 }): React.JSX.Element {
   const t = useT()
@@ -172,17 +173,19 @@ function PresetMenu({
                   >
                     <Pencil size={14} />
                   </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={`${t('share.title')}: ${p.name}`}
-                    onClick={() => {
-                      setOpen(false)
-                      onShare(p.id)
-                    }}
-                  >
-                    <Share2 size={14} />
-                  </button>
+                  {onShare && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`${t('share.title')}: ${p.name}`}
+                      onClick={() => {
+                        setOpen(false)
+                        onShare(p.id)
+                      }}
+                    >
+                      <Share2 size={14} />
+                    </button>
+                  )}
                   <button type="button" className="icon-btn" aria-label={`${t('common.delete')}: ${p.name}`} onClick={() => onDelete(p.id)}>
                     <Trash2 size={14} />
                   </button>
@@ -241,17 +244,21 @@ function SectionPresetMenu({ section }: { section: Section }): React.JSX.Element
         if (p) applySectionPreset(section, p)
       }}
       onRename={(id, name) => renameSectionPreset(section, id, name)}
-      onShare={(id) => {
-        const p = find(id)
-        if (p) sharePreset(section, p)
-      }}
+      onShare={
+        section === 'plugins'
+          ? undefined
+          : (id) => {
+              const p = find(id)
+              if (p) sharePreset(section, p)
+            }
+      }
       onDelete={(id) => deleteSectionPreset(section, id)}
     />
   )
 }
 
 /** «Guardar» e «Importar» de la cabecera de una sección */
-export function PresetActions({ section }: { section: ShareSection }): React.JSX.Element {
+export function PresetActions({ section }: { section: ShareSection | 'plugins' }): React.JSX.Element {
   const t = useT()
   return (
     <>
@@ -259,10 +266,12 @@ export function PresetActions({ section }: { section: ShareSection }): React.JSX
         <Save size={15} />
         <span className="btn-label">{t('presets.saveShort')}</span>
       </button>
-      <button className="btn btn-sm hb hb-early" data-tip={t('share.importTitle')} aria-label={t('share.importTitle')} onClick={() => setState({ modal: 'import', importCode: '' })}>
-        <Import size={15} />
-        <span className="btn-label">{t('presets.import')}</span>
-      </button>
+      {section !== 'plugins' && (
+        <button className="btn btn-sm hb hb-early" data-tip={t('share.importTitle')} aria-label={t('share.importTitle')} onClick={() => setState({ modal: 'import', importCode: '' })}>
+          <Import size={15} />
+          <span className="btn-label">{t('presets.import')}</span>
+        </button>
+      )}
     </>
   )
 }

@@ -25,6 +25,7 @@ export default {
     studio: 'Estudio',
     room: 'Sala',
     mic: 'Micrófono',
+    plugins: 'Plugins',
     settings: 'Ajustes',
     on: 'Hay algo encendido',
     warn: 'Escucha de estudio activa'
@@ -40,7 +41,8 @@ export default {
     eqOn: 'EQ encendido',
     eqOff: 'EQ apagado',
     broken: 'PoxiEQ dejó de funcionar en {d}',
-    repair: 'Abre PoxiEQ y pulsa Reparar'
+    repair: 'Abre PoxiEQ y pulsa Reparar',
+    pluginsOff: 'Apagar mis plugins'
   },
   device: {
     default: 'Predeterminado',
@@ -487,7 +489,48 @@ export default {
       saves: 'Se guarda todo lo del micrófono: su EQ, la puerta de ruido y el compresor.',
       namePh: 'Directo, Podcast…',
       empty: 'Guarda aquí los ajustes de tu micro (EQ, puerta y compresor) para cambiar con un clic.'
+    },
+    plugins: {
+      saves: 'Se guarda la cadena: qué plugins, en qué orden, cuáles encendidos y cómo está ajustado cada uno.',
+      namePh: 'Mezcla, Voz en directo…',
+      empty: 'Guarda aquí tus cadenas de plugins para cambiar entre ellas con un clic.'
     }
+  },
+  plugins: {
+    for: 'Cadena de',
+    output: 'Salida',
+    mic: 'Micrófono',
+    micOff: 'Activa antes PoxiEQ en tu micrófono (página Micrófono) para ponerle plugins.',
+    chain: 'Tu cadena',
+    chainHint: 'Suenan en este orden, después de tu EQ y antes de Sonido y Cascos (así el limitador sigue siendo lo último). Cada dispositivo tiene su cadena.',
+    empty: 'Aún no hay plugins. Añade los tuyos desde la biblioteca de abajo.',
+    latency: '+{ms} ms',
+    edit: 'Editar',
+    editing: 'Abierto',
+    up: 'Subir',
+    down: 'Bajar',
+    remove: 'Quitar de la cadena',
+    unreadable: 'Está fuera de Archivos de programa: puede que el audio de Windows (otra cuenta) no pueda leerlo y no suene.',
+    risks:
+      'Los plugins suenan dentro del audio de Windows, que funciona con otra cuenta: los que piden licencia (iLok, cuenta del fabricante) o leen archivos de tu usuario pueden no arrancar. Si una salida se queda muda, apágalos aquí o desde el icono de la bandeja.',
+    library: 'Biblioteca',
+    scan: 'Buscar plugins',
+    scanning: 'Buscando… {n}/{t}',
+    scanFirst: 'Buscando tus plugins…',
+    search: 'Buscar por nombre o fabricante',
+    none: 'No se ha encontrado ningún plugin de 64 bits. Añade la carpeta donde los tengas.',
+    noMatch: 'Nada coincide con la búsqueda.',
+    failed: '{n} archivos no se han podido cargar',
+    timeout: 'tardó demasiado en cargar',
+    crash: 'se cerró al cargarlo',
+    added: '«{n}» añadido a la cadena',
+    full: 'Como mucho {n} plugins por cadena.',
+    folders: 'Carpetas',
+    foldersHint: 'Se buscan solos en las carpetas estándar de VST2 y VST3. Si tienes plugins en otra, añádela.',
+    folderAdd: 'Añadir carpeta',
+    folderBad: 'Escribe la ruta completa de una carpeta (p. ej. D:\\Plugins).',
+    noEditor: 'Este plugin no tiene ventana de edición.',
+    openFail: 'No se ha podido abrir el plugin: {e}'
   },
   share: {
     title: 'Compartir preset',
@@ -514,6 +557,9 @@ export default {
     'engine.download': 'No se ha podido descargar el motor. Revisa la conexión. ({d})',
     'engine.hash': 'El instalador descargado no es el oficial: no se ha ejecutado',
     'engine.elevation': 'Hace falta aceptar el permiso de administrador para activarlo.',
+    'plugins.missing': 'Ese plugin ya no está en la cadena',
+    'plugins.open': 'No se ha podido abrir la ventana del plugin',
+    'plugins.scan': 'No se ha podido buscar plugins',
     'engine.setup': 'No se ha podido completar la activación',
     'engine.badDevice': 'Dispositivo no válido',
     'engine.uninstall': 'No se ha podido desinstalar el motor: {d}',

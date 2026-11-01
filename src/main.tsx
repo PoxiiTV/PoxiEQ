@@ -84,6 +84,13 @@ async function start(): Promise<void> {
       if (d) toast(t('follow.now', { d: `${d.name} · ${d.device}` }), 'info', { secs: 4 })
     })
   )
+  // Ventanas de edición de plugins (proceso aparte): cuáles están abiertas y por qué no se abre una
+  void listen<[string, string, boolean]>('plugin-editor', (e) => {
+    const [device, id, open] = e.payload
+    const key = `${device}/${id}`
+    setState((s) => ({ editing: open ? [...s.editing.filter((k) => k !== key), key] : s.editing.filter((k) => k !== key) }))
+  })
+  void listen<[string, string]>('plugin-error', (e) => toast(t(e.payload[1] === 'noEditor' ? 'plugins.noEditor' : 'plugins.openFail', { e: e.payload[1] }), 'err', { secs: 8 }))
   // Por si algo cambió sin aviso mientras la ventana estaba escondida
   window.addEventListener('focus', () => void refreshEngine())
   // Se enseña la ventana ya pintada (sin parpadeo blanco), salvo si arrancó con Windows en la bandeja

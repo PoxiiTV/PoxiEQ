@@ -49,7 +49,34 @@ export interface Mic {
 }
 
 /** Secciones con presets propios (los del Ecualizador son `Preset`) */
-export type Section = 'sound' | 'phones' | 'studio' | 'mic'
+export type Section = 'sound' | 'phones' | 'studio' | 'mic' | 'plugins'
+
+export type PluginFormat = 'vst2' | 'vst3'
+
+/** Un plugin del usuario en la cadena de un dispositivo (lo aloja PoxiDSP en el audio de Windows) */
+export interface PluginSlot {
+  /** Único en la cadena */
+  id: string
+  format: PluginFormat
+  path: string
+  /** Clase dentro de un VST3 (hex); en VST2, vacío */
+  cid: string
+  name: string
+  vendor: string
+  on: boolean
+  /** Estado del plugin en base64 (vacío: el inicial) */
+  state: string
+  /** Muestras de retardo a 48 kHz */
+  latency: number
+}
+
+/** Un plugin encontrado al escanear */
+export type FoundPlugin = Pick<PluginSlot, 'format' | 'path' | 'cid' | 'name' | 'vendor' | 'latency'>
+
+export interface ScanResult {
+  plugins: FoundPlugin[]
+  failed: { path: string; error: string }[]
+}
 
 /** Preset de una sección: Sonido y Cascos guardan sus partes de `dsp`; Micrófono su `curve` y su puerta/compresor
  *  en `dsp`; Estudio, `studio`. Rust descarta lo que no es de su sección (`SectionPresets::sanitize`). */
@@ -59,6 +86,7 @@ export interface SectionPreset {
   dsp?: Dsp | null
   curve?: Curve | null
   studio?: Studio | null
+  plugins?: PluginSlot[] | null
 }
 
 export type SectionPresets = Record<Section, SectionPreset[]>
@@ -68,7 +96,9 @@ export interface DeviceSettings {
   /** En una salida, Sonido y Cascos; en un micrófono, su puerta y su compresor */
   dsp: Dsp
   /** Último preset elegido en cada sección */
-  presets: { sound: string | null; phones: string | null; mic: string | null }
+  presets: { sound: string | null; phones: string | null; mic: string | null; plugins: string | null }
+  /** Plugins del usuario, en orden (después de la curva y antes de PoxiDSP) */
+  plugins: PluginSlot[]
 }
 
 /** Atajos globales en el formato del registrador (`control+alt+Numpad0`); `null` = sin atajo */
@@ -127,6 +157,8 @@ export interface Config {
   /** Por id de dispositivo; sin entrada, lo de serie (`DSP_DEFAULT`, ningún preset) */
   perDevice: Record<string, DeviceSettings>
   sectionPresets: SectionPresets
+  /** Carpetas de plugins que añade el usuario (aparte de las estándar) */
+  pluginFolders: string[]
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic
@@ -150,6 +182,7 @@ export interface TrayLabels {
   eqOff: string
   broken: string
   repair: string
+  pluginsOff: string
 }
 
 export interface Device {
@@ -253,6 +286,8 @@ export const api = {
   engineDiagnose: (device: string) => invoke<Diagnosis>('engine_diagnose', { device }),
   engineCheck: (device: string) => invoke<Check>('engine_check', { device }),
   soundSettings: () => invoke<void>('sound_settings'),
+  pluginsScan: (force: boolean) => invoke<ScanResult>('plugins_scan', { force }),
+  pluginEdit: (device: string, id: string) => invoke<void>('plugin_edit', { device, id }),
   autoeqIndex: (force = false) => invoke<AutoEqEntry[]>('autoeq_index', { force }),
   autoeqFetch: (path: string) => invoke<string>('autoeq_fetch', { path }),
   autostartGet: () => invoke<boolean>('autostart_get'),

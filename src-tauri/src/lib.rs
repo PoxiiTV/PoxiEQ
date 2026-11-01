@@ -5,6 +5,7 @@ pub mod engine;
 mod eq;
 mod hotkeys;
 mod osd;
+pub mod plughost;
 mod room;
 
 use eq::{Curve, DeviceSettings, Live, Loudness, Mic, Preset, SectionPresets};
@@ -69,6 +70,8 @@ pub struct Config {
     pub preset_keys: Option<Vec<Option<String>>>,
     /// Micrófono: su propio bypass (su EQ va en `curves` y su puerta/compresor en `per_device`)
     pub mic: Mic,
+    /// Carpetas de plugins que añade el usuario (aparte de las estándar)
+    pub plugin_folders: Vec<String>,
 }
 
 impl Default for Config {
@@ -97,6 +100,7 @@ impl Default for Config {
             bypass_hotkey: None,
             preset_keys: None,
             mic: Mic::default(),
+            plugin_folders: vec![],
         }
     }
 }
@@ -136,6 +140,14 @@ impl Config {
             self.hotkeys = hotkeys::Hotkeys::migrate(self.bypass_hotkey.take(), self.preset_keys.take());
         }
         self.hotkeys.sanitize(apps::valid_preset_id);
+        self.plugin_folders.retain(|f| f.len() <= 512 && f.as_bytes().get(1..3) == Some(b":\\") && !f.chars().any(char::is_control));
+        self.plugin_folders.dedup();
+        self.plugin_folders.truncate(20);
+    }
+
+    /// Algún plugin del usuario encendido en algún dispositivo
+    fn plugins_on(&self) -> bool {
+        self.per_device.values().any(|d| d.plugins.iter().any(|p| p.on))
     }
 
     /// Antes la dinámica de las salidas (Sonido y Cascos) era una para todas y la puerta/compresor del
@@ -152,8 +164,8 @@ impl Config {
     }
 
     /// Lo que pinta el menú de la bandeja: si cambia, se rehace
-    fn tray_key(&self) -> (bool, Option<String>, BTreeMap<String, Option<String>>) {
-        (self.bypass, self.device.clone(), self.curves.iter().map(|(k, c)| (k.clone(), c.preset.clone())).collect())
+    fn tray_key(&self) -> (bool, bool, Option<String>, BTreeMap<String, Option<String>>) {
+        (self.bypass, self.plugins_on(), self.device.clone(), self.curves.iter().map(|(k, c)| (k.clone(), c.preset.clone())).collect())
     }
 }
 
@@ -186,6 +198,8 @@ pub struct AppState {
     default_output: Mutex<Option<String>>,
     /// Dispositivos activados que el vigilante ha visto rotos (para avisar una sola vez por rotura)
     broken: Mutex<Vec<String>>,
+    /// Ventanas de edición de plugins abiertas (`dispositivo/hueco` → su proceso)
+    editors: Mutex<HashMap<String, std::process::Child>>,
 }
 
 impl AppState {
@@ -219,6 +233,10 @@ impl AppState {
 
     fn broken(&self) -> MutexGuard<'_, Vec<String>> {
         self.broken.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn editors(&self) -> MutexGuard<'_, HashMap<String, std::process::Child>> {
+        self.editors.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -627,6 +645,8 @@ pub struct TrayLabels {
     broken: String,
     /// «Abre PoxiEQ y pulsa Reparar»
     repair: String,
+    /// «Apagar mis plugins»
+    plugins_off: String,
 }
 
 #[tauri::command]
@@ -796,6 +816,7 @@ fn refresh_tray(app: &AppHandle) {
     let st = app.state::<AppState>();
     let l = st.labels();
     let bypass = st.cfg().bypass;
+    let plugins = st.cfg().plugins_on();
     let active = current_curve(&st).and_then(|(_, c)| c.preset);
     let presets: Vec<(String, String)> = st.presets().iter().map(|p| (p.id.clone(), p.name.clone())).collect();
     let build = || -> tauri::Result<Menu<tauri::Wry>> {
@@ -812,20 +833,258 @@ fn refresh_tray(app: &AppHandle) {
             }
             refs.push(item);
         }
-        Menu::with_items(
-            app,
-            &[
-                &MenuItem::with_id(app, "open", &l.open, true, None::<&str>)?,
-                &CheckMenuItem::with_id(app, "bypass", &l.bypass, true, bypass, None::<&str>)?,
-                &Submenu::with_items(app, &l.presets, !refs.is_empty(), &refs)?,
-                &PredefinedMenuItem::separator(app)?,
-                &MenuItem::with_id(app, "quit", &l.quit, true, None::<&str>)?,
-            ],
-        )
+        let open = MenuItem::with_id(app, "open", &l.open, true, None::<&str>)?;
+        let by = CheckMenuItem::with_id(app, "bypass", &l.bypass, true, bypass, None::<&str>)?;
+        let sub = Submenu::with_items(app, &l.presets, !refs.is_empty(), &refs)?;
+        // Si un plugin deja sin sonido, aquí se apagan todos sin abrir la ventana
+        let off = MenuItem::with_id(app, "plugins_off", &l.plugins_off, true, None::<&str>)?;
+        let sep = PredefinedMenuItem::separator(app)?;
+        let quit = MenuItem::with_id(app, "quit", &l.quit, true, None::<&str>)?;
+        let mut items: Vec<&dyn IsMenuItem<tauri::Wry>> = vec![&open, &by, &sub];
+        if plugins {
+            items.push(&off);
+        }
+        items.extend([&sep as &dyn IsMenuItem<tauri::Wry>, &quit]);
+        Menu::with_items(app, &items)
     };
     if let (Some(tray), Ok(menu)) = (app.tray_by_id("main"), build()) {
         let _ = tray.set_menu(Some(menu));
     }
+}
+
+/// Apaga todos los plugins del usuario (desde la bandeja: por si uno deja la salida sin sonido)
+fn plugins_off(app: &AppHandle) {
+    let mut cfg = app.state::<AppState>().cfg().clone();
+    cfg.per_device.values_mut().flat_map(|d| d.plugins.iter_mut()).for_each(|p| p.on = false);
+    commit(app, cfg);
+}
+
+// ------------------------------------------------------------ plugins del usuario
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanFailure {
+    path: String,
+    error: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanResult {
+    plugins: Vec<plughost::Found>,
+    failed: Vec<ScanFailure>,
+}
+
+/// Lo escaneado de cada archivo, para no volver a cargarlo si no ha cambiado
+#[derive(Serialize, Deserialize, Clone)]
+struct ScanCache {
+    path: String,
+    stamp: u64,
+    found: Vec<plughost::Found>,
+    error: Option<String>,
+}
+
+/// Carpetas estándar de plugins de 64 bits
+fn plugin_dirs(extra: &[String]) -> Vec<PathBuf> {
+    let env = |k: &str| std::env::var(k).ok().map(PathBuf::from);
+    let mut dirs: Vec<PathBuf> = [
+        env("CommonProgramFiles").map(|d| d.join("VST3")),
+        env("CommonProgramFiles").map(|d| d.join("VST2")),
+        env("ProgramFiles").map(|d| d.join("VSTPlugins")),
+        env("ProgramFiles").map(|d| d.join("Steinberg").join("VstPlugins")),
+        env("ProgramFiles").map(|d| d.join("Common Files").join("Steinberg").join("VST2")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    dirs.extend(extra.iter().map(PathBuf::from));
+    dirs
+}
+
+/// DLL de 64 bits (los plugins de 32 bits no se pueden cargar)
+fn is_x64_dll(path: &std::path::Path) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else { return false };
+    let mut b = [0u8; 4];
+    let ok = (|| -> std::io::Result<bool> {
+        f.seek(SeekFrom::Start(0x3c))?;
+        f.read_exact(&mut b)?;
+        f.seek(SeekFrom::Start(u32::from_le_bytes(b) as u64 + 4))?;
+        let mut m = [0u8; 2];
+        f.read_exact(&mut m)?;
+        Ok(u16::from_le_bytes(m) == 0x8664)
+    })();
+    ok.unwrap_or(false)
+}
+
+/// Archivos candidatos: `.vst3` (archivo o carpeta) y `.dll` de 64 bits, hasta 6 niveles de carpetas
+fn plugin_files(dirs: &[PathBuf]) -> Vec<PathBuf> {
+    fn walk(dir: &std::path::Path, depth: u32, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = p.to_string_lossy().to_ascii_lowercase();
+            if name.ends_with(".vst3") {
+                out.push(p);
+            } else if p.is_dir() {
+                if depth < 6 {
+                    walk(&p, depth + 1, out);
+                }
+            } else if name.ends_with(".dll") && is_x64_dll(&p) {
+                out.push(p);
+            }
+        }
+    }
+    let mut out = vec![];
+    for d in dirs {
+        walk(d, 0, &mut out);
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn file_stamp(path: &std::path::Path) -> u64 {
+    let m = std::fs::metadata(if path.is_dir() { engine_vst3_binary(path) } else { path.to_path_buf() });
+    m.map(|m| m.len() ^ m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs()) << 20).unwrap_or(0)
+}
+
+fn engine_vst3_binary(dir: &std::path::Path) -> PathBuf {
+    dir.join("Contents").join("x86_64-win").join(dir.file_name().unwrap_or_default())
+}
+
+/// Un proceso aparte por archivo, con tiempo límite (un plugin colgado no para el escaneo)
+fn scan_one(path: &str) -> Result<Vec<plughost::Found>, String> {
+    use std::io::Read;
+    use std::os::windows::process::CommandExt;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut child = std::process::Command::new(exe)
+        .args(["--plugin-host", "scan", path])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(0x0800_0000)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            break;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("timeout".into());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut text = String::new();
+    if let Some(mut o) = child.stdout.take() {
+        let _ = o.read_to_string(&mut text);
+    }
+    let line = text.lines().last().unwrap_or_default();
+    if let Ok(found) = serde_json::from_str::<Vec<plughost::Found>>(line) {
+        return Ok(found);
+    }
+    let err = serde_json::from_str::<serde_json::Value>(line).ok().and_then(|v| v["error"].as_str().map(String::from));
+    Err(err.unwrap_or_else(|| "crash".into()))
+}
+
+/// Busca plugins en las carpetas estándar y las del usuario. Lo ya escaneado y sin cambios sale de la caché
+/// (`force` lo vuelve a cargar todo). Avisa del progreso con `plugins-scan`.
+#[tauri::command]
+async fn plugins_scan(app: AppHandle, force: bool) -> Res<ScanResult> {
+    let extra = app.state::<AppState>().cfg().plugin_folders.clone();
+    let cache_path = app.path().app_data_dir().map_err(|_| problem("plugins.scan", None))?.join("plugins.json");
+    tauri::async_runtime::spawn_blocking(move || {
+        let old: Vec<ScanCache> = if force { vec![] } else { std::fs::read_to_string(&cache_path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default() };
+        let files = plugin_files(&plugin_dirs(&extra));
+        let total = files.len();
+        let done = std::sync::atomic::AtomicUsize::new(0);
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let results: Mutex<Vec<ScanCache>> = Mutex::new(vec![]);
+        std::thread::scope(|s| {
+            for _ in 0..4 {
+                s.spawn(|| loop {
+                    let i = next.fetch_add(1, Ordering::SeqCst);
+                    let Some(file) = files.get(i) else { break };
+                    let path = file.to_string_lossy().into_owned();
+                    let stamp = file_stamp(file);
+                    let entry = old.iter().find(|c| c.path == path && c.stamp == stamp).cloned().unwrap_or_else(|| match scan_one(&path) {
+                        Ok(found) => ScanCache { path, stamp, found, error: None },
+                        Err(e) => ScanCache { path, stamp, found: vec![], error: Some(e) },
+                    });
+                    results.lock().unwrap_or_else(|e| e.into_inner()).push(entry);
+                    let n = done.fetch_add(1, Ordering::SeqCst) + 1;
+                    let _ = app.emit("plugins-scan", (n, total));
+                });
+            }
+        });
+        let mut all = results.into_inner().unwrap_or_else(|e| e.into_inner());
+        all.sort_by(|a, b| a.path.cmp(&b.path));
+        if let Ok(json) = serde_json::to_string(&all) {
+            let _ = std::fs::write(&cache_path, json);
+        }
+        let mut plugins: Vec<plughost::Found> = all.iter().flat_map(|c| c.found.clone()).collect();
+        plugins.sort_by_key(|p| p.name.to_lowercase());
+        // Las DLL que no son plugins (librerías de apoyo) no se cuentan como fallos
+        let failed = all
+            .into_iter()
+            .filter_map(|c| c.error.filter(|e| e != "no es un plugin VST2").map(|error| ScanFailure { path: c.path, error }))
+            .collect();
+        ScanResult { plugins, failed }
+    })
+    .await
+    .map_err(|_| problem("plugins.scan", None))
+}
+
+/// Abre la ventana de edición de un plugin de la cadena de `device` (en un proceso aparte). Lo que se toca allí
+/// llega como estado nuevo, se guarda y el motor recarga el plugin con él.
+#[tauri::command]
+fn plugin_edit(app: AppHandle, st: State<'_, AppState>, device: String, id: String) -> Res<()> {
+    use std::io::BufRead;
+    use std::os::windows::process::CommandExt;
+    if !engine::is_device_id(&device) {
+        return Err(problem("engine.badDevice", None));
+    }
+    let key = format!("{device}/{id}");
+    if st.editors().contains_key(&key) {
+        return Ok(());
+    }
+    let slot = st.cfg().per_device.get(&device).and_then(|d| d.plugins.iter().find(|p| p.id == id).cloned()).ok_or_else(|| problem("plugins.missing", None))?;
+    let file = std::env::temp_dir().join(format!("poxieq-edit-{}-{}.json", std::process::id(), id));
+    let job = plughost::EditJob { title: format!("{} · PoxiEQ", slot.name), slot };
+    std::fs::write(&file, serde_json::to_string(&job).unwrap_or_default()).map_err(|e| problem("plugins.open", e.to_string()))?;
+    let exe = std::env::current_exe().map_err(|e| problem("plugins.open", e.to_string()))?;
+    let mut child = std::process::Command::new(exe)
+        .args(["--plugin-host", "edit"])
+        .arg(&file)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(0x0800_0000)
+        .spawn()
+        .map_err(|e| problem("plugins.open", e.to_string()))?;
+    let Some(stdout) = child.stdout.take() else { return Err(problem("plugins.open", None)) };
+    st.editors().insert(key.clone(), child);
+    let _ = app.emit("plugin-editor", (&device, &id, true));
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
+            if let Some(state) = line.strip_prefix("STATE ") {
+                let st = app.state::<AppState>();
+                let mut cfg = st.cfg().clone();
+                if let Some(s) = cfg.per_device.get_mut(&device).and_then(|d| d.plugins.iter_mut().find(|p| p.id == id)) {
+                    s.state = state.trim().to_string();
+                    commit(&app, cfg);
+                }
+            } else if let Some(err) = line.strip_prefix("ERROR ") {
+                let _ = app.emit("plugin-error", (&id, err.trim()));
+            }
+        }
+        if let Some(mut c) = app.state::<AppState>().editors().remove(&key) {
+            let _ = c.wait();
+        }
+        let _ = app.emit("plugin-editor", (&device, &id, false));
+    });
+    Ok(())
 }
 
 /// Bypass desde la bandeja o el atajo; con el atajo, además, aviso en pantalla
@@ -1089,6 +1348,7 @@ pub fn run() {
                     eq_off: "EQ apagado".into(),
                     broken: "PoxiEQ dejó de funcionar en {d}".into(),
                     repair: "Abre PoxiEQ y pulsa Reparar".into(),
+                    plugins_off: "Apagar mis plugins".into(),
                 }),
                 live: Mutex::new(live),
                 presets: Mutex::new(vec![]),
@@ -1097,6 +1357,7 @@ pub fn run() {
                 room: Mutex::new(vec![]),
                 default_output: Mutex::new(default_output),
                 broken: Mutex::new(vec![]),
+                editors: Mutex::new(HashMap::new()),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -1110,6 +1371,7 @@ pub fn run() {
                 .on_menu_event(|app, ev| match ev.id().as_ref() {
                     "open" => show_window(app),
                     "bypass" => toggle_bypass(app, false),
+                    "plugins_off" => plugins_off(app),
                     "quit" => app.exit(0),
                     id => {
                         if let Some(id) = id.strip_prefix("preset:") {
@@ -1150,6 +1412,8 @@ pub fn run() {
             engine_status,
             engine_setup,
             engine_diagnose,
+            plugins_scan,
+            plugin_edit,
             engine_check,
             sound_settings,
             engine_uninstall,
@@ -1183,6 +1447,9 @@ pub fn run() {
         .run(|app, ev| {
             if let RunEvent::Exit = ev {
                 reset_live(app);
+                for (_, mut c) in app.state::<AppState>().editors().drain() {
+                    let _ = c.kill();
+                }
             }
         });
 }
@@ -1300,6 +1567,7 @@ mod tests {
             dsp: None,
             curve: None,
             studio: Some(eq::Studio { listen: eq::Listen::Mono, sim: Some(eq::Sim::Phone), ..eq::Studio::default() }),
+            plugins: None,
         });
         let mut phones = poxidsp::Settings::default();
         phones.crossfeed.on = true;

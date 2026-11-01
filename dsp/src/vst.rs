@@ -9,6 +9,7 @@
 //! sale tal cual entró (si el plugin calla, Windows se queda sin sonido).
 
 use crate::dsp::Chain;
+use crate::host::{self, Spec};
 use crate::shm::{self, Map};
 use crate::Settings;
 use std::ffi::c_void;
@@ -25,6 +26,7 @@ const FLAG_DOUBLE: i32 = 1 << 12;
 const OPEN: i32 = 0;
 const CLOSE: i32 = 1;
 const SET_SAMPLE_RATE: i32 = 10;
+const SET_BLOCK_SIZE: i32 = 11;
 const MAINS_CHANGED: i32 = 12;
 const GET_CHUNK: i32 = 23;
 const SET_CHUNK: i32 = 24;
@@ -99,6 +101,12 @@ struct Plugin {
     meters: Option<Map>,
     /// Un panic dentro del proceso: desde ahí, paso directo
     failed: bool,
+    /// Modo host: el plugin del usuario que se aloja (`spec`) y, ya cargado, la instancia
+    spec: Option<Spec>,
+    hosted: Option<host::Plugin>,
+    block: usize,
+    /// Búferes en f32 para el plugin alojado (reservados al cargarlo)
+    work: [Vec<f32>; 2],
 }
 
 impl Plugin {
@@ -137,6 +145,10 @@ impl Plugin {
             chain: None,
             meters: None,
             failed: false,
+            spec: None,
+            hosted: None,
+            block: 1024,
+            work: [Vec::new(), Vec::new()],
         })
     }
 
@@ -147,11 +159,24 @@ impl Plugin {
                 self.rate = opt as f64;
                 0
             }
+            SET_BLOCK_SIZE => {
+                self.block = (value.max(16) as usize).min(8192);
+                0
+            }
             SET_CHUNK => {
-                if ptr.is_null() || !(1..=1 << 16).contains(&value) {
+                if ptr.is_null() || !(1..=host::MAX_STATE as isize + 4096).contains(&value) {
                     return 0;
                 }
                 let data = unsafe { std::slice::from_raw_parts(ptr as *const u8, value as usize) };
+                if data.starts_with(host::MAGIC) {
+                    // Un plugin del usuario: se carga al arrancar el proceso (ya con frecuencia y bloque)
+                    self.spec = Spec::from_chunk(data);
+                    self.chunk = data.to_vec();
+                    return self.spec.is_some() as isize;
+                }
+                if data.len() > 1 << 16 {
+                    return 0;
+                }
                 // Un chunk que no se entiende deja todo apagado: paso directo
                 (self.settings, self.key) = Settings::from_chunk(data).unwrap_or_default();
                 self.chunk = data.to_vec();
@@ -178,6 +203,15 @@ impl Plugin {
 
     /// Prepara la cadena con los ajustes y la frecuencia ya recibidos (aquí sí se reserva memoria)
     fn resume(&mut self) {
+        if let Some(spec) = &self.spec {
+            if self.hosted.is_none() {
+                // ponytail: un plugin que revienta con una excepción de C++ o un acceso inválido tumba audiodg
+                // (Windows lo reinicia); aislarlo exigiría otro proceso con audio compartido
+                self.hosted = host::Plugin::load(spec, self.rate, self.block).ok();
+                self.work = [vec![0.0; self.block], vec![0.0; self.block]];
+            }
+            return;
+        }
         self.chain = self.settings.active().then(|| Chain::new(&self.settings, self.rate));
         if let (Some(chain), Some(s)) = (&mut self.chain, saved(self.key)) {
             let v = |i: usize| f64::from_bits(s.state[i].load(Ordering::Relaxed));
@@ -190,6 +224,24 @@ impl Plugin {
 
     /// Un bloque. Los punteros pueden coincidir (proceso en el sitio): se lee L y R antes de escribir.
     unsafe fn run<T: Sample>(&mut self, inp: [*const T; 2], out: [*mut T; 2], n: usize) {
+        if let Some(p) = self.hosted.as_mut().filter(|_| !self.failed) {
+            let [l, r] = &mut self.work;
+            let mut done = 0;
+            while done < n {
+                let m = (n - done).min(l.len());
+                for i in 0..m {
+                    l[i] = inp[0].add(done + i).read().get() as f32;
+                    r[i] = inp[1].add(done + i).read().get() as f32;
+                }
+                p.process(&mut l[..m], &mut r[..m]);
+                for i in 0..m {
+                    out[0].add(done + i).write(T::put(l[i] as f64));
+                    out[1].add(done + i).write(T::put(r[i] as f64));
+                }
+                done += m;
+            }
+            return;
+        }
         let Some(chain) = self.chain.as_mut().filter(|_| !self.failed) else {
             return passthrough(inp, out, n);
         };
@@ -412,6 +464,21 @@ mod tests {
             h.run(h.fx().process_replacing, &mut ol, &mut or);
             assert!(ol.iter().zip(&l).chain(or.iter().zip(&r)).all(|(a, b)| a.to_bits() == b.to_bits()));
         }
+    }
+
+    /// Modo host por la misma frontera que usa el motor, con un VST3 de verdad (ignorado: depende del PC)
+    #[test]
+    #[ignore]
+    fn modo_host_con_un_plugin_real() {
+        let path = r"C:\Program Files\Common Files\VST3\ValhallaDelay.vst3";
+        let Ok(infos) = host::scan(path) else { return };
+        let chunk = Spec { format: infos[0].format, path: path.into(), cid: infos[0].cid, state: vec![] }.chunk();
+        let h = Host::load(Some(&chunk));
+        // Bloques más largos que el anunciado: se trocean
+        let (mut l, mut r) = (signal(FRAMES * 3, 1), signal(FRAMES * 3, 2));
+        h.run(h.fx().process_double_replacing, &mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| v.is_finite()));
+        assert_eq!(h.fx().initial_delay, 0);
     }
 
     #[test]

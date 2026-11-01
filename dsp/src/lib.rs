@@ -6,6 +6,8 @@
 //! ([`Settings::chunk`]) y leer las medidas de la memoria compartida ([`shm`]).
 
 pub mod dsp;
+pub mod host;
+mod host3;
 mod hrir;
 pub mod shm;
 mod vst;
@@ -327,9 +329,46 @@ pub fn base64(data: &[u8]) -> String {
     out
 }
 
+/// Base64 estándar a bytes (`None` si no es base64 válido)
+pub fn unbase64(text: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let b = text.trim_end_matches('=').as_bytes();
+    if text.len() % 4 != 0 || text.len() - b.len() > 2 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(b.len() * 3 / 4);
+    for c in b.chunks(4) {
+        let mut n = 0u32;
+        for (i, &ch) in c.iter().enumerate() {
+            n |= val(ch)? << (18 - 6 * i);
+        }
+        out.extend_from_slice(&n.to_be_bytes()[1..c.len()]);
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn base64_ida_y_vuelta() {
+        for n in 0..10 {
+            let d: Vec<u8> = (0..n).map(|i| (i * 37 + 5) as u8).collect();
+            assert_eq!(unbase64(&base64(&d)), Some(d));
+        }
+        assert_eq!(unbase64("abc"), None);
+        assert_eq!(unbase64("a$c="), None);
+    }
 
     #[test]
     fn chunk_ida_y_vuelta() {

@@ -1,4 +1,4 @@
-import { AudioWaveform, Headphones, House, Mic, Settings, SlidersVertical, Volume2 } from 'lucide-react'
+import { AudioWaveform, Blocks, Headphones, House, Mic, Settings, SlidersVertical, Volume2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { partsOn, SECTION_PARTS } from '../lib/dsp'
 import { go, micSettings, outputSettings, studioActive, useStore, type Page } from '../lib/store'
@@ -10,7 +10,8 @@ const PAGES: [Page, LucideIcon][] = [
   ['phones', Headphones],
   ['studio', AudioWaveform],
   ['room', House],
-  ['mic', Mic]
+  ['mic', Mic],
+  ['plugins', Blocks]
 ]
 
 /** Punto junto a la sección cuando algo suyo está encendido: ámbar si es momentáneo y cambia lo que oyes */
@@ -22,7 +23,8 @@ function useDots(): Record<Page, Dot> {
   const phones = useStore((s) => partsOn(outputSettings(s).dsp, SECTION_PARTS.phones))
   const studio = useStore((s) => studioActive(s.studio))
   const mic = useStore((s) => !s.config?.mic.bypass && partsOn(micSettings(s).dsp, SECTION_PARTS.mic))
-  return { eq: null, sound: sound ? 'on' : null, phones: phones ? 'on' : null, studio: studio ? 'warn' : null, room: null, mic: mic ? 'on' : null, settings: null }
+  const plugins = useStore((s) => [outputSettings(s), micSettings(s)].some((d) => d.plugins.some((p) => p.on)))
+  return { plugins: plugins ? 'on' : null, eq: null, sound: sound ? 'on' : null, phones: phones ? 'on' : null, studio: studio ? 'warn' : null, room: null, mic: mic ? 'on' : null, settings: null }
 }
 
 /** Menú principal: una sección por tarea y Ajustes abajo del todo */

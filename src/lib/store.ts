@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, type AppInfo, type Config, type Device, type DeviceSettings, type Dsp, type EngineStatus, type Preset, type Section, type SectionPreset, type Studio } from './api'
+import { api, type AppInfo, type Config, type Device, type DeviceSettings, type Dsp, type EngineStatus, type PluginSlot, type Preset, type Section, type SectionPreset, type Studio } from './api'
 import { DSP_DEFAULT, equal, onlyParts, partsOn, sameParts, SECTION_PARTS, withParts } from './dsp'
 import { autoPreamp, BUILTIN, builtinCurve, hasGain, type Curve } from './eq'
 import { Grouper, History } from './history'
@@ -18,7 +18,7 @@ export interface Toast {
 export type SetupStep = 'download' | 'install' | 'check' | null
 
 /** Secciones del menú lateral */
-export type Page = 'eq' | 'sound' | 'phones' | 'studio' | 'room' | 'mic' | 'settings'
+export type Page = 'eq' | 'sound' | 'phones' | 'studio' | 'room' | 'mic' | 'plugins' | 'settings'
 
 interface State {
   app: AppInfo | null
@@ -33,11 +33,15 @@ interface State {
   studio: Studio
   modal: 'savePreset' | 'import' | 'hearing' | 'room' | 'diagnose' | null
   /** Sección del preset que se guarda (ventana de guardar) */
-  saveFor: ShareSection
+  saveFor: ShareSection | 'plugins'
   /** Preset que se está compartiendo, con su código (ventana de compartir abierta) */
   sharing: { name: string; code: string } | null
   /** Último preset de Estudio elegido: momentáneo como la propia escucha (se va con ella) */
   studioPreset: string | null
+  /** Página Plugins: la cadena de la salida o la del micrófono */
+  pluginsFor: 'output' | 'mic'
+  /** Ventanas de edición de plugins abiertas (`dispositivo/hueco`) */
+  editing: string[]
   /** Código que llega a la ventana de importar (archivo arrastrado) */
   importCode: string
   /** Hay algo que deshacer / rehacer */
@@ -61,6 +65,8 @@ export const useStore = create<State>(() => ({
   saveFor: 'eq',
   sharing: null,
   studioPreset: null,
+  pluginsFor: 'output',
+  editing: [],
   importCode: '',
   history: { undo: false, redo: false },
   hotkeysFailed: [],
@@ -272,7 +278,7 @@ export function renamePreset(id: string, name: string): void {
 
 // ——— Ajustes de cada dispositivo: su PoxiDSP y el último preset de cada sección ———
 
-const NO_SETTINGS: DeviceSettings = Object.freeze({ dsp: DSP_DEFAULT, presets: { sound: null, phones: null, mic: null } })
+const NO_SETTINGS: DeviceSettings = Object.freeze({ dsp: DSP_DEFAULT, presets: { sound: null, phones: null, mic: null, plugins: null }, plugins: [] })
 
 /** Lo que recuerda un dispositivo; sin nada guardado, lo de serie (Natural, sin crossfeed, ningún preset) */
 export function settingsOf(s: Pick<State, 'config'>, id: string | null | undefined): DeviceSettings {
@@ -295,6 +301,21 @@ export const setOutputDsp = (dsp: Dsp): void => setDsp(currentOutput()?.id, dsp)
 
 /** Cambia la puerta/compresor del micrófono que se edita */
 export const setMicDsp = (dsp: Dsp): void => setDsp(currentMic()?.id, dsp)
+
+// ——— Plugins del usuario ———
+
+/** Dispositivo cuya cadena se ve en la página Plugins */
+export const pluginsDevice = (s: Pick<State, 'config' | 'engine' | 'pluginsFor'> = getState()): Device | null =>
+  s.pluginsFor === 'mic' ? currentMic(s) : currentOutput(s)
+
+export const pluginsSettings = (s: Pick<State, 'config' | 'engine' | 'pluginsFor'> = getState()): DeviceSettings => settingsOf(s, pluginsDevice(s)?.id)
+
+/** Cambia la cadena de plugins del dispositivo de la página Plugins */
+export function setPlugins(plugins: PluginSlot[]): void {
+  const s = getState()
+  const id = pluginsDevice(s)?.id
+  if (id && s.config) updateConfig({ perDevice: { ...s.config.perDevice, [id]: { ...settingsOf(s, id), plugins } } })
+}
 
 // ——— Presets de Sonido, Cascos, Estudio y Micrófono ———
 
@@ -322,12 +343,18 @@ function matches(s: State, section: Section, p: SectionPreset): boolean {
       return !!p.dsp && !!p.curve && sameParts(micSettings(s).dsp, p.dsp, SECTION_PARTS.mic) && sameCurve(micCurve(s), p.curve)
     case 'studio':
       return !!p.studio && equal(s.studio, p.studio)
+    case 'plugins':
+      return !!p.plugins && equal(chainOf(pluginsSettings(s).plugins), chainOf(p.plugins))
   }
 }
 
+/** Lo que define una cadena: qué plugins, en qué orden, encendidos o no y con qué estado */
+const chainOf = (list: PluginSlot[]): unknown[] => list.map((p) => [p.path, p.cid, p.on, p.state])
+
 /** Preset de la sección que suena: el último elegido mientras no se retoque (después, «Personalizado») */
 export function activeSectionPreset(s: State, section: Section): string | null {
-  const id = section === 'studio' ? s.studioPreset : section === 'mic' ? micSettings(s).presets.mic : outputSettings(s).presets[section]
+  const id =
+    section === 'studio' ? s.studioPreset : section === 'mic' ? micSettings(s).presets.mic : section === 'plugins' ? pluginsSettings(s).presets.plugins : outputSettings(s).presets[section]
   const p = id ? sectionPresets(s, section).find((x) => x.id === id) : undefined
   return p && matches(s, section, p) ? p.id : null
 }
@@ -344,6 +371,8 @@ export function sectionOff(s: State, section: Section): boolean {
       const c = micCurve(s)
       return !partsOn(micSettings(s).dsp, SECTION_PARTS.mic) && c.preamp === 0 && c.bands.every((b) => !b.on || (hasGain(b.kind) && b.gain === 0))
     }
+    case 'plugins':
+      return pluginsSettings(s).plugins.length === 0
   }
 }
 
@@ -359,11 +388,13 @@ function snapshot(s: State, section: Section): Omit<SectionPreset, 'id' | 'name'
     }
     case 'studio':
       return { studio: { ...s.studio } }
+    case 'plugins':
+      return { plugins: structuredClone(pluginsSettings(s).plugins) }
   }
 }
 
 /** Dispositivo al que se aplica una sección: el micrófono que se edita o la salida */
-const targetOf = (s: State, section: Section): string | undefined => (section === 'mic' ? currentMic(s) : currentOutput(s))?.id
+const targetOf = (s: State, section: Section): string | undefined => (section === 'mic' || (section === 'plugins' && s.pluginsFor === 'mic') ? currentMic(s) : currentOutput(s))?.id
 
 /** Apunta `id` como último preset de la sección en su dispositivo (sin paso de deshacer: no cambia el sonido) */
 function markPick(section: Section, id: string): void {
@@ -408,9 +439,14 @@ export function applySectionPreset(section: Section, p: SectionPreset): void {
     return
   }
   const dev = targetOf(s, section)
-  if (!dev || !p.dsp) return
+  if (!dev) return
   const cur = settingsOf(s, dev)
-  const next: DeviceSettings = { dsp: withParts(cur.dsp, p.dsp, SECTION_PARTS[section]), presets: { ...cur.presets, [section]: p.id } }
+  if (section === 'plugins') {
+    if (p.plugins) updateConfig({ perDevice: { ...s.config.perDevice, [dev]: { ...cur, plugins: structuredClone(p.plugins), presets: { ...cur.presets, plugins: p.id } } } })
+    return
+  }
+  if (!p.dsp) return
+  const next: DeviceSettings = { ...cur, dsp: withParts(cur.dsp, p.dsp, SECTION_PARTS[section]), presets: { ...cur.presets, [section]: p.id } }
   const patch: Partial<Config> = { perDevice: { ...s.config.perDevice, [dev]: next } }
   if (section === 'mic' && p.curve) {
     setState({ selected: null })

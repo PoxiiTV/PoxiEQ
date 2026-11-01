@@ -5,6 +5,10 @@ use poxieq_lib::engine;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Proceso aparte para escanear plugins o abrir su editor (un plugin que revienta no tumba la app)
+    if args.first().is_some_and(|a| a == "--plugin-host") {
+        std::process::exit(poxieq_lib::plughost::main(&args[1..]));
+    }
     // Copia elevada de la app (UAC): hace lo que necesita admin, deja el resultado en un archivo y sale
     if let [flag, out, rest @ ..] = args.as_slice() {
         if flag == "--elevated" {
