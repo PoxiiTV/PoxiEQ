@@ -336,10 +336,13 @@ mod real {
         }
         println!("bloques procesados {ok}/300, cambiados por el plugin {changed}, peor ida y vuelta {worst:?}");
         assert!(ok >= 290 && changed > 100);
+        // Su retardo lo manda cada segundo
+        std::thread::sleep(Duration::from_millis(1500));
         writeln!(child.stdin.as_mut().unwrap(), "QUIT").unwrap();
         let out = std::io::BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok).collect::<Vec<_>>();
         assert!(child.wait().unwrap().success());
         println!("salida: {:?}", out.iter().map(|l| &l[..l.len().min(40)]).collect::<Vec<_>>());
+        assert!(out.iter().any(|l| l.starts_with("LATENCY ")), "manda su retardo");
         // Sin el proceso, vuelve a pasar tal cual sin esperar
         let (mut l, mut r) = (vec![0.3f32; 480], vec![0.3f32; 480]);
         assert!(!c.process(48000.0, &mut l, &mut r));

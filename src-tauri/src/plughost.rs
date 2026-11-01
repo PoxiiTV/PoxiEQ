@@ -5,14 +5,15 @@
 //! - `serve <archivo.json>`: aloja de verdad el plugin del hueco descrito (el archivo se borra al leerlo). Un hilo
 //!   de audio atiende el puente con el motor (`poxidsp::bridge`) y su ventana es la del plugin que suena. Por la
 //!   entrada estándar llega `SHOW` (enseñar la ventana) y `QUIT`; por la salida va `STATE <base64>` cuando cambia
-//!   su estado (cada segundo como mucho), `EDITOR 1`/`EDITOR 0` al abrir y cerrar la ventana y `ERROR …`.
+//!   su estado (cada segundo como mucho), `LATENCY <muestras a 48 kHz>` cuando cambia su retardo, `EDITOR 1`/
+//!   `EDITOR 0` al abrir y cerrar la ventana y `ERROR …`.
 
 use serde::{Deserialize, Serialize};
 use poxidsp::bridge::{Server, MAX_BLOCK};
 use poxidsp::host::Plugin;
 use std::cell::UnsafeCell;
 use std::io::{BufRead, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use windows::core::{w, HSTRING, PCWSTR};
@@ -125,9 +126,11 @@ fn serve(file: &str) -> i32 {
     };
     let live = Arc::new(Live { plugin: UnsafeCell::new(plugin), audio: Mutex::new(()) });
     let stop = Arc::new(AtomicBool::new(false));
+    // Frecuencia a la que trabaja (la del motor): para pasar su retardo a muestras a 48 kHz
+    let now_rate = Arc::new(AtomicU32::new(rate as u32));
     let audio = {
-        let (live, stop, key) = (live.clone(), stop.clone(), job.bridge);
-        std::thread::spawn(move || audio_thread(&live, &stop, key, first, rate))
+        let (live, stop, key, now_rate) = (live.clone(), stop.clone(), job.bridge, now_rate.clone());
+        std::thread::spawn(move || audio_thread(&live, &stop, key, first, rate, &now_rate))
     };
 
     unsafe {
@@ -166,6 +169,7 @@ fn serve(file: &str) -> i32 {
 
         let p = live.get();
         let mut last = p.state();
+        let mut latency = u32::MAX;
         let mut open = false;
         let mut ticks = 0u32;
         let mut msg = MSG::default();
@@ -179,6 +183,13 @@ fn serve(file: &str) -> i32 {
                     // Cada segundo, el estado nuevo si ha cambiado (para guardarlo; el sonido ya lo lleva)
                     if ticks % 33 == 0 {
                         send(p, &mut last);
+                        // Su retardo real (cambia con sus ajustes: lookahead, fase lineal…), en muestras a 48 kHz
+                        let r = now_rate.load(Ordering::Relaxed).max(8000) as u64;
+                        let at48 = (p.latency() as u64 * 48000 / r) as u32;
+                        if at48 != latency {
+                            latency = at48;
+                            out(&format!("LATENCY {at48}"));
+                        }
                     }
                 }
                 WM_SHOW => {
@@ -240,7 +251,7 @@ fn flush(live: &Live) {
 }
 
 /// Atiende el puente: espera cada bloque del motor, lo procesa con el plugin y lo devuelve
-fn audio_thread(live: &Live, stop: &AtomicBool, key: u32, mut server: Option<Server>, mut rate: f64) {
+fn audio_thread(live: &Live, stop: &AtomicBool, key: u32, mut server: Option<Server>, mut rate: f64, now_rate: &AtomicU32) {
     pro_audio();
     let (mut l, mut r) = (vec![0.0f32; MAX_BLOCK], vec![0.0f32; MAX_BLOCK]);
     let mut tried = Instant::now();
@@ -259,6 +270,7 @@ fn audio_thread(live: &Live, stop: &AtomicBool, key: u32, mut server: Option<Ser
             if now >= 8000.0 && (now - rate).abs() > 0.5 {
                 live.get().set_rate(now);
                 rate = now;
+                now_rate.store(now as u32, Ordering::Relaxed);
             }
             live.get().process(l, r);
         });

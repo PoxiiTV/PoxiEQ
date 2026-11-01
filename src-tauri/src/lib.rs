@@ -1360,6 +1360,16 @@ fn spawn_host(app: &AppHandle, device: &str, slot: &eq::PluginSlot) -> Result<Ho
                         commit(&app, cfg);
                     }
                 }
+            } else if let Some(n) = line.strip_prefix("LATENCY ").and_then(|n| n.trim().parse::<u32>().ok()) {
+                // Su retardo de verdad, para el medidor de latencia (y el «+x ms» de la cadena)
+                let st = app.state::<AppState>();
+                let mut cfg = st.cfg().clone();
+                if let Some(s) = cfg.per_device.get_mut(&device).and_then(|d| d.plugins.iter_mut().find(|p| p.id == id)) {
+                    if s.latency != n {
+                        s.latency = n;
+                        commit(&app, cfg);
+                    }
+                }
             } else if let Some(open) = line.strip_prefix("EDITOR ") {
                 let _ = app.emit("plugin-editor", (&device, &id, open.trim() == "1"));
             } else if let Some(err) = line.strip_prefix("ERROR ") {
