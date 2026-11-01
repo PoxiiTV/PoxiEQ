@@ -353,6 +353,19 @@ pub fn fit(power: &[f64], params: &FitParams) -> Fit {
         lo -= 1;
     }
     let low = freqs[lo] * std::f64::consts::SQRT_2;
+    fit_curves(freqs, measured, target, low, params)
+}
+
+/// Lleva una curva en dB a 0 dB de media en la banda de referencia (250 Hz–2,5 kHz)
+pub fn normalize(v: &[f64]) -> Vec<f64> {
+    let (s, n) = (0..GRID).filter(|&i| (REF_BAND.0..=REF_BAND.1).contains(&grid_freq(i))).fold((0.0, 0), |(s, n), i| (s + v[i], n + 1));
+    let m = s / n.max(1) as f64;
+    v.iter().map(|x| x - m).collect()
+}
+
+/// Ajuste de filtros de `measured` a `target` (dB en la rejilla, ya normalizados). Por debajo de `low` no se
+/// sube nada. Lo usan la sala y los cascos (objetivos de AutoEq y «suena como»).
+pub fn fit_curves(freqs: Vec<f64>, measured: Vec<f64>, target: Vec<f64>, low: f64, params: &FitParams) -> Fit {
     let trig = freqs
         .iter()
         .map(|f| {

@@ -330,7 +330,12 @@ export default {
     manualText: 'Paste the text of a “ParametricEQ.txt” here or drop the file.',
     ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
     bad: "I can't find any filter in that text",
-    ok: '{n} filters applied'
+    ok: '{n} filters applied',
+    target: 'Target',
+    targets: { autoeq: "AutoEq's (recommended)", like: 'Sound like other headphones…' },
+    targetHint: "These targets are meant for oratory1990's measurements (GRAS 45CA). With other sources, AutoEq's is better.",
+    likeSearch: 'Search the headphones you want to imitate',
+    rigWarn: 'They were measured on a different rig: mixing them skews the result. Better pick ones from the same source.'
   },
   settings: {
     title: 'Settings',

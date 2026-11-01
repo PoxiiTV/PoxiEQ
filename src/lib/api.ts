@@ -327,6 +327,7 @@ export const api = {
   pluginEdit: (device: string, id: string) => invoke<void>('plugin_edit', { device, id }),
   autoeqIndex: (force = false) => invoke<AutoEqEntry[]>('autoeq_index', { force }),
   autoeqFetch: (path: string) => invoke<string>('autoeq_fetch', { path }),
+  autoeqFit: (path: string, target: string | null, like: string | null) => invoke<Band[]>('autoeq_fit', { req: { path, target, like } }),
   autostartGet: () => invoke<boolean>('autostart_get'),
   autostartSet: (on: boolean) => invoke<void>('autostart_set', { on }),
   trayLabels: (labels: TrayLabels) => invoke<void>('tray_labels', { labels }),

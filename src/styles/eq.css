@@ -1627,6 +1627,21 @@
   min-width: 0;
 }
 
+/* ——— Objetivo de AutoEq ——— */
+.target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.like-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hint.warn {
+  color: var(--warning);
+}
+
 /* ——— Convolución ——— */
 .ir-info {
   display: flex;

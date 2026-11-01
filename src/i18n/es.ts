@@ -330,7 +330,12 @@ export default {
     manualText: 'Pega aquí el texto de un «ParametricEQ.txt» o arrastra el archivo.',
     ph: 'Preamp: -6.4 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70\n…',
     bad: 'No encuentro ningún filtro en ese texto',
-    ok: '{n} filtros aplicados'
+    ok: '{n} filtros aplicados',
+    target: 'Objetivo',
+    targets: { autoeq: 'El de AutoEq (recomendado)', like: 'Que suene como otros cascos…' },
+    targetHint: 'Estos objetivos están pensados para medidas de oratory1990 (GRAS 45CA). Con otras fuentes, mejor el de AutoEq.',
+    likeSearch: 'Busca los cascos que quieres imitar',
+    rigWarn: 'Están medidos en otro banco de medida: mezclarlos falsea el resultado. Mejor elige unos de la misma fuente.'
   },
   settings: {
     title: 'Ajustes',

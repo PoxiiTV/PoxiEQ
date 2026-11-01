@@ -730,6 +730,29 @@ async fn autoeq_fetch(path: String) -> Res<String> {
     autoeq::fetch(&path).await.map_err(|e| problem("autoeq.offline", e))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoEqFit {
+    path: String,
+    /// Uno de `autoeq::TARGET_FILES` (sin él, el objetivo con el que lo ajustó AutoEq)
+    target: Option<String>,
+    /// «Que suene como…»: otro modelo del índice
+    like: Option<String>,
+}
+
+/// Corrección de un modelo hacia otro objetivo o hacia la medida de otros cascos
+#[tauri::command]
+async fn autoeq_fit(req: AutoEqFit) -> Res<Vec<eq::Band>> {
+    let off = |e: String| problem("autoeq.offline", e);
+    let (measured, own) = autoeq::measurement(&req.path).await.map_err(off)?;
+    let target = match (&req.like, &req.target) {
+        (Some(l), _) => autoeq::measurement(l).await.map_err(off)?.0,
+        (None, Some(t)) => autoeq::target(t).await.map_err(off)?,
+        _ => own,
+    };
+    tauri::async_runtime::spawn_blocking(move || autoeq::fit(&measured, &target).bands).await.map_err(|_| problem("autoeq.offline", None))
+}
+
 /// Analizador: solo con la ventana a la vista (la interfaz lo para al esconderse). De una salida mide lo que
 /// suena; de un micrófono, lo que llega de él ya procesado.
 #[tauri::command]
@@ -1535,6 +1558,7 @@ pub fn run() {
             engine_uninstall,
             autoeq_index,
             autoeq_fetch,
+            autoeq_fit,
             autostart_get,
             autostart_set,
             tray_labels,

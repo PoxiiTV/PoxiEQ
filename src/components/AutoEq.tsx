@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, LoaderCircle, Search } from 'lucide-react'
 import { api, type AutoEqEntry } from '../lib/api'
-import { curveDb, fmtDb, logFreqs, parseApo, type Band } from '../lib/eq'
+import { autoPreamp, curveDb, fmtDb, logFreqs, parseApo, type Band } from '../lib/eq'
 import { currentCurve, savePreset, setCurve, setState, toast } from '../lib/store'
 import { errorText, useT } from '../i18n'
+import { Select } from './controls'
 
 // Quién mide mejor va antes: oratory1990 es la referencia de AutoEq
 const RANK: Record<string, number> = { oratory1990: 0, crinacle: 1, Rtings: 2, Innerfidelity: 3 }
@@ -20,6 +21,13 @@ function withTaste(bands: Band[], bass: number, treble: number): Band[] {
 }
 
 type Picked = { entry: AutoEqEntry; bands: Band[]; preamp: number }
+
+/** Objetivos que se pueden elegir (los mismos que `autoeq::TARGET_FILES`); `autoeq` = el suyo, `like` = otros cascos */
+const TARGETS = ['autoeq', 'Harman over-ear 2018', 'Harman in-ear 2019', 'Diffuse field 5128', 'Diffuse field ISO 11904-1', 'AutoEq in-ear', 'like'] as const
+type Target = (typeof TARGETS)[number]
+
+/** Banco de medida: fuente y equipo (las dos primeras partes de la ruta del índice) */
+const rig = (path: string): string => path.split('/').slice(0, 2).join('/')
 
 /** Buscador de AutoEq dentro de la página «Cascos»: buscar, ver la corrección y aplicarla (o pegar el archivo) */
 export function AutoEqPanel(): React.JSX.Element {
@@ -157,10 +165,31 @@ function Detail({ picked, back }: { picked: Picked; back: () => void }): React.J
   const [bass, setBass] = useState(0)
   const [treble, setTreble] = useState(0)
   const [name, setName] = useState(picked.entry.name)
-  const bands = useMemo(() => withTaste(picked.bands, bass, treble), [picked, bass, treble])
+  const [target, setTarget] = useState<Target>('autoeq')
+  const [like, setLike] = useState<AutoEqEntry | null>(null)
+  const [fitted, setFitted] = useState<Band[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    setFitted(null)
+    if (target === 'autoeq' || (target === 'like' && !like)) return
+    let live = true
+    setBusy(true)
+    api
+      .autoeqFit(picked.entry.path, target === 'like' ? null : target, target === 'like' ? like!.path : null)
+      .then((b) => live && setFitted(b))
+      .catch((e) => live && toast(errorText(e), 'err'))
+      .finally(() => live && setBusy(false))
+    return () => {
+      live = false
+    }
+  }, [picked, target, like])
+  const base = fitted ?? picked.bands
+  const bands = useMemo(() => withTaste(base, bass, treble), [base, bass, treble])
+  const preamp = fitted ? autoPreamp(bands) : picked.preamp
 
   const apply = (): void => {
-    setCurve({ ...currentCurve(), bands, preamp: picked.preamp })
+    if (target !== 'autoeq' && !fitted) return
+    setCurve({ ...currentCurve(), bands, preamp })
     if (name.trim()) savePreset(name.trim().slice(0, 48))
     setState({ selected: null })
     toast(t('autoeq.ok', { n: bands.length }))
@@ -180,6 +209,19 @@ function Detail({ picked, back }: { picked: Picked; back: () => void }): React.J
           </small>
         </div>
       </div>
+      <div className="target-row">
+        <Select
+          size="sm"
+          value={target}
+          label={t('autoeq.target')}
+          options={TARGETS.map((x) => ({ value: x, label: x === 'autoeq' || x === 'like' ? t(`autoeq.targets.${x}`) : x }))}
+          onChange={setTarget}
+        />
+        {busy && <LoaderCircle size={16} className="spin" />}
+      </div>
+      {target === 'like' && <LikePicker own={picked.entry} value={like} onPick={setLike} />}
+      {target === 'like' && like && rig(like.path) !== rig(picked.entry.path) && <p className="hint warn">{t('autoeq.rigWarn')}</p>}
+      {target !== 'autoeq' && target !== 'like' && <p className="hint">{t('autoeq.targetHint')}</p>}
       <Preview bands={bands} />
       <div className="taste">
         <Taste label={t('autoeq.bass')} value={bass} min={-6} max={12} onChange={setBass} />
@@ -194,11 +236,48 @@ function Detail({ picked, back }: { picked: Picked; back: () => void }): React.J
         <button className="btn btn-ghost" onClick={back}>
           {t('common.cancel')}
         </button>
-        <button className="btn btn-primary" onClick={apply}>
+        <button className="btn btn-primary" disabled={target !== 'autoeq' && !fitted} onClick={apply}>
           {t('autoeq.import')}
         </button>
       </div>
     </>
+  )
+}
+
+/** «Que suene como…»: otro modelo del índice (el de la misma fuente y banco, primero) */
+function LikePicker({ own, value, onPick }: { own: AutoEqEntry; value: AutoEqEntry | null; onPick: (e: AutoEqEntry) => void }): React.JSX.Element {
+  const t = useT()
+  const [q, setQ] = useState('')
+  const results = useMemo(() => {
+    const words = q.split(/\s+/).map(key).filter(Boolean)
+    if (!cache || !words.length) return []
+    return cache
+      .filter((e) => e.path !== own.path && words.every((w) => key(e.name).includes(w)))
+      .sort((a, b) => Number(rig(b.path) === rig(own.path)) - Number(rig(a.path) === rig(own.path)) || a.name.length - b.name.length)
+      .slice(0, 8)
+  }, [q, own])
+  return (
+    <div className="like-pick">
+      <div className="finder-search">
+        <Search size={17} />
+        <input className="input" value={q} placeholder={value ? value.name : t('autoeq.likeSearch')} onChange={(e) => setQ(e.target.value)} aria-label={t('autoeq.targets.like')} />
+      </div>
+      {results.map((e) => (
+        <button
+          key={e.path}
+          className={`finder-item ${value?.path === e.path ? 'hl' : ''}`}
+          onClick={() => {
+            onPick(e)
+            setQ('')
+          }}
+        >
+          <span className="txt">
+            <b>{e.name}</b>
+            <small>{t('autoeq.by', { s: e.source })}</small>
+          </span>
+        </button>
+      ))}
+    </div>
   )
 }
 
