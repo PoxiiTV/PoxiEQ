@@ -4,7 +4,7 @@
 
 <br />
 
-![Versión](https://img.shields.io/badge/versión-0.1.0-e879f9?style=flat-square&labelColor=1a0f1d)
+![Versión](https://img.shields.io/badge/versión-0.2.0-e879f9?style=flat-square&labelColor=1a0f1d)
 ![Plataforma](https://img.shields.io/badge/Windows%2010%20%7C%2011-64%20bits-5fd7ff?style=flat-square&labelColor=1a0f1d)
 ![Latencia](https://img.shields.io/badge/latencia-cero-ffd25f?style=flat-square&labelColor=1a0f1d)
 ![Sin reiniciar](https://img.shields.io/badge/sin-reiniciar-34d399?style=flat-square&labelColor=1a0f1d)
@@ -62,9 +62,9 @@ de Windows; PoxiEQ lo instala, lo activa y lo esconde por ti con **un clic**.
 
 ## 📥 Descarga
 
-### **[⬇️ Descargar PoxiEQ 0.1.0 para Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.1.0/PoxiEQ-Setup-0.1.0.exe)**
+### **[⬇️ Descargar PoxiEQ 0.2.0 para Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.0/PoxiEQ-Setup-0.2.0.exe)**
 
-Instalador de 2,5 MB: crea los accesos, arranca con Windows si quieres y **se actualiza solo**.
+Instalador de 3 MB: crea los accesos, arranca con Windows si quieres y **se actualiza solo**.
 
 Todas las versiones y sus novedades, en [**Releases**](https://github.com/PoxiiTV/PoxiEQ/releases).
 Requiere **Windows 10 u 11 de 64 bits**.
@@ -73,8 +73,9 @@ Requiere **Windows 10 u 11 de 64 bits**.
 > administrador una vez** (el motor vive dentro del audio de Windows) y el sonido se corta un par de segundos.
 > **No hace falta reiniciar.**
 
-> ℹ️ Como el `.exe` aún no está firmado, Windows puede enseñar el aviso azul de SmartScreen:
-> **Más información → Ejecutar de todas formas.**
+> ℹ️ Como el `.exe` aún no está firmado con un certificado, Windows puede enseñar el aviso azul de SmartScreen
+> (**Más información → Ejecutar de todas formas**) y algún antivirus puede desconfiar de él por ser nuevo. El código
+> está entero aquí.
 
 ---
 
@@ -87,7 +88,9 @@ Requiere **Windows 10 u 11 de 64 bits**.
 | 📊 **Medidores de estudio, siempre a la vista** | Pico y RMS por canal, **LUFS** momentáneo, corto e integrado, **true peak**, correlación de fase y la reducción de ganancia del compresor y el limitador. Miden **después** del EQ: lo que de verdad oyes |
 | 🎧 **Tus cascos, corregidos** | Escribe tu modelo y aplica su corrección de [AutoEq](https://github.com/jaakkopasanen/AutoEq) (más de 8.000 modelos) sin salir de la app, con graves y agudos a tu gusto |
 | 🔁 **Cada dispositivo con lo suyo** | Cada salida guarda su curva, su Sonido y sus Cascos; cada micrófono, lo suyo. Conectas unos cascos o un altavoz Bluetooth, Windows cambia a él y **PoxiEQ cambia solo a su EQ** |
-| 🎙️ **Tu micrófono, procesado** | EQ, **puerta de ruido** y **compresor** antes de que llegue a Discord, OBS o cualquier app |
+| 🔌 **Tus plugins VST** | VST2 y VST3 en la cadena de cada salida o micrófono, con su ventana de verdad y sus medidores en vivo. Cada uno en su propio proceso: si uno se cuelga, el audio de Windows sigue |
+| 🎙️ **Tu micrófono, procesado** | EQ, **supresión de ruido**, **puerta** y **compresor** antes de que llegue a Discord, OBS o cualquier app |
+| 🛠️ **Se repara solo** | Si Windows o un driver le quitan el motor a una salida, PoxiEQ lo ve y lo repara con un clic. Y si algo no suena, **¿Por qué no suena?** te dice qué pasa |
 | 🙈 **Limpio** | El motor no deja accesos en el menú Inicio ni avisos suyos. Se quita desde **Ajustes → Motor** o al desinstalar PoxiEQ, y devuelve cada dispositivo a como estaba |
 
 ## 🎚️ Ecualizador
@@ -113,7 +116,8 @@ Requiere **Windows 10 u 11 de 64 bits**.
 
 | | |
 |---|---|
-| 🔎 **Buscar mis cascos** | Corrección de AutoEq para tu modelo; también vale pegar su archivo |
+| 🔎 **Buscar mis cascos** | Corrección de AutoEq para tu modelo; también vale pegar su archivo. Con otras **curvas objetivo** y **«Suena como»** otro modelo |
+| 🌀 **Convolución** | Carga una respuesta al impulso en WAV (BRIR de HeSuVi/Impulcifer, FIR de REW) y ve su respuesta dibujada |
 | 🔀 **Crossfeed** | Un poco de cada canal al otro oído, como con altavoces: menos fatiga en sesiones largas |
 | 🔊 **Altavoces virtuales** | El estéreo suena desde dos altavoces delante de ti (±30°) en vez de dentro de la cabeza. Respuestas de cabeza reales (KEMAR del MIT), con la intensidad regulable sin cambiar el timbre del centro |
 | 👂 **Test de audición** | Mide tu umbral en 10 frecuencias en cada oído y crea «Mi audición», una compensación suave por oído. No es una prueba médica |
@@ -123,25 +127,27 @@ Requiere **Windows 10 u 11 de 64 bits**.
 | | |
 |---|---|
 | 🎚️ **Monitorización** | Mono, side, solo L / R, invertir la polaridad de cada canal e intercambiarlos. Exactos y sin colorear, también con el EQ apagado |
-| 📱 **Simular otros sistemas** | Móvil, portátil, coche, auriculares de botón, tele y altavoz Bluetooth, para comprobar cómo traduce una mezcla. Nunca suben el volumen |
+| 📱 **Simular otros sistemas** | Móvil, tablet, portátil, coche, auriculares de botón, tele, barra de sonido, altavoz Bluetooth, monitores de estudio y club, para comprobar cómo traduce una mezcla. Nunca suben el volumen. Con **inclinación** de tono ±6 dB |
 | ⏱️ **Momentáneo** | Mientras algo de Estudio está puesto se ve un aviso, y al cerrar la ventana todo vuelve a estéreo normal |
 
 ## 📐 Sala y 🎙️ Micrófono
 
 | | |
 |---|---|
-| 📐 **Corrección de sala** | Con un micrófono en tu sitio: barridos en varias posiciones, media y hasta 10 filtros calculados solos, sobre todo de **corte** (las subidas tienen tope y nunca por debajo de donde llega tu altavoz). Unos 3 minutos |
-| 🎙️ **Micrófono** | Su EQ, puerta de ruido con histéresis y compresor, con medidor de entrada y la raya del umbral de la puerta. Tiene **su propio bypass**: el atajo del EQ no te quita la puerta en mitad de un directo |
+| 📐 **Corrección de sala** | Con un micrófono en tu sitio: barridos en varias posiciones, media y hasta 10 filtros calculados solos, sobre todo de **corte** (las subidas tienen tope y nunca por debajo de donde llega tu altavoz). Unos 3 minutos. Admite la calibración de tu micrófono de medida |
+| 🎙️ **Micrófono** | Su EQ, **supresión de ruido** (RNNoise), puerta de ruido con histéresis y compresor, con medidor de entrada y la raya del umbral de la puerta. Tiene **su propio bypass**: el atajo del EQ no te quita la puerta en mitad de un directo |
 
 ## ☕ Para el día a día
 
 | | |
 |---|---|
-| 🎯 **Preset por aplicación** | Spotify → Música, tu juego → Pasos. Cambia cuando la app pasa a primer plano y vuelve al que tenías al salir |
+| 🎯 **Apps** | Cada app con su preset (Spotify → Música, tu juego → Pasos) y **su salida de audio** (Spotify a los altavoces, el juego a los cascos). **Atenuación** automática cuando habla Discord y un mezclador juego/chat con atajos |
+| ⚡ **Activar solos** | Los dispositivos nuevos que conectes se activan sin volver a pedir permiso (opcional) |
+| 📄 **Tus archivos** | Importa y exporta curvas de REW, Peace, EasyEffects, AutoEq y GraphicEQ. **Balance** izquierda/derecha por salida |
 | ⌨️ **Atajos a tu gusto** | Bypass y nueve presets, cada uno con la combinación que grabes (por defecto `Ctrl+Alt+Num 0…9`). Rechaza las que chocan con **AltGr** (que te dejarían sin `€ \| @ # ~`) y avisa si otro programa ya tiene esa combinación. Con un aviso en pantalla que **no roba el foco** al juego |
 | 🗂️ **Presets en todas las secciones** | Sonido, Cascos, Estudio y Micrófono tienen sus propios presets, y cada salida recuerda el último de cada una |
 | 🔗 **Compartir** | Cualquier preset como **código** para pegar en un chat o como archivo **`.poxieq`**: arrástralo a la ventana y va a su sección |
-| 🧺 **Bandeja** | Bypass y cambio de preset sin abrir la ventana. Al cerrar, PoxiEQ se queda en la bandeja; aunque lo cierres del todo, el EQ sigue sonando |
+| 🧺 **Bandeja** | Bypass, cambio de preset y una **mini-barra** con el medidor siempre encima, sin abrir la ventana. Al cerrar, PoxiEQ se queda en la bandeja; aunque lo cierres del todo, el EQ sigue sonando |
 | 🎨 **A tu gusto** | Tema oscuro y claro, 7 colores, español e inglés |
 
 ## 🔄 Siempre al día
@@ -158,7 +164,8 @@ Requiere **Windows 10 u 11 de 64 bits**.
 
 ## ❓ Preguntas
 
-- **¿Si cierro PoxiEQ deja de ecualizar?** No. El motor sigue aplicando lo último que pusiste; PoxiEQ solo hace falta para cambiarlo.
+- **¿Si cierro PoxiEQ deja de ecualizar?** No. El motor sigue aplicando lo último que pusiste; PoxiEQ solo hace falta para cambiarlo. Lo único que necesita PoxiEQ abierto (aunque sea en la bandeja) son tus plugins VST.
+- **¿Por qué mi antivirus lo marca?** Es un falso positivo de un programa nuevo y sin certificado de firma: los antivirus desconfían de lo que casi nadie ha descargado todavía, y más si toca el audio de Windows y pide administrador. El código está aquí entero; si te pasa, avísame en [Issues](https://github.com/PoxiiTV/PoxiEQ/issues).
 - **¿Cómo lo quito de un dispositivo?** **Ajustes → Motor**: apaga esa salida y aplica. Vuelven sus efectos originales.
 - **¿Y para quitarlo del todo?** Desinstala PoxiEQ: se lleva el motor con él. O quita solo el motor desde **Ajustes → Motor**.
 - **¿Cómo proceso mi micrófono?** En **Micrófono**, elige tu micro y actívalo. Lo que ajustes ahí lo reciben todas las apps que lo usen.
@@ -256,9 +263,9 @@ Windows; PoxiEQ installs, enables and hides it for you in **one click**.
 
 ## 📥 Download
 
-### **[⬇️ Download PoxiEQ 0.1.0 for Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.1.0/PoxiEQ-Setup-0.1.0.exe)**
+### **[⬇️ Download PoxiEQ 0.2.0 for Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.0/PoxiEQ-Setup-0.2.0.exe)**
 
-A 2.5 MB installer: creates shortcuts, optionally starts with Windows and **updates itself**.
+A 3 MB installer: creates shortcuts, optionally starts with Windows and **updates itself**.
 
 Every version and its changes, in [**Releases**](https://github.com/PoxiiTV/PoxiEQ/releases).
 Requires **64-bit Windows 10 or 11**.
@@ -267,8 +274,8 @@ Requires **64-bit Windows 10 or 11**.
 > permission once** (the engine lives inside Windows audio) and the sound cuts out for a couple of seconds.
 > **No restart needed.**
 
-> ℹ️ The `.exe` isn't signed yet, so Windows may show the blue SmartScreen warning:
-> **More info → Run anyway.**
+> ℹ️ The `.exe` isn't signed with a certificate yet, so Windows may show the blue SmartScreen warning
+> (**More info → Run anyway**) and some antivirus may distrust it for being new. All the code is here.
 
 ## 🌟 What makes it different
 
@@ -279,7 +286,9 @@ Requires **64-bit Windows 10 or 11**.
 | 📊 **Studio meters, always visible** | Per-channel peak and RMS, momentary, short-term and integrated **LUFS**, **true peak**, phase correlation and the compressor and limiter gain reduction. They measure **after** the EQ: what you actually hear |
 | 🎧 **Your headphones, corrected** | Type your model and apply its [AutoEq](https://github.com/jaakkopasanen/AutoEq) correction (over 8,000 models) without leaving the app, with bass and treble to taste |
 | 🔁 **Each device keeps its own** | Every output keeps its curve, Sound and Headphones settings; every microphone, its own. Plug in headphones or a Bluetooth speaker, Windows switches to it and **PoxiEQ switches to its EQ** |
-| 🎙️ **Your microphone, processed** | EQ, **noise gate** and **compressor** before it reaches Discord, OBS or any app |
+| 🔌 **Your VST plugins** | VST2 and VST3 in the chain of each output or microphone, with their real window and live meters. Each one in its own process: if one hangs, Windows audio keeps going |
+| 🎙️ **Your microphone, processed** | EQ, **noise suppression**, **gate** and **compressor** before it reaches Discord, OBS or any app |
+| 🛠️ **Self-repair** | If Windows or a driver removes the engine from an output, PoxiEQ notices and repairs it in one click. And if something is silent, **Why is there no sound?** tells you why |
 | 🙈 **Clean** | The engine leaves no Start menu shortcuts or notifications of its own. Remove it from **Settings → Engine** or by uninstalling PoxiEQ, and every device goes back to how it was |
 
 ## 🎚️ Equalizer
@@ -305,7 +314,8 @@ Requires **64-bit Windows 10 or 11**.
 
 | | |
 |---|---|
-| 🔎 **Find my headphones** | AutoEq correction for your model; pasting its file works too |
+| 🔎 **Find my headphones** | AutoEq correction for your model; pasting its file works too. With other **target curves** and **"Sounds like"** another model |
+| 🌀 **Convolution** | Load an impulse response WAV (HeSuVi/Impulcifer BRIR, REW FIR) and see its response drawn |
 | 🔀 **Crossfeed** | A bit of each channel into the other ear, like speakers: less fatigue in long sessions |
 | 🔊 **Virtual speakers** | Stereo plays from two speakers in front of you (±30°) instead of inside your head. Real head responses (MIT KEMAR), with adjustable intensity that doesn't change the tone of the center |
 | 👂 **Hearing test** | Measures your threshold at 10 frequencies in each ear and creates "My hearing", a gentle per-ear compensation. Not a medical test |
@@ -315,25 +325,27 @@ Requires **64-bit Windows 10 or 11**.
 | | |
 |---|---|
 | 🎚️ **Monitoring** | Mono, side, solo L / R, per-channel polarity invert and channel swap. Exact and uncolored, even with the EQ off |
-| 📱 **Simulate other systems** | Phone, laptop, car, earbuds, TV and Bluetooth speaker, to check how a mix translates. They never raise the volume |
+| 📱 **Simulate other systems** | Phone, tablet, laptop, car, earbuds, TV, soundbar, Bluetooth speaker, studio monitors and club, to check how a mix translates. They never raise the volume. With ±6 dB tone **tilt** |
 | ⏱️ **Momentary** | While anything in Studio is on a notice shows, and closing the window puts everything back to normal stereo |
 
 ## 📐 Room and 🎙️ Microphone
 
 | | |
 |---|---|
-| 📐 **Room correction** | With a microphone at your seat: sweeps at several positions, averaging and up to 10 automatically fitted filters, mostly **cuts** (boosts are capped and never below where your speaker reaches). About 3 minutes |
-| 🎙️ **Microphone** | Its own EQ, a noise gate with hysteresis and a compressor, with an input meter showing the gate threshold. It has **its own bypass**: the EQ shortcut won't remove the gate in the middle of a stream |
+| 📐 **Room correction** | With a microphone at your seat: sweeps at several positions, averaging and up to 10 automatically fitted filters, mostly **cuts** (boosts are capped and never below where your speaker reaches). About 3 minutes. Accepts your measurement microphone's calibration |
+| 🎙️ **Microphone** | Its own EQ, **noise suppression** (RNNoise), a noise gate with hysteresis and a compressor, with an input meter showing the gate threshold. It has **its own bypass**: the EQ shortcut won't remove the gate in the middle of a stream |
 
 ## ☕ Everyday
 
 | | |
 |---|---|
-| 🎯 **Preset per app** | Spotify → Music, your game → Footsteps. It switches when the app comes to the foreground and goes back to yours when you leave |
+| 🎯 **Apps** | Each app with its preset (Spotify → Music, your game → Footsteps) and **its audio output** (Spotify to the speakers, the game to the headphones). Automatic **ducking** when Discord talks and a game/chat mixer with shortcuts |
+| ⚡ **Auto-enable** | New devices you plug in are enabled without asking for permission again (optional) |
+| 📄 **Your files** | Import and export curves from REW, Peace, EasyEffects, AutoEq and GraphicEQ. Left/right **balance** per output |
 | ⌨️ **Your own shortcuts** | Bypass and nine presets, each with the combination you record (by default `Ctrl+Alt+Num 0…9`). It rejects those that clash with **AltGr** (which would cost you `€ \| @ # ~`) and warns if another program already owns the combination. With an on-screen notice that **doesn't steal focus** from your game |
 | 🗂️ **Presets in every section** | Sound, Headphones, Studio and Microphone have their own presets, and each output remembers the last one of each |
 | 🔗 **Sharing** | Any preset as a **code** to paste in a chat or as a **`.poxieq`** file: drop it on the window and it goes to its section |
-| 🧺 **Tray** | Bypass and preset switching without opening the window. Closing keeps PoxiEQ in the tray; even if you quit it, the EQ keeps playing |
+| 🧺 **Tray** | Bypass, preset switching and an always-on-top **mini bar** with the meter, without opening the window. Closing keeps PoxiEQ in the tray; even if you quit it, the EQ keeps playing |
 | 🎨 **Your style** | Dark and light themes, 7 colors, Spanish and English |
 
 ## 🔄 Always up to date
@@ -350,7 +362,8 @@ Requires **64-bit Windows 10 or 11**.
 
 ## ❓ FAQ
 
-- **Does the EQ stop if I close PoxiEQ?** No. The engine keeps applying your last settings; PoxiEQ is only needed to change them.
+- **Does the EQ stop if I close PoxiEQ?** No. The engine keeps applying your last settings; PoxiEQ is only needed to change them. The only thing that needs PoxiEQ open (even in the tray) is your VST plugins.
+- **Why does my antivirus flag it?** It's a false positive on a new program without a signing certificate: antivirus engines distrust what hardly anyone has downloaded yet, more so when it touches Windows audio and asks for administrator rights. All the code is here; if it happens to you, let me know in [Issues](https://github.com/PoxiiTV/PoxiEQ/issues).
 - **How do I remove it from a device?** **Settings → Engine**: turn that output off and apply. Its original effects come back.
 - **And to remove it completely?** Uninstall PoxiEQ: it takes the engine with it. Or remove just the engine from **Settings → Engine**.
 - **How do I process my microphone?** In **Microphone**, pick your mic and enable it. What you set there is what every app using it receives.

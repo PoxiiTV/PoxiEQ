@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.2.0
+
+### 🇪🇸 Español
+
+- 🔌 **Tus plugins VST2 y VST3** en la cadena de cada salida o micrófono: añádelos desde su archivo (o busca todos los de tus carpetas), ordénalos, apágalos y abre su ventana de verdad, la del plugin que suena, con sus medidores en vivo. Su latencia se suma al medidor.
+- 🩺 **¿Por qué no suena?**: en Ajustes → Motor, un diagnóstico que mira audio espacial, apps en exclusivo, silencio, otra salida predeterminada o efectos del fabricante, y te dice qué hacer.
+- 🛠️ **Se repara solo**: si una actualización de Windows o del driver quita el motor de una salida, PoxiEQ lo detecta y te ofrece repararlo con un clic. Si alguien toca su configuración, la rehace.
+- 🎧 **Bluetooth completo**: activa a la vez el modo música y el de llamadas de tus cascos, y la curva también suena en las llamadas.
+- 🎯 **Apps**: página propia con la salida de audio de cada app (Spotify a los altavoces, el juego a los cascos), su preset, atenuación automática cuando habla Discord y un mezclador juego/chat con atajos.
+- 🎙️ **Supresión de ruido** en el micrófono (RNNoise): quita teclado, ventilador y ruido de fondo antes de que llegue a Discord u OBS.
+- 🌀 **Convolución**: carga un WAV de respuesta al impulso (BRIR de HeSuVi/Impulcifer, FIR de REW) en cualquier salida, con su respuesta dibujada.
+- 🎯 **Objetivos de AutoEq** y **«Suena como»**: lleva tus cascos a otra curva objetivo o a que suenen como otro modelo.
+- 📐 **Sala**: carga la calibración de tu micrófono de medida y avisa si una toma sale rara.
+- 🎛️ **Estudio**: simulación de tablet, barra de sonido, monitores de estudio y club, e inclinación de tono ±6 dB.
+- ⚖️ **Balance** izquierda/derecha por salida.
+- 📄 **Importar y exportar** curvas de REW, Peace, EasyEffects, AutoEq y GraphicEQ.
+- ⚡ **Activar solos** los dispositivos nuevos que conectes, sin volver a pedir permiso.
+- 📊 **Mini-barra** siempre encima con el medidor, desde la bandeja, que no roba el foco.
+
+### 🇬🇧 English
+
+- 🔌 **Your VST2 and VST3 plugins** in the chain of each output or microphone: add them from their file (or scan your folders), reorder, turn off and open their real window, the one of the plugin you hear, with live meters. Their latency adds to the meter.
+- 🩺 **Why is there no sound?**: in Settings → Engine, a diagnosis that checks spatial audio, exclusive-mode apps, mute, another default output or vendor effects, and tells you what to do.
+- 🛠️ **Self-repair**: if a Windows or driver update removes the engine from an output, PoxiEQ notices and offers a one-click repair. If something touches its configuration, it rewrites it.
+- 🎧 **Full Bluetooth**: enables both the music and call modes of your headphones at once, and the curve plays in calls too.
+- 🎯 **Apps**: its own page with each app's audio output (Spotify to the speakers, the game to the headphones), its preset, automatic ducking when Discord talks and a game/chat mixer with shortcuts.
+- 🎙️ **Noise suppression** on the microphone (RNNoise): removes keyboard, fan and background noise before it reaches Discord or OBS.
+- 🌀 **Convolution**: load an impulse response WAV (HeSuVi/Impulcifer BRIR, REW FIR) on any output, with its response drawn.
+- 🎯 **AutoEq targets** and **"Sounds like"**: bring your headphones to another target curve or make them sound like another model.
+- 📐 **Room**: load your measurement microphone's calibration and get a warning when a take looks off.
+- 🎛️ **Studio**: tablet, soundbar, studio monitors and club simulation, plus ±6 dB tone tilt.
+- ⚖️ **Left/right balance** per output.
+- 📄 **Import and export** curves from REW, Peace, EasyEffects, AutoEq and GraphicEQ.
+- ⚡ **Auto-enable** new devices you plug in, without asking for permission again.
+- 📊 **Mini bar** always on top with the meter, from the tray, that doesn't steal focus.
+
 ## 0.1.0
 
 ### 🇪🇸 Español
