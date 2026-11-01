@@ -422,6 +422,11 @@ export default {
     failedTip: 'Otro programa ya usa este atajo'
   },
   room: {
+    cal: 'Calibración del micro de medida',
+    calHint: 'Si tu micro de medida (UMIK-1, ECM8000…) trae archivo de calibración, cárgalo: se descuenta de cada toma.',
+    calLoad: 'Cargar archivo',
+    calLoaded: 'Calibración cargada: se aplica a las tomas nuevas',
+    odd: 'Esta toma no se parece a las anteriores (¿se movió el micro de golpe, hubo un ruido?). Si no te cuadra, empieza de nuevo.',
     title: 'Corrección de sala',
     cardTitle: 'Ajusta tus altavoces a la habitación',
     cardText: 'Con un micrófono en tu sitio de escucha, mide cómo suena la sala y crea un preset que corta las resonancias de graves. Unos 3 minutos.',
@@ -600,6 +605,7 @@ export default {
     'plugins.missing': 'Ese plugin ya no está en la cadena',
     'plugins.open': 'No se ha podido abrir la ventana del plugin',
     'plugins.scan': 'No se ha podido buscar plugins',
+    'room.cal': 'El archivo no parece una calibración de micro (líneas «frecuencia dB»)',
     'ir.notWav': 'No es un archivo WAV válido',
     'ir.format': 'Formato de WAV no admitido (usa PCM de 16/24/32 bits o flotante)',
     'ir.channels': 'Como mucho 8 canales',

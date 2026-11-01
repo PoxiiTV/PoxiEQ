@@ -328,6 +328,34 @@ fn width_q(k: usize, len: usize, inside: impl Fn(usize) -> bool) -> f64 {
     2f64.powf(bw / 2.0) / (2f64.powf(bw) - 1.0)
 }
 
+/// Calibración de un micro de medida (UMIK-1, ECM8000…): líneas «frecuencia dB [fase]»; lo demás (cabecera con
+/// `"Sens Factor"`, comentarios) se salta. Devuelve los dB en la rejilla, que se restan a cada toma.
+pub fn parse_cal(text: &str) -> Option<Vec<f64>> {
+    let (mut f, mut db) = (vec![], vec![]);
+    for l in text.lines() {
+        let mut it = l.split(|c: char| c.is_whitespace() || c == ',' || c == ';').filter(|s| !s.is_empty()).map(|s| s.parse::<f64>());
+        let (Some(Ok(freq)), Some(Ok(v))) = (it.next(), it.next()) else { continue };
+        if freq.is_finite() && v.is_finite() && freq > 0.0 && v.abs() < 60.0 && f.last().is_none_or(|&p| freq > p) {
+            f.push(freq);
+            db.push(v);
+        }
+    }
+    (f.len() >= 10).then(|| crate::autoeq::to_grid(&f, &db))
+}
+
+/// La toma nueva no se parece a las de antes (desviación media de más de 6 dB entre 200 Hz y 5 kHz, a 1/3 de
+/// octava y con el nivel igualado): micro movido de sitio a lo bruto, un golpe, alguien hablando…
+pub fn odd_take(take: &[f64], before: &[Vec<f64>]) -> bool {
+    if before.is_empty() {
+        return false;
+    }
+    let db = |p: &[f64]| normalize(&smooth(p, 1.0 / 3.0).iter().map(|v| 10.0 * v.max(1e-30).log10()).collect::<Vec<f64>>());
+    let (new, avg) = (db(take), db(&average(before)));
+    let band: Vec<usize> = (0..GRID).filter(|&i| (200.0..=5000.0).contains(&grid_freq(i))).collect();
+    let rms = (band.iter().map(|&i| (new[i] - avg[i]).powi(2)).sum::<f64>() / band.len() as f64).sqrt();
+    rms > 6.0
+}
+
 /// Ajuste completo sobre la media de las posiciones (potencia en la rejilla)
 pub fn fit(power: &[f64], params: &FitParams) -> Fit {
     let freqs: Vec<f64> = (0..GRID).map(grid_freq).collect();
@@ -717,6 +745,19 @@ mod tests {
 
     fn fit_slope() -> Fit {
         fit(&room(), &FitParams { slope: -0.8, high: 20000.0, ..params() })
+    }
+
+    #[test]
+    fn calibracion_y_tomas_raras() {
+        let cal = "\"Sens Factor =-1.378dB, SERNO: 7023456\"\n10.054 -1.83 0\n20 -0.5\n50 0\n100 0\n200 0\n500 0\n1000 0\n2000 0.2\n5000 0.8\n10000 1.5\n20000 3\n";
+        let g = parse_cal(cal).unwrap();
+        assert_eq!(g.len(), GRID);
+        assert!((g[0] + 0.5).abs() < 0.05 && (g[GRID - 1] - 3.0).abs() < 0.05);
+        assert!(parse_cal("hola\n1 2\n").is_none());
+        let a = room();
+        assert!(!odd_take(&a, std::slice::from_ref(&a)));
+        let tilted: Vec<f64> = a.iter().enumerate().map(|(i, p)| p * 10f64.powf(if (300.0..3000.0).contains(&grid_freq(i)) { 2.0 } else { 0.0 })).collect();
+        assert!(odd_take(&tilted, &[a.clone(), a]));
     }
 
     #[test]

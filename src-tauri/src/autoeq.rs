@@ -116,7 +116,7 @@ fn parse_csv(text: &str, columns: &[&str]) -> Option<Vec<Vec<f64>>> {
 }
 
 /// Interpolación en frecuencia logarítmica a la rejilla de `room` (fuera de rango, el extremo)
-fn to_grid(freqs: &[f64], vals: &[f64]) -> Vec<f64> {
+pub fn to_grid(freqs: &[f64], vals: &[f64]) -> Vec<f64> {
     (0..crate::room::GRID)
         .map(|i| {
             let f = crate::room::grid_freq(i);

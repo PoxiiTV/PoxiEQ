@@ -192,6 +192,7 @@ export interface Config {
   /** Carpetas de plugins que añade el usuario (aparte de las estándar) */
   pluginFolders: string[]
   voice: Voice
+  roomCal: RoomCal | null
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic
@@ -288,6 +289,14 @@ export interface RoomLevels {
   noise: number
   peak: number
   takes: number
+  /** La toma no se parece a las de antes */
+  odd: boolean
+}
+
+/** Calibración del micro de medida (dB en la rejilla de la sala) */
+export interface RoomCal {
+  name: string
+  db: number[]
 }
 
 export interface RoomParams {
@@ -348,6 +357,7 @@ export const api = {
   roomCheck: (output: string, input: string, level: number) => invoke<RoomLevels>('room_check', { output, input, level }),
   roomMeasure: (output: string, input: string, level: number) => invoke<RoomLevels>('room_measure', { output, input, level }),
   roomReset: () => invoke<void>('room_reset'),
+  roomCalLoad: (path: string) => invoke<RoomCal>('room_cal_load', { path }),
   roomCancel: () => invoke<void>('room_cancel'),
   roomFit: (params: RoomParams) => invoke<RoomFit>('room_fit', { params })
 }

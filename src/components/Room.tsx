@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CircleCheck, LoaderCircle, Mic, Ruler, TriangleAlert } from 'lucide-react'
+import { CircleCheck, LoaderCircle, Mic, Ruler, Trash2, TriangleAlert, Upload } from 'lucide-react'
 import { api, type Preset, type RoomFit, type RoomLevels, type RoomParams } from '../lib/api'
 import { autoPreamp, fmtFreq } from '../lib/eq'
-import { applyPreset, currentCurve, currentOutput, saveRoomPreset, setState, toast, useStore } from '../lib/store'
+import { applyPreset, currentCurve, currentOutput, saveRoomPreset, setState, toast, updateConfig, useStore } from '../lib/store'
 import { errorText, useT } from '../i18n'
 import { Range, Select } from './controls'
 import { Preview } from './AutoEq'
@@ -48,6 +48,7 @@ export function RoomPage(): React.JSX.Element {
             </button>
           </div>
         </div>
+        <CalCard />
       </section>
       <section>
         <SectionHead label={t('room.last')} />
@@ -75,6 +76,39 @@ export function RoomPage(): React.JSX.Element {
         <SectionHead label={t('ir.section')} />
         <ConvolutionCard hint={t('ir.roomHint')} />
       </section>
+    </div>
+  )
+}
+
+/** Archivo de calibración del micro de medida: se resta a cada toma */
+function CalCard(): React.JSX.Element {
+  const t = useT()
+  const cal = useStore((s) => s.config?.roomCal ?? null)
+  const load = async (): Promise<void> => {
+    const path = await api.pickFile('cal')
+    if (!path) return
+    try {
+      updateConfig({ roomCal: await api.roomCalLoad(path) })
+      toast(t('room.calLoaded'))
+    } catch (e) {
+      toast(errorText(e), 'err')
+    }
+  }
+  return (
+    <div className="set-row room-cal" role="group" aria-label={t('room.cal')}>
+      <div className="txt">
+        <b>{t('room.cal')}</b>
+        <small>{cal ? cal.name : t('room.calHint')}</small>
+      </div>
+      <button className="btn btn-sm" onClick={() => void load()}>
+        <Upload size={14} />
+        {t(cal ? 'ir.replace' : 'room.calLoad')}
+      </button>
+      {cal && (
+        <button className="icon-btn" onClick={() => updateConfig({ roomCal: null })} aria-label={t('ir.remove')} data-tip={t('ir.remove')}>
+          <Trash2 size={15} />
+        </button>
+      )}
     </div>
   )
 }
@@ -137,6 +171,7 @@ function RoomWizard(): React.JSX.Element {
       const r = kind === 'check' ? await api.roomCheck(output, input, level) : await api.roomMeasure(output, input, level)
       setLevels(r)
       if (kind === 'measure') setTakes(r.takes)
+      if (r.odd) toast(t('room.odd'), 'info', { secs: 10 })
     } catch (e) {
       if ((e as { code?: string })?.code !== 'room.cancelled') toast(errorText(e), 'err', { secs: 8 })
     } finally {

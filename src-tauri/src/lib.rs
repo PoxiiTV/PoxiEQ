@@ -76,6 +76,8 @@ pub struct Config {
     pub plugin_folders: Vec<String>,
     /// Juego y voz: atenuación y mezclador
     pub voice: sessions::Voice,
+    /// Calibración del micro de medida de la sala
+    pub room_cal: Option<eq::RoomCal>,
 }
 
 impl Default for Config {
@@ -106,6 +108,7 @@ impl Default for Config {
             mic: Mic::default(),
             plugin_folders: vec![],
             voice: sessions::Voice::default(),
+            room_cal: None,
         }
     }
 }
@@ -149,6 +152,9 @@ impl Config {
         self.plugin_folders.dedup();
         self.plugin_folders.truncate(20);
         self.voice.sanitize();
+        if self.room_cal.as_mut().is_some_and(|c| !c.valid()) {
+            self.room_cal = None;
+        }
     }
 
     /// Archivos de respuesta al impulso que usa algún dispositivo
@@ -777,6 +783,8 @@ pub struct RoomLevels {
     peak: f64,
     /// Posiciones medidas
     takes: usize,
+    /// La toma no se parece a las de antes (micro movido a lo bruto, un golpe…)
+    odd: bool,
 }
 
 /// Salida de verdad y micrófono de verdad
@@ -820,7 +828,7 @@ async fn room_check(app: AppHandle, output: String, input: String, level: f64) -
         .await
         .map_err(|_| problem("room.device", None))??;
     let takes = app.state::<AppState>().room().len();
-    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes })
+    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes, odd: false })
 }
 
 /// Mide una posición y la añade a la media (como mucho `MAX_TAKES`: la más antigua sale)
@@ -828,20 +836,39 @@ async fn room_check(app: AppHandle, output: String, input: String, level: f64) -
 async fn room_measure(app: AppHandle, output: String, input: String, level: f64) -> Res<RoomLevels> {
     room_devices(&output, &input)?;
     let handle = app.clone();
+    let cal = app.state::<AppState>().cfg().room_cal.clone();
     let (take, grid) = tauri::async_runtime::spawn_blocking(move || {
         let take = room_take(&handle, &output, &input, level, room::MEASURE_SECS)?;
-        let grid = take.analyze();
+        let mut grid = take.analyze();
+        // Lo que el micro de medida añade de suyo, fuera
+        if let Some(c) = &cal {
+            grid.iter_mut().zip(&c.db).for_each(|(p, d)| *p /= 10f64.powf(d / 10.0));
+        }
         Ok::<_, Problem>((take, grid))
     })
     .await
     .map_err(|_| problem("room.device", None))??;
     let st = app.state::<AppState>();
     let mut takes = st.room();
+    let odd = room::odd_take(&grid, &takes);
     if takes.len() >= room::MAX_TAKES {
         takes.remove(0);
     }
     takes.push(grid);
-    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes: takes.len() })
+    Ok(RoomLevels { noise: take.noise, peak: take.peak, takes: takes.len(), odd })
+}
+
+/// Lee el archivo de calibración del micro de medida (la interfaz lo guarda en la configuración)
+#[tauri::command]
+fn room_cal_load(path: String) -> Res<eq::RoomCal> {
+    let meta = std::fs::metadata(&path).map_err(|_| problem("room.cal", None))?;
+    if meta.len() > 1 << 20 {
+        return Err(problem("room.cal", None));
+    }
+    let text = std::fs::read_to_string(&path).map_err(|_| problem("room.cal", None))?;
+    let db = room::parse_cal(&text).ok_or_else(|| problem("room.cal", None))?;
+    let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(eq::RoomCal { name, db })
 }
 
 #[tauri::command]
@@ -1579,6 +1606,7 @@ pub fn run() {
             room_check,
             room_measure,
             room_reset,
+            room_cal_load,
             room_cancel,
             room_fit,
         ])

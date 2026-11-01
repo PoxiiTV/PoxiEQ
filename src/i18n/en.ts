@@ -422,6 +422,11 @@ export default {
     failedTip: 'Another program already uses this shortcut'
   },
   room: {
+    cal: 'Measurement mic calibration',
+    calHint: 'If your measurement mic (UMIK-1, ECM8000…) came with a calibration file, load it: it is subtracted from every take.',
+    calLoad: 'Load file',
+    calLoaded: 'Calibration loaded: it applies to new takes',
+    odd: "This take doesn't look like the previous ones (did the mic move suddenly, was there a noise?). If it doesn't add up, start over.",
     title: 'Room correction',
     cardTitle: 'Fit your speakers to the room',
     cardText: 'With a microphone at your listening spot, measure how the room sounds and create a preset that cuts the bass resonances. About 3 minutes.',
@@ -600,6 +605,7 @@ export default {
     'plugins.missing': "That plugin isn't in the chain anymore",
     'plugins.open': "Couldn't open the plugin window",
     'plugins.scan': "Couldn't search for plugins",
+    'room.cal': "The file doesn't look like a mic calibration (\"frequency dB\" lines)",
     'ir.notWav': "It's not a valid WAV file",
     'ir.format': 'Unsupported WAV format (use 16/24/32-bit PCM or float)',
     'ir.channels': 'At most 8 channels',

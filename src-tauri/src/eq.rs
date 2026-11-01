@@ -594,6 +594,21 @@ pub fn sanitize_devices(devices: &mut HashMap<String, DeviceSettings>, presets: 
         }
     }
 }
+/// Calibración del micro de medida de la sala (dB en la rejilla de `room`, se restan a cada toma)
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomCal {
+    pub name: String,
+    pub db: Vec<f64>,
+}
+
+impl RoomCal {
+    pub fn valid(&mut self) -> bool {
+        self.name = self.name.chars().filter(|c| !c.is_control()).take(80).collect();
+        self.db.len() == crate::room::GRID && self.db.iter().all(|v| v.is_finite() && v.abs() < 60.0)
+    }
+}
+
 /// Lo que suena ahora sin guardarse en la configuración
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Live {
