@@ -38,7 +38,8 @@ export const DSP_DEFAULT: Dsp = {
   crossfeed: { on: false, freq: 700, feed: 4.5 },
   speakers: { on: false, amount: 1 },
   gate: { on: false, threshold: -50, range: 30, attack: 1, hold: 150, release: 200 },
-  bassBoost: { on: false, amount: 0.5 }
+  bassBoost: { on: false, amount: 0.5 },
+  denoise: { on: false, amount: 1 }
 }
 
 /** Rangos de cada valor, los de `Settings::sanitize` (al importar, lo que se sale se rechaza) */
@@ -51,7 +52,8 @@ export const DSP_RANGES: { [K in keyof Dsp]: Record<Exclude<keyof Dsp[K], 'on'>,
   crossfeed: { freq: [300, 2000], feed: [1, 15] },
   speakers: { amount: [0, 1] },
   gate: { threshold: [-90, 0], range: [0, 90], attack: [0.1, 50], hold: [0, 2000], release: [5, 2000] },
-  bassBoost: { amount: [0, 1] }
+  bassBoost: { amount: [0, 1] },
+  denoise: { amount: [0, 1] }
 }
 
 export type Part = keyof Dsp
@@ -63,7 +65,7 @@ export const SOUND_PARTS = ['leveler', 'comp', 'limiter', 'bassBoost', 'bass', '
 export const SECTION_PARTS: Record<Exclude<Section, 'studio' | 'plugins'>, readonly Part[]> = {
   sound: SOUND_PARTS,
   phones: ['crossfeed', 'speakers'],
-  mic: ['gate', 'comp']
+  mic: ['denoise', 'gate', 'comp']
 }
 
 export function withSound(d: Dsp, s: Sound): Dsp {

@@ -249,7 +249,7 @@ export default {
   mic: {
     pick: 'Microphone you are editing',
     none: 'No microphone connected',
-    intro: 'What you set here is what Discord, OBS and any app using the microphone receive, in this order: EQ, noise gate and compressor. Each microphone remembers its own.',
+    intro: 'What you set here is what Discord, OBS and any app using the microphone receive, in this order: EQ, noise suppression, noise gate and compressor. Each microphone remembers its own.',
     eq: 'Microphone equalizer',
     bypassOn: 'Microphone unprocessed: click to process it',
     bypassOff: 'Leave the microphone unprocessed',
@@ -259,7 +259,10 @@ export default {
     gateHint: "Lowers background noise (fan, keyboard) when you're not talking. Set the threshold just above the noise: the line on the meter shows where it is.",
     range: 'Attenuation',
     hold: 'Hold',
-    compHint: 'Evens out your voice: lowers what goes over the threshold, and the gain brings the volume back.'
+    compHint: 'Evens out your voice: lowers what goes over the threshold, and the gain brings the volume back.',
+    denoise: 'Noise suppression (AI)',
+    denoiseHint: 'A neural network (RNNoise) removes background noise even while you talk: fans, keyboard, traffic. Adds 10 ms of delay, only to the microphone.',
+    denoiseAmount: 'Strength'
   },
   meter: {
     title: 'Output',
@@ -487,7 +490,7 @@ export default {
       empty: 'Save your mix checks here to apply them with one click.'
     },
     mic: {
-      saves: 'Saves everything for the microphone: its EQ, the noise gate and the compressor.',
+      saves: 'Saves everything for the microphone: its EQ, noise suppression, the gate and the compressor.',
       namePh: 'Live, Podcast…',
       empty: 'Save your mic settings here (EQ, gate and compressor) to switch with one click.'
     },

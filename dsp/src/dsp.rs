@@ -684,6 +684,7 @@ pub struct Meters {
 }
 
 pub struct Chain {
+    denoise: Option<crate::denoise::Denoise>,
     gate: Option<Gate>,
     voice: Option<Voice>,
     boost: Option<LowBoost>,
@@ -713,6 +714,7 @@ impl Chain {
         let fs = if fs.is_finite() { fs.clamp(8000.0, 768_000.0) } else { 48000.0 };
         let boost = s.bass_boost.active();
         Self {
+            denoise: s.denoise.on.then(|| crate::denoise::Denoise::new(fs, s.denoise.amount as f64)),
             gate: s.gate.on.then(|| Gate::new(fs, &s.gate)),
             voice: s.dialog.on.then(|| Voice::new(fs, s.dialog.amount as f64)),
             boost: boost.then(|| LowBoost::new(fs, s.bass_boost.amount as f64)),
@@ -731,9 +733,9 @@ impl Chain {
         }
     }
 
-    /// Retardo real en muestras (solo el limitador tiene lookahead)
+    /// Retardo real en muestras (el lookahead del limitador y el bloque de la supresión de ruido)
     pub fn latency(&self) -> usize {
-        self.limiter.as_ref().map_or(0, Brickwall::latency)
+        self.limiter.as_ref().map_or(0, Brickwall::latency) + self.denoise.as_ref().map_or(0, |d| d.latency())
     }
 
     /// Estado de los niveladores (antes y después del compresor) para la siguiente instancia:
@@ -759,6 +761,9 @@ impl Chain {
             return dry;
         }
         let (mut l, mut r) = dry;
+        if let Some(p) = &mut self.denoise {
+            (l, r) = p.tick(l, r);
+        }
         if let Some(p) = &mut self.gate {
             (l, r) = p.tick(l, r);
         }

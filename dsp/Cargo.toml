@@ -18,6 +18,8 @@ serde = ["dep:serde"]
 serde = { version = "1", features = ["derive"], optional = true }
 # Bindings de VST3 (generados de las cabeceras del SDK, MIT): para alojar plugins VST3 del usuario
 vst3 = "0.3"
+# RNNoise en Rust (BSD-3): supresión de ruido del micrófono. Sin el programa de ejemplo ni sus dependencias
+nnnoiseless = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 ebur128 = "0.1"

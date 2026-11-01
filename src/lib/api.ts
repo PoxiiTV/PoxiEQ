@@ -39,6 +39,8 @@ export interface Dsp {
   gate: { on: boolean; threshold: number; range: number; attack: number; hold: number; release: number }
   /** «Graves» (la rueda): `amount` 0…1, a 0 no procesa */
   bassBoost: { on: boolean; amount: number }
+  /** Micrófono: supresión de ruido (RNNoise); `amount` 0…1 = mezcla con la original */
+  denoise: { on: boolean; amount: number }
 }
 
 /** Micrófono: su propio bypass (su EQ va en `curves` y su puerta/compresor en `perDevice`, con el id de la

@@ -1,4 +1,4 @@
-import { ArrowDown, AudioLines, AudioWaveform, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
+import { ArrowDown, AudioLines, AudioWaveform, BrainCircuit, DoorClosed, Gauge, Headphones, Leaf, LoaderCircle, Mic, Moon, Radio, ShieldCheck, Sparkles, Speaker, Volume2, Waves } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Dsp } from '../lib/api'
 import { runSetup } from '../lib/actions'
@@ -147,13 +147,17 @@ function CompSliders({ comp, set }: { comp: Dsp['comp']; set: (patch: Partial<Ds
 export function MicDynamics(): React.JSX.Element {
   const t = useT()
   const dsp = useStore((s) => micSettings(s).dsp)
-  const set = <K extends 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => {
+  const set = <K extends 'denoise' | 'gate' | 'comp'>(key: K, patch: Partial<Dsp[K]>): void => {
     const cur = micSettings().dsp
     setMicDsp({ ...cur, [key]: { ...cur[key], ...patch } })
   }
   const g = dsp.gate
   return (
     <div className="chain">
+      <Card icon={BrainCircuit} title={t('mic.denoise')} hint={t('mic.denoiseHint')} on={dsp.denoise.on} onToggle={(on) => set('denoise', { on })}>
+        <Slider label={t('mic.denoiseAmount')} value={Math.round(dsp.denoise.amount * 100)} min={0} max={100} fmt={(v) => `${Math.round(v)} %`} onChange={(v) => set('denoise', { amount: v / 100 })} />
+      </Card>
+      <ChainArrow />
       <Card icon={DoorClosed} title={t('mic.gate')} hint={t('mic.gateHint')} on={g.on} onToggle={(on) => set('gate', { on })}>
         <Slider label={t('dsp.threshold')} value={g.threshold} min={-90} max={0} fmt={(v) => `${num(v, 0)} dBFS`} onChange={(threshold) => set('gate', { threshold })} />
         <Slider label={t('mic.range')} value={g.range} min={0} max={90} fmt={(v) => `${num(-v, 0)} dB`} onChange={(range) => set('gate', { range })} />

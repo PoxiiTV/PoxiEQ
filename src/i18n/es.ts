@@ -249,7 +249,7 @@ export default {
   mic: {
     pick: 'Micrófono que editas',
     none: 'No hay ningún micrófono conectado',
-    intro: 'Lo que ajustes aquí lo reciben Discord, OBS y cualquier app que use el micrófono, en este orden: EQ, puerta de ruido y compresor. Cada micrófono recuerda lo suyo.',
+    intro: 'Lo que ajustes aquí lo reciben Discord, OBS y cualquier app que use el micrófono, en este orden: EQ, supresión de ruido, puerta de ruido y compresor. Cada micrófono recuerda lo suyo.',
     eq: 'Ecualizador del micrófono',
     bypassOn: 'Micrófono sin procesar: pulsa para procesarlo',
     bypassOff: 'Dejar el micrófono sin procesar',
@@ -259,7 +259,10 @@ export default {
     gateHint: 'Baja el ruido de fondo (ventilador, teclado) cuando no hablas. Pon el umbral justo por encima del ruido: en el medidor, la raya marca dónde está.',
     range: 'Atenuación',
     hold: 'Mantener',
-    compHint: 'Iguala la voz: baja lo que pasa del umbral y con la ganancia recuperas el volumen.'
+    compHint: 'Iguala la voz: baja lo que pasa del umbral y con la ganancia recuperas el volumen.',
+    denoise: 'Supresión de ruido (IA)',
+    denoiseHint: 'Una red neuronal (RNNoise) quita el ruido de fondo aunque estés hablando: ventilador, teclado, tráfico. Añade 10 ms de retardo, solo al micrófono.',
+    denoiseAmount: 'Intensidad'
   },
   meter: {
     title: 'Salida',
@@ -487,7 +490,7 @@ export default {
       empty: 'Guarda aquí tus comprobaciones de mezcla para ponerlas con un clic.'
     },
     mic: {
-      saves: 'Se guarda todo lo del micrófono: su EQ, la puerta de ruido y el compresor.',
+      saves: 'Se guarda todo lo del micrófono: su EQ, la supresión de ruido, la puerta y el compresor.',
       namePh: 'Directo, Podcast…',
       empty: 'Guarda aquí los ajustes de tu micro (EQ, puerta y compresor) para cambiar con un clic.'
     },

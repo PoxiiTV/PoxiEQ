@@ -506,7 +506,7 @@ pub fn section_dsp(dsp: &poxidsp::Settings, section: Section) -> poxidsp::Settin
     match section {
         Section::Sound => poxidsp::Settings { leveler: dsp.leveler, comp: dsp.comp, limiter: dsp.limiter, bass_boost: dsp.bass_boost, bass: dsp.bass, dialog: dsp.dialog, ..d },
         Section::Phones => poxidsp::Settings { crossfeed: dsp.crossfeed, speakers: dsp.speakers, ..d },
-        Section::Mic => poxidsp::Settings { gate: dsp.gate, comp: dsp.comp, ..d },
+        Section::Mic => poxidsp::Settings { denoise: dsp.denoise, gate: dsp.gate, comp: dsp.comp, ..d },
         Section::Studio | Section::Plugins => d,
     }
 }

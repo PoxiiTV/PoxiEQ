@@ -5,6 +5,7 @@
 //! La app usa este mismo crate (como biblioteca, con `serde`) para escribir los ajustes
 //! ([`Settings::chunk`]) y leer las medidas de la memoria compartida ([`shm`]).
 
+mod denoise;
 pub mod dsp;
 pub mod host;
 mod host3;
@@ -31,6 +32,8 @@ pub struct Settings {
     pub gate: Gate,
     /// «Graves»: realce de graves con una rueda. `bass` es otra cosa (los armónicos).
     pub bass_boost: BassBoost,
+    /// Micrófono: supresión de ruido (RNNoise), lo primero de la cadena
+    pub denoise: Denoise,
 }
 
 /// Limitador brickwall con lookahead
@@ -138,6 +141,21 @@ pub struct BassBoost {
     pub amount: f32,
 }
 
+/// Supresión de ruido con IA (RNNoise) en el micrófono
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(rename_all = "camelCase", default))]
+pub struct Denoise {
+    pub on: bool,
+    /// 0…1: mezcla de la señal limpia con la original
+    pub amount: f32,
+}
+
+impl Default for Denoise {
+    fn default() -> Self {
+        Self { on: false, amount: 1.0 }
+    }
+}
+
 impl BassBoost {
     /// Encendido y con la rueda por encima de 0: solo entonces suma el paso bajo (y la protección)
     pub fn active(&self) -> bool {
@@ -202,7 +220,7 @@ fn clamp(v: f32, lo: f32, hi: f32, def: f32) -> f32 {
 /// Valores en orden fijo: es el formato del ChunkData (versión 1). Lo nuevo va siempre al final: un plugin
 /// anterior lee lo suyo e ignora el resto, y uno nuevo completa con los valores por defecto lo que no trae
 /// un chunk anterior (como mínimo [`MIN_FIELDS`]).
-const FIELDS: usize = 30;
+const FIELDS: usize = 32;
 /// Campos de la primera versión publicada del chunk (hasta los altavoces virtuales)
 const MIN_FIELDS: usize = 22;
 const MAGIC: &[u8; 4] = b"PXD1";
@@ -237,6 +255,7 @@ impl Settings {
         g.hold = clamp(g.hold, 0.0, 2000.0, d.gate.hold);
         g.release = clamp(g.release, 5.0, 2000.0, d.gate.release);
         self.bass_boost.amount = clamp(self.bass_boost.amount, 0.0, 1.0, d.bass_boost.amount);
+        self.denoise.amount = clamp(self.denoise.amount, 0.0, 1.0, d.denoise.amount);
         // Crossfeed y altavoces virtuales hacen lo mismo de dos formas: juntos se cruzaría dos veces
         if self.speakers.on {
             self.crossfeed.on = false;
@@ -245,12 +264,21 @@ impl Settings {
 
     /// Con todo apagado el plugin ni se carga
     pub fn active(&self) -> bool {
-        self.limiter.on || self.comp.on || self.leveler.on || self.bass.on || self.dialog.on || self.crossfeed.on || self.speakers.on || self.gate.on || self.bass_boost.active()
+        self.limiter.on
+            || self.comp.on
+            || self.leveler.on
+            || self.bass.on
+            || self.dialog.on
+            || self.crossfeed.on
+            || self.speakers.on
+            || self.gate.on
+            || self.bass_boost.active()
+            || self.denoise.on
     }
 
     fn fields(&self) -> [f32; FIELDS] {
         let on = |b: bool| if b { 1.0 } else { 0.0 };
-        let (l, c, v, b, d, x, h, g, w) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers, self.gate, self.bass_boost);
+        let (l, c, v, b, d, x, h, g, w, n) = (self.limiter, self.comp, self.leveler, self.bass, self.dialog, self.crossfeed, self.speakers, self.gate, self.bass_boost, self.denoise);
         [
             on(l.on), l.ceiling,
             on(c.on), c.threshold, c.ratio, c.attack, c.release, c.knee, c.makeup,
@@ -261,6 +289,7 @@ impl Settings {
             on(h.on), h.amount,
             on(g.on), g.threshold, g.range, g.attack, g.hold, g.release,
             on(w.on), w.amount,
+            on(n.on), n.amount,
         ]
     }
 
@@ -276,6 +305,7 @@ impl Settings {
             speakers: Speakers { on: on(f[20]), amount: f[21] },
             gate: Gate { on: on(f[22]), threshold: f[23], range: f[24], attack: f[25], hold: f[26], release: f[27] },
             bass_boost: BassBoost { on: on(f[28]), amount: f[29] },
+            denoise: Denoise { on: on(f[30]), amount: f[31] },
         };
         s.sanitize();
         s
