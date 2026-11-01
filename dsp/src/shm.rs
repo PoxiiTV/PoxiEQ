@@ -111,21 +111,29 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
 
-/// Vista de la memoria compartida; se suelta al soltar el valor
-pub struct Map {
+/// Vista de una memoria compartida con un bloque `T` (todo atómico: la usan procesos distintos a la vez); se
+/// suelta al soltar el valor
+pub struct Shared<T> {
     handle: Handle,
-    view: *mut Block,
+    view: *mut T,
 }
 
-// La vista solo se toca con atómicos
-unsafe impl Send for Map {}
-unsafe impl Sync for Map {}
+/// La de los medidores
+pub type Map = Shared<Block>;
 
-impl Map {
+// La vista solo se toca con atómicos
+unsafe impl<T> Send for Shared<T> {}
+unsafe impl<T> Sync for Shared<T> {}
+
+impl<T> Shared<T> {
     /// Lado del plugin: crea (o abre, si ya existe) con lectura para todos y escritura solo para
     /// sistema, servicio local y administradores
-    pub fn create(name: &str) -> Option<Map> {
-        let sddl = wide("D:(A;;GA;;;SY)(A;;GA;;;LS)(A;;GA;;;BA)(A;;GA;;;OW)(A;;GR;;;WD)");
+    pub fn create(name: &str) -> Option<Self> {
+        Self::create_with(name, "D:(A;;GA;;;SY)(A;;GA;;;LS)(A;;GA;;;BA)(A;;GA;;;OW)(A;;GR;;;WD)")
+    }
+
+    pub fn create_with(name: &str, sddl: &str) -> Option<Self> {
+        let sddl = wide(sddl);
         let name = wide(name);
         unsafe {
             let mut sd = std::ptr::null_mut();
@@ -133,37 +141,49 @@ impl Map {
                 return None;
             }
             let sa = SecurityAttributes { len: size_of::<SecurityAttributes>() as u32, descriptor: sd, inherit: 0 };
-            let handle = CreateFileMappingW(-1isize as Handle, &sa, PAGE_READWRITE, 0, size_of::<Block>() as u32, name.as_ptr());
+            let handle = CreateFileMappingW(-1isize as Handle, &sa, PAGE_READWRITE, 0, size_of::<T>() as u32, name.as_ptr());
             LocalFree(sd);
             Self::view(handle, FILE_MAP_READ | FILE_MAP_WRITE)
         }
     }
 
     /// Lado de la app: solo lectura. `None` si el plugin no ha arrancado
-    pub fn open(name: &str) -> Option<Map> {
+    pub fn open(name: &str) -> Option<Self> {
         let name = wide(name);
         unsafe { Self::view(OpenFileMappingW(FILE_MAP_READ, 0, name.as_ptr()), FILE_MAP_READ) }
     }
 
-    unsafe fn view(handle: Handle, access: u32) -> Option<Map> {
+    /// Lectura y escritura (el proceso que aloja un plugin del usuario devuelve el audio por aquí)
+    pub fn open_rw(name: &str) -> Option<Self> {
+        let name = wide(name);
+        unsafe { Self::view(OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, 0, name.as_ptr()), FILE_MAP_READ | FILE_MAP_WRITE) }
+    }
+
+    unsafe fn view(handle: Handle, access: u32) -> Option<Self> {
         if handle.is_null() {
             return None;
         }
-        let view = MapViewOfFile(handle, access, 0, 0, size_of::<Block>()) as *mut Block;
+        let view = MapViewOfFile(handle, access, 0, 0, size_of::<T>()) as *mut T;
         if view.is_null() {
             CloseHandle(handle);
             return None;
         }
-        Some(Map { handle, view })
+        Some(Shared { handle, view })
     }
 
-    pub fn slots(&self) -> &[Slot] {
-        // La vista vive lo que `self` y empieza a ceros (todos los huecos libres)
-        unsafe { &(*self.view).slots }
+    /// La vista vive lo que `self` y empieza a ceros
+    pub fn get(&self) -> &T {
+        unsafe { &*self.view }
     }
 }
 
-impl Drop for Map {
+impl Map {
+    pub fn slots(&self) -> &[Slot] {
+        &self.get().slots
+    }
+}
+
+impl<T> Drop for Shared<T> {
     fn drop(&mut self) {
         unsafe {
             UnmapViewOfFile(self.view as _);

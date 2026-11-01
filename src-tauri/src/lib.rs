@@ -220,8 +220,8 @@ pub struct AppState {
     default_output: Mutex<Option<String>>,
     /// Dispositivos activados que el vigilante ha visto rotos (para avisar una sola vez por rotura)
     broken: Mutex<Vec<String>>,
-    /// Ventanas de edición de plugins abiertas (`dispositivo/hueco` → su proceso)
-    editors: Mutex<HashMap<String, std::process::Child>>,
+    /// Procesos que alojan los plugins del usuario (`dispositivo/hueco` → su proceso)
+    hosts: Mutex<HashMap<String, HostProc>>,
     /// Salidas ya vistas desde que arrancó la app (las demás son nuevas)
     known: Mutex<Vec<String>>,
 }
@@ -263,8 +263,8 @@ impl AppState {
         self.known.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn editors(&self) -> MutexGuard<'_, HashMap<String, std::process::Child>> {
-        self.editors.lock().unwrap_or_else(|e| e.into_inner())
+    fn hosts(&self) -> MutexGuard<'_, HashMap<String, HostProc>> {
+        self.hosts.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -342,6 +342,7 @@ fn store(app: &AppHandle, mut cfg: Config) -> Config {
             t.unpark();
         }
     }
+    sync_hosts(app);
     cfg
 }
 
@@ -1254,54 +1255,148 @@ async fn plugin_scan_file(path: String) -> Res<Vec<plughost::Found>> {
         .map_err(|e| problem("plugins.load", e))
 }
 
-/// Abre la ventana de edición de un plugin de la cadena de `device` (en un proceso aparte). Lo que se toca allí
-/// llega como estado nuevo, se guarda y el motor recarga el plugin con él.
-#[tauri::command]
-fn plugin_edit(app: AppHandle, st: State<'_, AppState>, device: String, id: String) -> Res<()> {
+/// Proceso que aloja de verdad un plugin del usuario (`plughost::serve`)
+pub struct HostProc {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    /// Qué plugin carga (si cambia, se vuelve a arrancar)
+    sig: String,
+}
+
+fn host_sig(s: &eq::PluginSlot) -> String {
+    format!("{:?}|{}|{}", s.format, s.path, s.cid)
+}
+
+/// Caídas recientes de cada hueco (para no relanzar sin fin uno que revienta al cargar)
+static HOST_CRASHES: Mutex<Vec<(String, std::time::Instant)>> = Mutex::new(Vec::new());
+static EXITING: AtomicBool = AtomicBool::new(false);
+
+/// Un proceso por cada plugin encendido de cada dispositivo: arranca los que faltan y cierra los que sobran
+fn sync_hosts(app: &AppHandle) {
+    if EXITING.load(Ordering::SeqCst) {
+        return;
+    }
+    let st = app.state::<AppState>();
+    let cfg = st.cfg().clone();
+    let want: Vec<(String, String, eq::PluginSlot)> = cfg
+        .per_device
+        .iter()
+        .flat_map(|(dev, d)| d.plugins.iter().filter(|p| p.on).map(move |p| (format!("{dev}/{}", p.id), dev.clone(), p.clone())))
+        .collect();
+    let mut hosts = st.hosts();
+    let gone: Vec<String> = hosts.iter().filter(|(k, h)| !want.iter().any(|(wk, _, s)| wk == *k && host_sig(s) == h.sig)).map(|(k, _)| k.clone()).collect();
+    for k in gone {
+        if let Some(h) = hosts.remove(&k) {
+            quit_host(h);
+        }
+    }
+    for (key, dev, slot) in want {
+        if hosts.contains_key(&key) {
+            continue;
+        }
+        let crashes = HOST_CRASHES.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|(k, t)| *k == key && t.elapsed() < Duration::from_secs(60)).count();
+        if crashes >= 3 {
+            continue;
+        }
+        match spawn_host(app, &dev, &slot) {
+            Ok(h) => {
+                hosts.insert(key, h);
+            }
+            Err(e) => {
+                let _ = app.emit("plugin-error", (&slot.id, e));
+            }
+        }
+    }
+}
+
+/// Le pide que se cierre (guarda su estado) y, si no lo hace en 1,5 s, se termina
+fn quit_host(mut h: HostProc) {
+    use std::io::Write;
+    let _ = writeln!(h.stdin, "QUIT");
+    let _ = h.stdin.flush();
+    std::thread::spawn(move || {
+        let until = std::time::Instant::now() + Duration::from_millis(1500);
+        while std::time::Instant::now() < until {
+            if h.child.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let _ = h.child.kill();
+        let _ = h.child.wait();
+    });
+}
+
+fn spawn_host(app: &AppHandle, device: &str, slot: &eq::PluginSlot) -> Result<HostProc, String> {
     use std::io::BufRead;
     use std::os::windows::process::CommandExt;
-    if !engine::is_device_id(&device) {
-        return Err(problem("engine.badDevice", None));
-    }
-    let key = format!("{device}/{id}");
-    if st.editors().contains_key(&key) {
-        return Ok(());
-    }
-    let slot = st.cfg().per_device.get(&device).and_then(|d| d.plugins.iter().find(|p| p.id == id).cloned()).ok_or_else(|| problem("plugins.missing", None))?;
-    let file = std::env::temp_dir().join(format!("poxieq-edit-{}-{}.json", std::process::id(), id));
-    let job = plughost::EditJob { title: format!("{} · PoxiEQ", slot.name), slot };
-    std::fs::write(&file, serde_json::to_string(&job).unwrap_or_default()).map_err(|e| problem("plugins.open", e.to_string()))?;
-    let exe = std::env::current_exe().map_err(|e| problem("plugins.open", e.to_string()))?;
+    let key = format!("{device}/{}", slot.id);
+    let file = std::env::temp_dir().join(format!("poxieq-host-{}-{}.json", std::process::id(), slot.id));
+    let job = plughost::HostJob { title: format!("{} · PoxiEQ", slot.name), bridge: slot.bridge_key(device), slot: slot.clone() };
+    std::fs::write(&file, serde_json::to_string(&job).unwrap_or_default()).map_err(|e| e.to_string())?;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let mut child = std::process::Command::new(exe)
-        .args(["--plugin-host", "edit"])
+        .args(["--plugin-host", "serve"])
         .arg(&file)
+        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .creation_flags(0x0800_0000)
         .spawn()
-        .map_err(|e| problem("plugins.open", e.to_string()))?;
-    let Some(stdout) = child.stdout.take() else { return Err(problem("plugins.open", None)) };
-    st.editors().insert(key.clone(), child);
-    let _ = app.emit("plugin-editor", (&device, &id, true));
+        .map_err(|e| e.to_string())?;
+    let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else { return Err("sin tuberías".into()) };
+    let pid = child.id();
+    let (app, device, id, name) = (app.clone(), device.to_string(), slot.id.clone(), slot.name.clone());
     std::thread::spawn(move || {
+        let mut failed = false;
         for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
             if let Some(state) = line.strip_prefix("STATE ") {
+                // Solo para guardarlo: el estado no va al motor (no recarga nada ni hace clics)
                 let st = app.state::<AppState>();
                 let mut cfg = st.cfg().clone();
                 if let Some(s) = cfg.per_device.get_mut(&device).and_then(|d| d.plugins.iter_mut().find(|p| p.id == id)) {
-                    s.state = state.trim().to_string();
-                    commit(&app, cfg);
+                    if s.state != state.trim() {
+                        s.state = state.trim().to_string();
+                        commit(&app, cfg);
+                    }
                 }
+            } else if let Some(open) = line.strip_prefix("EDITOR ") {
+                let _ = app.emit("plugin-editor", (&device, &id, open.trim() == "1"));
             } else if let Some(err) = line.strip_prefix("ERROR ") {
-                let _ = app.emit("plugin-error", (&id, err.trim()));
+                failed = err.trim() != "noEditor";
+                let _ = app.emit("plugin-error", (&name, err.trim()));
             }
         }
-        if let Some(mut c) = app.state::<AppState>().editors().remove(&key) {
-            let _ = c.wait();
-        }
         let _ = app.emit("plugin-editor", (&device, &id, false));
+        // Fin de la salida: se ha cerrado. Si no se lo pidió nadie (sigue en la lista), se ha caído: se apunta y se
+        // vuelve a arrancar en 2 s (como mucho 3 veces por minuto)
+        let st = app.state::<AppState>();
+        let crashed = st.hosts().get(&key).is_some_and(|h| h.child.id() == pid);
+        if crashed && !EXITING.load(Ordering::SeqCst) {
+            if let Some(mut h) = st.hosts().remove(&key) {
+                let _ = h.child.wait();
+            }
+            HOST_CRASHES.lock().unwrap_or_else(|e| e.into_inner()).push((key, std::time::Instant::now()));
+            if !failed {
+                let _ = app.emit("plugin-error", (&name, "crash"));
+            }
+            std::thread::sleep(Duration::from_secs(2));
+            sync_hosts(&app);
+        }
     });
-    Ok(())
+    Ok(HostProc { child, stdin, sig: host_sig(slot) })
+}
+
+/// Enseña la ventana del plugin que suena (su proceso ya está en marcha si está encendido)
+#[tauri::command]
+fn plugin_edit(st: State<'_, AppState>, device: String, id: String) -> Res<()> {
+    use std::io::Write;
+    if !engine::is_device_id(&device) {
+        return Err(problem("engine.badDevice", None));
+    }
+    let mut hosts = st.hosts();
+    let h = hosts.get_mut(&format!("{device}/{id}")).ok_or_else(|| problem("plugins.off", None))?;
+    writeln!(h.stdin, "SHOW").and_then(|_| h.stdin.flush()).map_err(|e| problem("plugins.open", e.to_string()))
 }
 
 /// Bypass desde la bandeja o el atajo; con el atajo, además, aviso en pantalla
@@ -1688,7 +1783,7 @@ pub fn run() {
                 room: Mutex::new(vec![]),
                 default_output: Mutex::new(default_output),
                 broken: Mutex::new(vec![]),
-                editors: Mutex::new(HashMap::new()),
+                hosts: Mutex::new(HashMap::new()),
                 known: Mutex::new(engine::status().devices.into_iter().map(|d| d.id).collect()),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
@@ -1726,6 +1821,8 @@ pub fn run() {
             let handle = app.handle().clone();
             engine::watch_devices(move || devices_changed(&handle));
             watch_engine(app.handle().clone());
+            // Los plugins del usuario, cada uno en su proceso (el motor les pasa el audio por el puente)
+            sync_hosts(app.handle());
             // Juego y voz: devuelve primero lo que quedara bajado si PoxiEQ murió a mitad
             sessions::start(cfg.voice.clone(), app.path().app_data_dir()?.join("volumes.json"));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
@@ -1795,9 +1892,13 @@ pub fn run() {
             if let RunEvent::Exit = ev {
                 reset_live(app);
                 sessions::shutdown();
-                for (_, mut c) in app.state::<AppState>().editors().drain() {
-                    let _ = c.kill();
+                // Cada plugin guarda su estado y se cierra (como mucho 1,5 s; luego, a la fuerza)
+                EXITING.store(true, Ordering::SeqCst);
+                let hosts: Vec<HostProc> = app.state::<AppState>().hosts().drain().map(|(_, h)| h).collect();
+                for h in hosts {
+                    quit_host(h);
                 }
+                std::thread::sleep(Duration::from_millis(400));
             }
         });
 }

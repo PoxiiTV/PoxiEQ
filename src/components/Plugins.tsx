@@ -12,9 +12,6 @@ import { Switch } from './ui'
 /** Biblioteca escaneada (vive mientras la app está abierta; el escaneo de verdad tiene caché en Rust) */
 let library: ScanResult | null = null
 
-/** Carpetas que el audio de Windows (otra cuenta) puede leer seguro */
-const readable = (path: string): boolean => /^[a-z]:\\program files( \(x86\))?\\/i.test(path)
-
 /** Página «Plugins»: tus VST2 y VST3 en la cadena de la salida (o del micrófono), cada uno con su ventana */
 export function PluginsPage(): React.JSX.Element {
   const t = useT()
@@ -94,18 +91,13 @@ function Chain(): React.JSX.Element {
                   {[p.vendor, p.format.toUpperCase(), p.latency > 0 && t('plugins.latency', { ms: (p.latency / 48).toFixed(1) })].filter(Boolean).join(' · ')}
                 </small>
               </div>
-              {!readable(p.path) && (
-                <span className="warn-ico" data-tip={t('plugins.unreadable')}>
-                  <TriangleAlert size={15} />
-                </span>
-              )}
               <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('plugins.up')} data-tip={t('plugins.up')}>
                 <ArrowUp size={15} />
               </button>
               <button className="icon-btn" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label={t('plugins.down')} data-tip={t('plugins.down')}>
                 <ArrowDown size={15} />
               </button>
-              <button className={`btn btn-sm ${open ? 'btn-primary' : ''}`} onClick={() => edit(p)}>
+              <button className={`btn btn-sm ${open ? 'btn-primary' : ''}`} disabled={!p.on} data-tip={p.on ? undefined : t('plugins.editOff')} onClick={() => edit(p)}>
                 <SlidersHorizontal size={14} />
                 {t(open ? 'plugins.editing' : 'plugins.edit')}
               </button>

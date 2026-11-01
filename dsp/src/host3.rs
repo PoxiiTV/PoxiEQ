@@ -226,7 +226,6 @@ impl Vst3 {
     }
 
     pub(crate) fn state(&mut self) -> Vec<u8> {
-        self.flush_edits();
         let comp = Stream::new(&[]);
         unsafe { self.comp.getState(comp.as_ptr()) };
         let ctrl = Stream::new(&[]);
@@ -236,8 +235,9 @@ impl Vst3 {
         join_state(&comp.bytes(), &ctrl.bytes())
     }
 
-    /// Lo tocado en el editor llega al procesador en un bloque en silencio
-    fn flush_edits(&mut self) {
+    /// Lo tocado en el editor llega al procesador en un bloque en silencio (solo con el audio parado: si no, ya
+    /// le llega en cada bloque)
+    pub(crate) fn flush_edits(&mut self) {
         let edits = std::mem::take(&mut *self.edits.lock().unwrap_or_else(|e| e.into_inner()));
         if edits.is_empty() {
             return;
@@ -248,16 +248,36 @@ impl Vst3 {
         self.run(&mut l, &mut r, changes.to_com_ptr::<IParameterChanges>().map_or(std::ptr::null_mut(), |c| c.as_ptr()));
     }
 
-    pub(crate) fn edited(&self) -> bool {
-        self.edits.lock().is_ok_and(|e| !e.is_empty())
-    }
-
     pub(crate) fn latency(&self) -> u32 {
         unsafe { self.proc.getLatencySamples() }
     }
 
+    /// Un bloque, con lo que se haya tocado en la ventana desde el anterior
     pub(crate) fn process(&mut self, l: &mut [f32], r: &mut [f32]) {
-        self.run(l, r, std::ptr::null_mut());
+        let edits = self.edits.try_lock().map(|mut e| std::mem::take(&mut *e)).unwrap_or_default();
+        if edits.is_empty() {
+            return self.run(l, r, std::ptr::null_mut());
+        }
+        let changes = ComWrapper::new(Changes(edits.into_iter().map(|(id, v)| ComWrapper::new(Queue { id, value: v })).collect()));
+        self.run(l, r, changes.to_com_ptr::<IParameterChanges>().map_or(std::ptr::null_mut(), |c| c.as_ptr()));
+    }
+
+    pub(crate) fn set_rate(&mut self, rate: f64) {
+        let mut setup = ProcessSetup {
+            processMode: ProcessModes_::kRealtime,
+            symbolicSampleSize: SymbolicSampleSizes_::kSample32,
+            maxSamplesPerBlock: self.block as i32,
+            sampleRate: rate,
+        };
+        unsafe {
+            self.proc.setProcessing(0);
+            self.comp.setActive(0);
+            self.proc.setupProcessing(&mut setup);
+            self.comp.setActive(1);
+            self.proc.setProcessing(1);
+        }
+        self.rate = rate;
+        self.ctx.sampleRate = rate;
     }
 
     fn run(&mut self, l: &mut [f32], r: &mut [f32], changes: *mut IParameterChanges) {
@@ -340,10 +360,6 @@ impl Vst3 {
         self.frame = None;
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn rate(&self) -> f64 {
-        self.rate
-    }
 }
 
 impl Drop for Vst3 {

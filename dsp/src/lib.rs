@@ -5,6 +5,7 @@
 //! La app usa este mismo crate (como biblioteca, con `serde`) para escribir los ajustes
 //! ([`Settings::chunk`]) y leer las medidas de la memoria compartida ([`shm`]).
 
+pub mod bridge;
 mod denoise;
 pub mod dsp;
 pub mod host;

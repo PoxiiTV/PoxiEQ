@@ -432,8 +432,14 @@ impl PluginSlot {
         Some(out)
     }
 
+    /// Clave del puente de audio entre el motor y el proceso que aloja este hueco
+    pub fn bridge_key(&self, device: &str) -> u32 {
+        poxidsp::device_key(&format!("{device}/{}", self.id))
+    }
+
     pub fn spec(&self) -> Option<poxidsp::host::Spec> {
         Some(poxidsp::host::Spec {
+            bridge: 0,
             format: if self.format == PluginFormat::Vst2 { poxidsp::host::Format::Vst2 } else { poxidsp::host::Format::Vst3 },
             path: self.path.clone(),
             cid: self.cid_bytes()?,
@@ -472,9 +478,11 @@ pub fn sanitize_plugins(list: &mut Vec<PluginSlot>) {
 }
 
 /// Una línea de PoxiDSP en modo host por cada plugin encendido. `channels`: `L R` en salidas, `all` en micros.
-fn plugin_lines(out: &mut String, plugins: &[PluginSlot], channels: &str) {
+/// Solo lleva la clave del puente (el plugin lo aloja un proceso de PoxiEQ): su estado no viaja al motor, así
+/// que tocarlo no recarga nada.
+fn plugin_lines(out: &mut String, device: &str, plugins: &[PluginSlot], channels: &str) {
     for p in plugins.iter().filter(|p| p.on) {
-        if let Some(spec) = p.spec() {
+        if let Some(spec) = p.spec().map(|s| poxidsp::host::Spec { state: vec![], bridge: p.bridge_key(device), ..s }) {
             let chunk = poxidsp::base64(&spec.chunk());
             out.push_str(&format!("Channel: {channels}\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
         }
@@ -703,7 +711,7 @@ pub fn render(curves: &HashMap<String, Curve>, devices: &HashMap<String, DeviceS
             let dsp = &d.dsp;
             out.push_str(&format!("\r\nDevice: {id}\r\nStage: capture\r\nPreamp: {:.1} dB\r\n", c.preamp));
             out.push_str(&filters(&c.bands));
-            plugin_lines(&mut out, &d.plugins, "all");
+            plugin_lines(&mut out, id, &d.plugins, "all");
             // Todos los canales (un micro mono es «C», no «L R»): el motor reparte de dos en dos
             if dsp.active() {
                 let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
@@ -741,7 +749,7 @@ fn render_outputs(out: &mut String, outputs: &[(&str, &Curve, &DeviceSettings)],
         if let Some(ir) = d.ir.as_ref().filter(|i| i.on) {
             out.push_str(&crate::ir::line(ir));
         }
-        plugin_lines(out, &d.plugins, "L R");
+        plugin_lines(out, id, &d.plugins, "L R");
         if dsp.active() {
             let chunk = poxidsp::base64(&dsp.chunk(poxidsp::device_key(id)));
             out.push_str(&format!("Channel: L R\r\nVSTPlugin: Library \"{}\" ChunkData \"{chunk}\"\r\nChannel: all\r\n", poxidsp::DLL_NAME));
@@ -799,11 +807,13 @@ mod tests {
         let devices = HashMap::from([(id.clone(), d.clone())]);
         let text = render(&HashMap::new(), &devices, false, &Loudness::default(), false, &Live::default(), |_| false);
         // Un plugin encendido (el apagado no se escribe), antes del limitador de PoxiDSP
-        let host = poxidsp::base64(&d.plugins[0].spec().unwrap().chunk());
+        let host = poxidsp::base64(&poxidsp::host::Spec { state: vec![], bridge: d.plugins[0].bridge_key(&id), ..d.plugins[0].spec().unwrap() }.chunk());
         let at = text.find(&host).expect("plugin escrito");
         assert!(at < text.rfind("VSTPlugin").unwrap());
         assert_eq!(text.matches("VSTPlugin").count(), 2);
-        assert_eq!(poxidsp::host::Spec::from_chunk(&poxidsp::unbase64(&host).unwrap()).unwrap().state, vec![1, 2, 3]);
+        // Al motor solo va la clave del puente: el estado se queda en el proceso del plugin
+        let spec = poxidsp::host::Spec::from_chunk(&poxidsp::unbase64(&host).unwrap()).unwrap();
+        assert!(spec.state.is_empty() && spec.bridge != 0);
         // Con bypass no suena nada
         let off = render(&HashMap::new(), &devices, true, &Loudness::default(), false, &Live::default(), |_| false);
         assert!(!off.contains("VSTPlugin"));

@@ -1,10 +1,9 @@
-//! Plugins del usuario (VST2 y VST3) alojados por PoxiDSP.
+//! Plugins del usuario (VST2 y VST3): cargarlos, procesar, su estado y su ventana.
 //!
-//! El motor solo sabe cargar VST2, y además «compensa» su latencia corrompiendo la salida (ver `initial_delay`
-//! en `vst.rs`). Así que todos los plugins del usuario van dentro de una instancia de PoxiDSP en «modo host»:
-//! su ChunkData lleva el formato, la ruta y el estado del plugin (`Spec`), y PoxiDSP lo carga y le pasa el
-//! audio (anunciando latencia 0 al motor). El mismo código lo usa la app en un proceso aparte para escanear y
-//! para abrir la ventana de edición de cada plugin (ahí sí con su controlador y su editor).
+//! Los aloja un proceso de PoxiEQ por plugin, en la sesión del usuario (con su ventana y su cuenta: valen los de
+//! licencia). En el motor, una instancia de PoxiDSP por plugin (ChunkData `PXHS`, `Spec`) le pasa el audio por
+//! el puente (`bridge.rs`) y anuncia latencia 0 (el motor 1.4.2 corrompe la salida con la que se le anuncia).
+//! El mismo código sirve para escanear, también en un proceso aparte.
 
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
@@ -29,16 +28,19 @@ pub struct Spec {
     pub path: String,
     /// Clase de VST3 dentro del módulo (en VST2, ceros)
     pub cid: [u8; 16],
-    /// Lo que devolvió `Plugin::state` (vacío: el estado inicial del plugin)
+    /// Lo que devolvió `Plugin::state` (vacío: el estado inicial del plugin). No viaja al motor.
     pub state: Vec<u8>,
+    /// Clave del puente de audio de este hueco (`bridge::Client`); en el motor es lo único que hace falta
+    pub bridge: u32,
 }
 
 impl Spec {
     pub fn chunk(&self) -> Vec<u8> {
         let mut c = MAGIC.to_vec();
-        c.push(1);
+        c.push(2);
         c.push(if self.format == Format::Vst2 { 2 } else { 3 });
         c.extend_from_slice(&self.cid);
+        c.extend_from_slice(&self.bridge.to_le_bytes());
         c.extend_from_slice(&(self.path.len() as u16).to_le_bytes());
         c.extend_from_slice(self.path.as_bytes());
         c.extend_from_slice(&(self.state.len() as u32).to_le_bytes());
@@ -49,7 +51,7 @@ impl Spec {
     pub fn from_chunk(d: &[u8]) -> Option<Spec> {
         let rest = d.strip_prefix(MAGIC.as_slice())?;
         let (&[ver, fmt], rest) = rest.split_first_chunk::<2>()?;
-        if ver != 1 {
+        if ver != 2 {
             return None;
         }
         let format = match fmt {
@@ -58,6 +60,7 @@ impl Spec {
             _ => return None,
         };
         let (cid, rest) = rest.split_first_chunk::<16>()?;
+        let (bridge, rest) = rest.split_first_chunk::<4>()?;
         let (len, rest) = rest.split_first_chunk::<2>()?;
         let len = u16::from_le_bytes(*len) as usize;
         let path = std::str::from_utf8(rest.get(..len)?).ok()?.to_string();
@@ -67,7 +70,7 @@ impl Spec {
         if slen > MAX_STATE || rest.len() != slen {
             return None;
         }
-        Some(Spec { format, path, cid: *cid, state: rest.to_vec() })
+        Some(Spec { format, path, cid: *cid, state: rest.to_vec(), bridge: u32::from_le_bytes(*bridge) })
     }
 }
 
@@ -90,14 +93,29 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    /// Para el audio: sin controlador ni editor
+    /// Sin controlador ni editor (escanear, tests)
     pub fn load(spec: &Spec, rate: f64, block: usize) -> Result<Plugin, String> {
         Self::open(spec, rate, block, false)
     }
 
-    /// Para editarlo (proceso aparte de la app): con su controlador, listo para abrir su ventana
-    pub fn load_for_editor(spec: &Spec) -> Result<Plugin, String> {
-        Self::open(spec, 48000.0, 512, true)
+    /// Para alojarlo de verdad: con su controlador, listo para abrir su ventana, bloques de hasta `bridge::MAX_BLOCK`
+    pub fn load_live(spec: &Spec, rate: f64) -> Result<Plugin, String> {
+        Self::open(spec, rate, crate::bridge::MAX_BLOCK, true)
+    }
+
+    /// Otra frecuencia de muestreo (la salida ha cambiado de formato)
+    pub fn set_rate(&mut self, rate: f64) {
+        match self {
+            Plugin::V2(p) => p.set_rate(rate),
+            Plugin::V3(p) => p.set_rate(rate),
+        }
+    }
+
+    /// Lo tocado en la ventana que aún no ha pasado por el audio, al procesador (con el audio parado)
+    pub fn flush(&mut self) {
+        if let Plugin::V3(p) = self {
+            p.flush_edits()
+        }
     }
 
     fn open(spec: &Spec, rate: f64, block: usize, editor: bool) -> Result<Plugin, String> {
@@ -143,15 +161,6 @@ impl Plugin {
         match self {
             Plugin::V2(p) => p.open_editor(hwnd, resize),
             Plugin::V3(p) => p.open_editor(hwnd, resize),
-        }
-    }
-
-    /// Puede haber cambiado su estado desde el último `state` (en VST3, solo si se ha tocado algo en el editor;
-    /// en VST2 no hay forma fiable de saberlo y hay que comparar)
-    pub fn maybe_changed(&self) -> bool {
-        match self {
-            Plugin::V2(_) => true,
-            Plugin::V3(p) => p.edited(),
         }
     }
 
@@ -454,6 +463,14 @@ impl Vst2 {
         unsafe { (*self.fx).initial_delay.max(0) as u32 }
     }
 
+    fn set_rate(&mut self, rate: f64) {
+        self.call(STOP_PROCESS, 0, 0, std::ptr::null_mut(), 0.0);
+        self.call(MAINS_CHANGED, 0, 0, std::ptr::null_mut(), 0.0);
+        self.call(SET_SAMPLE_RATE, 0, 0, std::ptr::null_mut(), rate as f32);
+        self.call(MAINS_CHANGED, 0, 1, std::ptr::null_mut(), 0.0);
+        self.call(START_PROCESS, 0, 0, std::ptr::null_mut(), 0.0);
+    }
+
     fn process(&mut self, l: &mut [f32], r: &mut [f32]) {
         let n = l.len().min(r.len()).min(self.outs[0].len());
         self.ins[0][..n].copy_from_slice(&l[..n]);
@@ -519,7 +536,7 @@ mod tests {
 
     #[test]
     fn el_chunk_de_host_va_y_vuelve() {
-        let s = Spec { format: Format::Vst3, path: r"C:\Program Files\Common Files\VST3\Ñu.vst3".into(), cid: [7; 16], state: vec![1, 2, 3] };
+        let s = Spec { format: Format::Vst3, path: r"C:\Program Files\Common Files\VST3\Ñu.vst3".into(), cid: [7; 16], state: vec![1, 2, 3], bridge: 0xabcd };
         let c = s.chunk();
         assert_eq!(Spec::from_chunk(&c), Some(s));
         assert_eq!(Spec::from_chunk(&c[..c.len() - 1]), None);
@@ -538,7 +555,7 @@ mod tests {
             let infos = scan(path).expect("escanear");
             println!("{path}: {infos:?}");
             let i = &infos[0];
-            let spec = Spec { format: i.format, path: path.into(), cid: i.cid, state: vec![] };
+            let spec = Spec { format: i.format, path: path.into(), cid: i.cid, state: vec![], bridge: 0 };
             let mut p = Plugin::load(&spec, 48000.0, 480).expect("cargar");
             let mut l: Vec<f32> = (0..480).map(|n| (n as f32 * 0.05).sin() * 0.5).collect();
             let mut r = l.clone();
@@ -553,7 +570,7 @@ mod tests {
             p.process(&mut l, &mut r);
             println!("  estado {} bytes, latencia {}", state.len(), p.latency());
             drop(p);
-            let mut e = Plugin::load_for_editor(&Spec { state, ..spec }).expect("cargar para editar");
+            let mut e = Plugin::load_live(&Spec { state, ..spec }, 48000.0).expect("cargar para editar");
             println!("  editor {:?}", e.editor_size());
             assert!(!e.state().is_empty());
         }
