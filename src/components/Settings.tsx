@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Trash2, WandSparkles, X } from 'lucide-react'
+import { AudioLines, Info, Keyboard, LoaderCircle, Palette } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { api, type Accent, type AppRule, type Config, type Device, type OpenApp } from '../lib/api'
+import { api, type Accent, type Config, type Device } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { allPresets, currentCurve, listed, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, listed, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
 import { KeyRecorder, Range, Select, type Option } from './controls'
 import { Logo, Switch } from './ui'
 
-type Cat = 'general' | 'auto' | 'keys' | 'engine' | 'about'
+type Cat = 'general' | 'keys' | 'engine' | 'about'
 const CATS: [Cat, LucideIcon][] = [
   ['general', Palette],
-  ['auto', WandSparkles],
   ['keys', Keyboard],
   ['engine', AudioLines],
   ['about', Info]
@@ -58,7 +57,6 @@ export function SettingsPage(): React.JSX.Element {
       </div>
       <div className="settings-body" role="tabpanel">
         {cat === 'general' && <General />}
-        {cat === 'auto' && <AutoRules />}
         {cat === 'keys' && <Keys />}
         {cat === 'engine' && <Engine />}
         {cat === 'about' && <About />}
@@ -168,73 +166,10 @@ function General(): React.JSX.Element {
 }
 
 /** Presets para un desplegable; si el elegido ya no existe (se borró), se enseña como tal en vez de en blanco */
-function presetOptions(cfg: Config, value: string | null, none?: string): Option<string>[] {
+export function presetOptions(cfg: Config, value: string | null, none?: string): Option<string>[] {
   const list: Option<string>[] = allPresets(cfg).map((p) => ({ value: p.id, label: p.name }))
   if (value && !list.some((o) => o.value === value)) list.push({ value, label: t('auto.missing') })
   return none === undefined ? list : [{ value: '', label: none }, ...list]
-}
-
-/** Preset automático por app: «cuando esta app está delante, este preset» */
-function AutoRules(): React.JSX.Element {
-  const t = useT()
-  const cfg = useStore((s) => s.config!)
-  const rules = cfg.appRules
-  const [apps, setApps] = useState<OpenApp[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const setRules = (appRules: AppRule[]): void => updateConfig({ appRules })
-  const edit = (i: number, patch: Partial<AppRule>): void => setRules(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)))
-  const pick = async (): Promise<void> => {
-    setLoading(true)
-    try {
-      setApps(await api.appsList())
-    } finally {
-      setLoading(false)
-    }
-  }
-  const add = (a: OpenApp): void => {
-    setRules([...rules, { exe: a.exe, name: a.name, preset: currentCurve().preset ?? 'b:flat', on: true }])
-    setApps(null)
-  }
-  const free = apps?.filter((a) => !rules.some((r) => r.exe === a.exe)) ?? []
-  return (
-    <>
-      <h3>{t('auto.title')}</h3>
-      <p className="hint set-intro">{t('auto.hint')}</p>
-      {rules.length === 0 && <div className="set-empty">{t('auto.empty')}</div>}
-      {rules.map((r, i) => (
-        <Row key={r.exe} title={r.name} hint={r.exe}>
-          <Select size="sm" value={r.preset} options={presetOptions(cfg, r.preset)} label={t('auto.preset')} onChange={(preset) => edit(i, { preset })} />
-          <Switch on={r.on} label={t('auto.on')} onChange={(on) => edit(i, { on })} />
-          <button className="icon-btn" aria-label={t('common.delete')} onClick={() => setRules(rules.filter((_, j) => j !== i))}>
-            <Trash2 size={15} />
-          </button>
-        </Row>
-      ))}
-      {apps === null ? (
-        <button className="btn btn-sm set-add" disabled={loading} onClick={() => void pick()}>
-          {loading ? <LoaderCircle size={15} className="spin" /> : <Plus size={15} />}
-          {t('auto.add')}
-        </button>
-      ) : (
-        <div className="app-pick" role="group" aria-label={t('auto.pick')}>
-          <div className="app-pick-head">
-            <b>{t('auto.pick')}</b>
-            <button className="icon-btn" aria-label={t('common.close')} onClick={() => setApps(null)}>
-              <X size={15} />
-            </button>
-          </div>
-          {free.length === 0 && <div className="small muted app-pick-empty">{t('auto.none')}</div>}
-          {free.map((a) => (
-            <button key={a.exe} className="app-pick-item" onClick={() => add(a)}>
-              <AppWindow size={16} />
-              <b>{a.name}</b>
-              <small>{a.exe}</small>
-            </button>
-          ))}
-        </div>
-      )}
-    </>
-  )
 }
 
 /** Atajos globales: bypass y nueve huecos de preset, cada uno con la combinación que se grabe */
@@ -243,7 +178,7 @@ function Keys(): React.JSX.Element {
   const cfg = useStore((s) => s.config!)
   const failed = useStore((s) => s.hotkeysFailed)
   const h = cfg.hotkeys
-  const all = [h.bypass, ...h.presets.map((p) => p.keys)]
+  const all = [h.bypass, ...h.presets.map((p) => p.keys), h.mixerGame, h.mixerChat]
   /** Las combinaciones de los demás atajos (`own` = posición en `all`), para no repetir ninguna */
   const others = (own: number): string[] => all.filter((k, i): k is string => !!k && i !== own)
   const setSlot = (i: number, patch: Partial<(typeof h.presets)[number]>): void =>
@@ -266,6 +201,18 @@ function Keys(): React.JSX.Element {
         <Row key={i} title={t('keys.slot', { n: i + 1 })}>
           <Select size="sm" value={p.preset ?? ''} options={presetOptions(cfg, p.preset, t('keys.none'))} label={t('keys.slot', { n: i + 1 })} onChange={(v) => setSlot(i, { preset: v || null })} />
           <KeyRecorder value={p.keys} taken={others(i + 1)} failed={!!p.keys && !!p.preset && failed.includes(p.keys)} label={t('keys.slot', { n: i + 1 })} onChange={(keys) => setSlot(i, { keys })} />
+        </Row>
+      ))}
+      <h3 style={{ marginTop: 22 }}>{t('apps.mixer')}</h3>
+      {(['mixerGame', 'mixerChat'] as const).map((k, j) => (
+        <Row key={k} title={t(`keys.${k}`)}>
+          <KeyRecorder
+            value={h[k]}
+            taken={others(h.presets.length + 1 + j)}
+            failed={!!h[k] && failed.includes(h[k]!)}
+            label={t(`keys.${k}`)}
+            onChange={(v) => updateConfig({ hotkeys: { ...h, [k]: v } })}
+          />
         </Row>
       ))}
     </>

@@ -105,6 +105,8 @@ export interface DeviceSettings {
 export interface Hotkeys {
   bypass: string | null
   presets: { keys: string | null; preset: string | null }[]
+  mixerGame: string | null
+  mixerChat: string | null
 }
 
 /** Monitorización: qué se escucha. `mono` es el mid, (L + R) / 2 */
@@ -124,8 +126,20 @@ export interface Studio {
 export interface AppRule {
   exe: string
   name: string
+  /** Vacío: la regla solo cambia la salida */
   preset: string
   on: boolean
+  /** Salida por la que suena la app (GUID); `null` = la predeterminada */
+  output: string | null
+}
+
+/** Juego y voz */
+export interface Voice {
+  duck: boolean
+  duckDb: number
+  apps: string[]
+  /** −1 = todo juego, 0 = igual, 1 = todo chat */
+  mixer: number
 }
 
 export interface OpenApp {
@@ -159,6 +173,7 @@ export interface Config {
   sectionPresets: SectionPresets
   /** Carpetas de plugins que añade el usuario (aparte de las estándar) */
   pluginFolders: string[]
+  voice: Voice
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic
@@ -183,6 +198,8 @@ export interface TrayLabels {
   broken: string
   repair: string
   pluginsOff: string
+  game: string
+  chat: string
 }
 
 export interface Device {

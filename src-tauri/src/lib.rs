@@ -7,6 +7,7 @@ mod hotkeys;
 mod osd;
 pub mod plughost;
 mod room;
+mod sessions;
 
 use eq::{Curve, DeviceSettings, Live, Loudness, Mic, Preset, SectionPresets};
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,8 @@ pub struct Config {
     pub mic: Mic,
     /// Carpetas de plugins que añade el usuario (aparte de las estándar)
     pub plugin_folders: Vec<String>,
+    /// Juego y voz: atenuación y mezclador
+    pub voice: sessions::Voice,
 }
 
 impl Default for Config {
@@ -101,6 +104,7 @@ impl Default for Config {
             preset_keys: None,
             mic: Mic::default(),
             plugin_folders: vec![],
+            voice: sessions::Voice::default(),
         }
     }
 }
@@ -143,6 +147,7 @@ impl Config {
         self.plugin_folders.retain(|f| f.len() <= 512 && f.as_bytes().get(1..3) == Some(b":\\") && !f.chars().any(char::is_control));
         self.plugin_folders.dedup();
         self.plugin_folders.truncate(20);
+        self.voice.sanitize();
     }
 
     /// Algún plugin del usuario encendido en algún dispositivo
@@ -287,10 +292,13 @@ fn config_set(app: AppHandle, st: State<'_, AppState>, cfg: Config) -> Res<Confi
 fn store(app: &AppHandle, mut cfg: Config) -> Config {
     let st = app.state::<AppState>();
     cfg.sanitize();
-    let (tray, keys, rules) = {
+    let (tray, keys, rules, voice) = {
         let old = st.cfg();
-        (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone())
+        (old.tray_key(), old.hotkeys.clone(), old.app_rules.clone(), old.voice.clone())
     };
+    if voice != cfg.voice {
+        sessions::update(&cfg.voice);
+    }
     *st.cfg() = cfg.clone();
     save(&st.config_path, &cfg);
     if tray != cfg.tray_key() {
@@ -647,6 +655,9 @@ pub struct TrayLabels {
     repair: String,
     /// «Apagar mis plugins»
     plugins_off: String,
+    /// «Juego» y «Chat» (aviso del mezclador)
+    game: String,
+    chat: String,
 }
 
 #[tauri::command]
@@ -1101,6 +1112,18 @@ fn toggle_bypass(app: &AppHandle, notify: bool) {
     }
 }
 
+/// Atajo del mezclador juego ↔ chat: un paso y aviso en pantalla con cómo queda cada lado
+fn mixer_step(app: &AppHandle, step: f64) {
+    let st = app.state::<AppState>();
+    let mut cfg = st.cfg().clone();
+    cfg.voice.mixer = (cfg.voice.mixer + step).clamp(-1.0, 1.0);
+    let m = cfg.voice.mixer;
+    commit(app, cfg);
+    let l = st.labels();
+    let pct = |att: f64| (100.0 * (1.0 - att)).round() as i32;
+    osd::show(app, &format!("{} {} % · {} {} %", l.game, pct(m.max(0.0)), l.chat, pct((-m).max(0.0))), "", "preset", osd::SHORT);
+}
+
 /// Atajo de un hueco de preset: el preset asignado, con aviso en pantalla
 fn preset_hotkey(app: &AppHandle, slot: usize) {
     let key = app.state::<AppState>().cfg().hotkeys.presets.get(slot).cloned().unwrap_or_default();
@@ -1119,6 +1142,17 @@ fn register_hotkeys(app: &AppHandle, cfg: &Config) {
         let ok = gs.on_shortcut(k.as_str(), |app, _, ev| {
             if ev.state == ShortcutState::Pressed {
                 toggle_bypass(app, true);
+            }
+        });
+        if ok.is_err() {
+            failed.push(k.clone());
+        }
+    }
+    for (k, step) in [(&cfg.hotkeys.mixer_game, -0.2), (&cfg.hotkeys.mixer_chat, 0.2)] {
+        let Some(k) = k else { continue };
+        let ok = gs.on_shortcut(k.as_str(), move |app, _, ev| {
+            if ev.state == ShortcutState::Pressed {
+                mixer_step(app, step);
             }
         });
         if ok.is_err() {
@@ -1171,14 +1205,25 @@ fn watch_foreground(app: AppHandle) -> std::thread::Thread {
         let own = std::env::current_exe().ok().and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned())).unwrap_or_default();
         let mut auto = apps::Auto::new(&own);
         let mut seen: Vec<apps::AppRule> = vec![];
+        let mut last_fg = 0u32;
         loop {
             let st = app.state::<AppState>();
-            let rules: Vec<apps::AppRule> = st.cfg().app_rules.iter().filter(|r| r.on).cloned().collect();
-            if rules != seen {
+            let all: Vec<apps::AppRule> = st.cfg().app_rules.iter().filter(|r| r.on).cloned().collect();
+            if all != seen {
                 auto.rearm();
-                seen = rules.clone();
+                // Salida por app: a lo que ya está abierto, en cuanto cambian las reglas
+                apply_outputs(&all, &seen, None);
+                seen = all.clone();
             }
-            if rules.is_empty() {
+            // El preset automático solo con las reglas que tienen preset
+            let rules: Vec<apps::AppRule> = all.iter().filter(|r| !r.preset.is_empty()).cloned().collect();
+            let fg = apps::foreground_pid();
+            if fg != last_fg {
+                // Una app que acaba de abrirse (o de venir delante): Windows no siempre le respeta la salida
+                last_fg = fg;
+                apply_outputs(&all, &[], Some(fg));
+            }
+            if all.is_empty() {
                 if auto.active() {
                     let cur = current_curve(&st);
                     run_step(&app, auto.release(cur.as_ref().map(|(d, c)| (d.as_str(), c))));
@@ -1195,6 +1240,32 @@ fn watch_foreground(app: AppHandle) -> std::thread::Thread {
     })
     .thread()
     .clone()
+}
+
+/// Pone a cada app con regla su salida. `only`: solo ese proceso (si es de una app con regla). Las reglas que ya no
+/// tienen salida (o han desaparecido) vuelven a la predeterminada en los procesos que sigan abiertos.
+fn apply_outputs(rules: &[apps::AppRule], before: &[apps::AppRule], only: Option<u32>) {
+    let mut wanted: Vec<(String, Option<String>)> = rules.iter().filter(|r| r.output.is_some()).map(|r| (r.exe.clone(), r.output.clone())).collect();
+    if only.is_none() {
+        for b in before.iter().filter(|b| b.output.is_some()) {
+            if !wanted.iter().any(|(e, _)| *e == b.exe) {
+                wanted.push((b.exe.clone(), None));
+            }
+        }
+    }
+    if wanted.is_empty() {
+        return;
+    }
+    let exes: Vec<String> = wanted.iter().map(|(e, _)| e.clone()).collect();
+    let procs = match only {
+        Some(pid) => sessions::exe_of(pid).filter(|e| exes.contains(e)).map(|e| vec![(pid, e)]).unwrap_or_default(),
+        None => sessions::pids_of(&exes),
+    };
+    for (pid, exe) in procs {
+        if let Some((_, out)) = wanted.iter().find(|(e, _)| *e == exe) {
+            sessions::set_app_output(pid, out.as_deref());
+        }
+    }
 }
 
 fn run_step(app: &AppHandle, step: apps::Step) {
@@ -1349,6 +1420,8 @@ pub fn run() {
                     broken: "PoxiEQ dejó de funcionar en {d}".into(),
                     repair: "Abre PoxiEQ y pulsa Reparar".into(),
                     plugins_off: "Apagar mis plugins".into(),
+                    game: "Juego".into(),
+                    chat: "Chat".into(),
                 }),
                 live: Mutex::new(live),
                 presets: Mutex::new(vec![]),
@@ -1392,6 +1465,8 @@ pub fn run() {
             let handle = app.handle().clone();
             engine::watch_devices(move || devices_changed(&handle));
             watch_engine(app.handle().clone());
+            // Juego y voz: devuelve primero lo que quedara bajado si PoxiEQ murió a mitad
+            sessions::start(cfg.voice.clone(), app.path().app_data_dir()?.join("volumes.json"));
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
             let _ = apply(&cfg, &live);
             Ok(())
@@ -1447,6 +1522,7 @@ pub fn run() {
         .run(|app, ev| {
             if let RunEvent::Exit = ev {
                 reset_live(app);
+                sessions::shutdown();
                 for (_, mut c) in app.state::<AppState>().editors().drain() {
                     let _ = c.kill();
                 }

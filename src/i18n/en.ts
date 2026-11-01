@@ -26,6 +26,7 @@ export default {
     room: 'Room',
     mic: 'Microphone',
     plugins: 'Plugins',
+    apps: 'Apps',
     settings: 'Settings',
     on: 'Something is on',
     warn: 'Studio listening on'
@@ -330,7 +331,7 @@ export default {
   },
   settings: {
     title: 'Settings',
-    cats: { general: 'General', auto: 'Automatic', keys: 'Shortcuts', engine: 'Engine', about: 'About' },
+    cats: { general: 'General', keys: 'Shortcuts', engine: 'Engine', about: 'About' },
     appearance: 'Appearance',
     theme: 'Theme',
     themes: { dark: 'Dark', light: 'Light', system: 'Like Windows' },
@@ -387,8 +388,6 @@ export default {
     portable: "You're using the portable version: download the new one and replace the .exe."
   },
   auto: {
-    title: 'Preset per app',
-    hint: 'When an app comes to the foreground its preset plays; switching to one without a rule brings yours back. If you change the curve in the meantime, yours stays.',
     empty: 'No rules yet.',
     add: 'Add app',
     pick: 'Pick an open app',
@@ -404,6 +403,8 @@ export default {
     bypassHint: 'Bypass for the outputs: the microphone stays processed.',
     presets: 'Preset shortcuts',
     slot: 'Preset {n}',
+    mixerGame: 'More game',
+    mixerChat: 'More chat',
     none: 'Not assigned',
     noKey: 'No shortcut',
     press: 'Press the combination…',
@@ -495,6 +496,26 @@ export default {
       namePh: 'Mixing, Live voice…',
       empty: 'Save your plugin chains here to switch between them with one click.'
     }
+  },
+  apps: {
+    rules: 'Per app',
+    rulesHint: "When an app comes to the front its preset plays; switching to one without a rule brings back the one you had. If you touch the curve meanwhile, yours stays.",
+    noPreset: 'No preset (output only)',
+    output: 'Output',
+    outDefault: 'Windows output',
+    outputHint: "This sets the app's output (like in Windows sound settings), not a per-app EQ: since each output has its own EQ, Spotify on your headphones plays with the headphones' EQ.",
+    duck: 'Voice on top',
+    duckHint: 'While someone talks in a voice app (Discord, Teams…), everything else goes down a bit and comes back when they stop. It only touches each app\'s volume and always restores it.',
+    duckOn: 'Lower the rest when they talk',
+    duckDb: 'How much it lowers',
+    duckAmount: 'Lowers {n} dB',
+    voiceApps: 'Voice apps',
+    voiceReset: 'Back to the defaults',
+    mixer: 'Game ↔ chat mix',
+    mixerHint: 'Left lowers the chat; right lowers the game (and everything that is not voice). Also with shortcuts (Settings → Shortcuts).',
+    game: 'Game',
+    chat: 'Chat',
+    center: 'Even'
   },
   plugins: {
     for: 'Chain for',

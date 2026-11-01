@@ -26,6 +26,7 @@ export default {
     room: 'Sala',
     mic: 'Micrófono',
     plugins: 'Plugins',
+    apps: 'Apps',
     settings: 'Ajustes',
     on: 'Hay algo encendido',
     warn: 'Escucha de estudio activa'
@@ -330,7 +331,7 @@ export default {
   },
   settings: {
     title: 'Ajustes',
-    cats: { general: 'General', auto: 'Automático', keys: 'Atajos', engine: 'Motor', about: 'Acerca de' },
+    cats: { general: 'General', keys: 'Atajos', engine: 'Motor', about: 'Acerca de' },
     appearance: 'Apariencia',
     theme: 'Tema',
     themes: { dark: 'Oscuro', light: 'Claro', system: 'Como Windows' },
@@ -387,8 +388,6 @@ export default {
     portable: 'Usas la versión portable: descarga la nueva y sustituye el .exe.'
   },
   auto: {
-    title: 'Preset por aplicación',
-    hint: 'Cuando una app pasa a primer plano suena su preset; al cambiar a otra sin regla vuelve el que tenías. Si tocas la curva mientras tanto, se queda la tuya.',
     empty: 'Aún no hay ninguna regla.',
     add: 'Añadir aplicación',
     pick: 'Elige una app abierta',
@@ -404,6 +403,8 @@ export default {
     bypassHint: 'El bypass de las salidas: el micrófono sigue procesado.',
     presets: 'Atajos de presets',
     slot: 'Preset {n}',
+    mixerGame: 'Más juego',
+    mixerChat: 'Más chat',
     none: 'Sin asignar',
     noKey: 'Sin atajo',
     press: 'Pulsa la combinación…',
@@ -495,6 +496,26 @@ export default {
       namePh: 'Mezcla, Voz en directo…',
       empty: 'Guarda aquí tus cadenas de plugins para cambiar entre ellas con un clic.'
     }
+  },
+  apps: {
+    rules: 'Por aplicación',
+    rulesHint: 'Cuando una app pasa a primer plano suena su preset; al cambiar a otra sin regla vuelve el que tenías. Si tocas la curva mientras tanto, se queda la tuya.',
+    noPreset: 'Sin preset (solo salida)',
+    output: 'Salida',
+    outDefault: 'Salida de Windows',
+    outputHint: 'La salida es la de la app (como en la configuración de sonido de Windows), no un EQ por app: como cada salida tiene su EQ, Spotify por los cascos suena con el de los cascos.',
+    duck: 'La voz por encima',
+    duckHint: 'Mientras alguien habla en una app de voz (Discord, Teams…), el resto baja un poco y vuelve solo cuando se calla. Solo toca el volumen de cada app y lo devuelve siempre.',
+    duckOn: 'Bajar lo demás cuando hablan',
+    duckDb: 'Cuánto baja',
+    duckAmount: 'Baja {n} dB',
+    voiceApps: 'Apps de voz',
+    voiceReset: 'Volver a las de serie',
+    mixer: 'Mezcla juego ↔ chat',
+    mixerHint: 'Hacia la izquierda baja el chat; hacia la derecha, el juego (y todo lo que no es voz). También con atajos (Ajustes → Atajos).',
+    game: 'Juego',
+    chat: 'Chat',
+    center: 'Igualar'
   },
   plugins: {
     for: 'Cadena de',

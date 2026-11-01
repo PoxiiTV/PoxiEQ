@@ -20,8 +20,12 @@ pub struct AppRule {
     pub exe: String,
     /// Nombre legible para la interfaz
     pub name: String,
+    /// Vacío: la regla solo cambia la salida
     pub preset: String,
     pub on: bool,
+    /// Salida por la que suena la app (GUID); `None` = la predeterminada de Windows
+    #[serde(default)]
+    pub output: Option<String>,
 }
 
 /// Id de preset válido: `b:…` (de serie) o `u:…` (propio), corto y sin nada raro
@@ -30,7 +34,7 @@ pub fn valid_preset_id(id: &str) -> bool {
 }
 
 /// Solo un nombre de archivo `.exe`: ni rutas, ni comodines, ni caracteres de control
-fn valid_exe(exe: &str) -> bool {
+pub fn valid_exe(exe: &str) -> bool {
     (5..=128).contains(&exe.len()) && exe.ends_with(".exe") && !exe.chars().any(|c| c.is_control() || r#"\/:*?"<>|"#.contains(c))
 }
 
@@ -43,7 +47,10 @@ pub fn sanitize_rules(rules: &mut Vec<AppRule>) {
         if r.name.is_empty() {
             r.name = r.exe.trim_end_matches(".exe").to_string();
         }
-        valid_exe(&r.exe) && valid_preset_id(&r.preset) && seen.insert(r.exe.clone())
+        if r.output.as_deref().is_some_and(|o| !crate::engine::is_device_id(o)) {
+            r.output = None;
+        }
+        valid_exe(&r.exe) && (r.preset.is_empty() || valid_preset_id(&r.preset)) && seen.insert(r.exe.clone())
     });
     rules.truncate(MAX_RULES);
 }
@@ -122,6 +129,15 @@ impl Auto {
 // ------------------------------------------------------------------ Windows
 
 /// Ejecutable (en minúsculas) de la ventana en primer plano
+/// Proceso de la ventana en primer plano
+pub fn foreground_pid() -> u32 {
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid));
+    }
+    pid
+}
+
 pub fn foreground_exe() -> Option<String> {
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -240,7 +256,7 @@ mod tests {
     use super::*;
 
     fn rule(exe: &str, preset: &str) -> AppRule {
-        AppRule { exe: exe.into(), name: String::new(), preset: preset.into(), on: true }
+        AppRule { exe: exe.into(), name: String::new(), preset: preset.into(), on: true, output: None }
     }
 
     fn curve(preset: Option<&str>) -> Curve {
@@ -250,7 +266,8 @@ mod tests {
     #[test]
     fn sanitize() {
         let mut rules = vec![
-            AppRule { exe: " Spotify.EXE ".into(), name: "Spo\ntify".into(), preset: "b:music".into(), on: true },
+            AppRule { exe: " Spotify.EXE ".into(), name: "Spo\ntify".into(), preset: "b:music".into(), on: true, output: Some(r"C:\nada".into()) },
+            AppRule { output: Some("{6af377fe-6370-495b-afe3-95fac2e918f7}".into()), ..rule("vlc.exe", "") },
             rule("spotify.exe", "b:bass"),
             rule(r"C:\juegos\cs2.exe", "b:footsteps"),
             rule("notepad.txt", "b:flat"),
@@ -259,8 +276,11 @@ mod tests {
             rule("discord.exe", "u:lq3k9"),
         ];
         sanitize_rules(&mut rules);
-        assert_eq!(rules.len(), 2, "{rules:?}");
-        assert_eq!(rules[0], AppRule { exe: "spotify.exe".into(), name: "Spotify".into(), preset: "b:music".into(), on: true });
+        assert_eq!(rules.len(), 3, "{rules:?}");
+        assert_eq!(rules[0], AppRule { exe: "spotify.exe".into(), name: "Spotify".into(), preset: "b:music".into(), on: true, output: None });
+        // Solo salida (sin preset) vale
+        assert_eq!(rules[1].output.as_deref(), Some("{6af377fe-6370-495b-afe3-95fac2e918f7}"));
+        let rules = [rules[0].clone(), rules[2].clone()];
         assert_eq!(rules[1].name, "discord", "sin nombre se usa el del exe");
         let mut many: Vec<AppRule> = (0..80).map(|i| rule(&format!("app{i}.exe"), "b:flat")).collect();
         sanitize_rules(&mut many);

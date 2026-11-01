@@ -17,6 +17,9 @@ pub struct Hotkeys {
     /// Encender/apagar el EQ (`None`: sin atajo)
     pub bypass: Option<String>,
     pub presets: Vec<PresetKey>,
+    /// Mezclador juego ↔ chat: un paso hacia cada lado (sin atajo de serie)
+    pub mixer_game: Option<String>,
+    pub mixer_chat: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -32,6 +35,8 @@ impl Default for Hotkeys {
         Self {
             bypass: Some("control+alt+Numpad0".into()),
             presets: (1..=SLOTS).map(|n| PresetKey { keys: Some(format!("control+alt+Numpad{n}")), preset: None }).collect(),
+            mixer_game: None,
+            mixer_chat: None,
         }
     }
 }
@@ -68,6 +73,8 @@ impl Hotkeys {
                 p.preset = None;
             }
         }
+        keep(&mut self.mixer_game);
+        keep(&mut self.mixer_chat);
     }
 }
 
@@ -230,6 +237,8 @@ mod tests {
                 PresetKey { keys: Some("control+alt+Digit1".into()), preset: Some("z:mal".into()) },
                 PresetKey { keys: Some("control+alt+F2".into()), preset: None },
             ],
+            mixer_game: Some("control+alt+F2".into()),
+            mixer_chat: Some("control+alt+F3".into()),
         };
         h.sanitize(|id| id.starts_with("b:"));
         assert_eq!(h.bypass.as_deref(), Some("control+alt+F1"));
@@ -238,5 +247,6 @@ mod tests {
         assert_eq!(h.presets[1], PresetKey::default(), "AltGr y preset inválido");
         assert_eq!(h.presets[2].keys.as_deref(), Some("control+alt+F2"));
         assert_eq!(h.presets[8], PresetKey::default());
+        assert_eq!((h.mixer_game.as_deref(), h.mixer_chat.as_deref()), (None, Some("control+alt+F3")), "la del mezclador repetida se va");
     }
 }

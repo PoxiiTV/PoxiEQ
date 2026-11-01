@@ -18,7 +18,7 @@ export interface Toast {
 export type SetupStep = 'download' | 'install' | 'check' | null
 
 /** Secciones del menú lateral */
-export type Page = 'eq' | 'sound' | 'phones' | 'studio' | 'room' | 'mic' | 'plugins' | 'settings'
+export type Page = 'eq' | 'sound' | 'phones' | 'studio' | 'room' | 'mic' | 'plugins' | 'apps' | 'settings'
 
 interface State {
   app: AppInfo | null
