@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AudioWaveform, Copy, Ear, Import, Plus, Power, Redo2, RotateCcw, Save, Search, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
+import { AudioWaveform, Copy, Download, Ear, Import, Plus, Power, Redo2, RotateCcw, Save, Search, Trash2, TriangleAlert, Undo2, X } from 'lucide-react'
+import { toEasyEffects, toParametric, toRew } from '../lib/formats'
+import { errorText } from '../i18n'
 import { api } from '../lib/api'
 import { clamp, curveDb, fmtDb, hasGain, headroom, logFreqs, MAX_F, MAX_G, MAX_Q, MIN_F, MIN_G, MIN_Q, tenBand, toApo, type Curve } from '../lib/eq'
 import { currentCurve, go, redo, setCurve, setState, setStudio, STUDIO_OFF, studioActive, toast, undo, updateConfig, useStore } from '../lib/store'
@@ -41,6 +43,52 @@ export function EqPage(): React.JSX.Element {
         <AddBand />
       </div>
       <CurveEditor />
+    </div>
+  )
+}
+
+const EXPORTS = [
+  { id: 'apo', ext: 'txt', make: toParametric },
+  { id: 'easyeffects', ext: 'json', make: toEasyEffects },
+  { id: 'rew', ext: 'txt', make: toRew }
+] as const
+
+/** Exportar la curva a otros programas (se guarda en Descargas) */
+function ExportMenu({ curve }: { curve: Curve }): React.JSX.Element {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent): void => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [open])
+  const save = async (x: (typeof EXPORTS)[number]): Promise<void> => {
+    setOpen(false)
+    const name = `${useStore.getState().config?.presets.find((p) => p.id === curve.preset)?.name ?? 'PoxiEQ'} ${t(`eq.exports.${x.id}`)}`
+    try {
+      toast(t('share.saved', { f: await api.textExport(name, x.ext, x.make(curve)) }))
+    } catch (e) {
+      toast(errorText(e), 'err')
+    }
+  }
+  return (
+    <div className={`dd export-menu ${open ? 'open' : ''}`} ref={root}>
+      <button className="icon-btn tip-right" data-tip={t('eq.export')} aria-label={t('eq.export')} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Download size={16} />
+      </button>
+      {open && (
+        <div className="dd-menu" role="menu">
+          {EXPORTS.map((x) => (
+            <button key={x.id} role="menuitem" className="dd-item" onClick={() => void save(x)}>
+              {t(`eq.exports.${x.id}`)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -93,6 +141,7 @@ export function CurveEditor(): React.JSX.Element {
         <button className="icon-btn tip-right" data-tip={t('eq.copy')} aria-label={t('eq.copy')} onClick={() => void navigator.clipboard.writeText(toApo(curve)).then(() => toast(t('eq.copied')))}>
           <Copy size={16} />
         </button>
+        <ExportMenu curve={curve} />
       </div>
       <Graph />
       <div className="hint-line small muted">{t('eq.hint')}</div>

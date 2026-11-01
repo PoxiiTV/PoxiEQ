@@ -105,6 +105,8 @@ export default {
     repairing: 'Repairing…'
   },
   eq: {
+    export: 'Export to another app',
+    exports: { apo: 'Equalizer APO · Peace', easyeffects: 'EasyEffects', rew: 'REW' },
     preamp: 'Preamp',
     auto: 'Auto',
     autoTip: 'Lowers the volume just enough so the curve never clips',
@@ -594,6 +596,8 @@ export default {
     openFail: "Couldn't open the plugin: {e}"
   },
   share: {
+    fromFile: 'From a file (APO, Peace, REW, AutoEq, EasyEffects or GraphicEQ)',
+    fileBad: "That file isn't an EQ that can be read (or it has values out of range).",
     title: 'Share preset',
     text: 'Copy the code and paste it in a chat, or save it as a .poxieq file. Whoever gets it imports it with one click.',
     code: 'Preset code',

@@ -450,6 +450,54 @@ fn preset_export(app: AppHandle, name: String, code: String) -> Res<String> {
     Ok(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())
 }
 
+/// Archivo de EQ de otro programa elegido con `pick_file` (como mucho 1 MB; lo valida la interfaz)
+#[tauri::command]
+fn text_read(path: String) -> Res<String> {
+    let meta = std::fs::metadata(&path).map_err(|e| problem("io.failed", e.to_string()))?;
+    if meta.len() > 1 << 20 {
+        return Err(problem("io.failed", None));
+    }
+    std::fs::read(&path).map(|b| String::from_utf8_lossy(&b).into_owned()).map_err(|e| problem("io.failed", e.to_string()))
+}
+
+/// Guarda en Descargas una curva exportada a otro formato (`txt` o `json`) y la enseña en el Explorador
+#[tauri::command]
+fn text_export(app: AppHandle, name: String, ext: String, content: String) -> Res<String> {
+    if !matches!(ext.as_str(), "txt" | "json") || content.len() > 1 << 20 {
+        return Err(problem("io.failed", None));
+    }
+    let dir = app.path().download_dir().or_else(|_| app.path().document_dir()).map_err(|e| problem("io.failed", e.to_string()))?;
+    let stem = file_stem(&name);
+    let mut path = dir.join(format!("{stem}.{ext}"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem} ({n}).{ext}"));
+        n += 1;
+    }
+    std::fs::write(&path, &content).map_err(|e| problem("io.failed", e.to_string()))?;
+    let _ = tauri_plugin_opener::reveal_item_in_dir(&path);
+    Ok(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+/// GraphicEQ (puntos frecuencia/ganancia) a filtros paramétricos, con el mismo ajustador que la sala
+#[tauri::command]
+async fn graphic_fit(points: Vec<(f64, f64)>) -> Res<Vec<eq::Band>> {
+    let ok = (2..=2000).contains(&points.len())
+        && points.iter().all(|&(f, g)| f.is_finite() && g.is_finite() && (1.0..=24000.0).contains(&f) && g.abs() <= 30.0)
+        && points.windows(2).all(|w| w[1].0 > w[0].0);
+    if !ok {
+        return Err(problem("share.bad", None));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let (f, g): (Vec<f64>, Vec<f64>) = points.into_iter().unzip();
+        // Lo que hay que aplicar es lo contrario de lo que «sobra»: medida = −ganancias, objetivo = plano
+        let measured: Vec<f64> = autoeq::to_grid(&f, &g).iter().map(|v| -v).collect();
+        autoeq::fit(&measured, &vec![0.0; room::GRID]).bands
+    })
+    .await
+    .map_err(|_| problem("share.bad", None))
+}
+
 /// Código de preset compartido (`PXEQ2.` + base64url, o `PXEQ1.` de los primeros, solo del ecualizador): solo
 /// eso y de tamaño razonable. Su contenido lo valida la interfaz al importarlo (`share.ts`).
 fn share_code_ok(code: &str) -> bool {
@@ -1581,6 +1629,9 @@ pub fn run() {
             engine_check,
             sound_settings,
             pick_file,
+            text_read,
+            text_export,
+            graphic_fit,
             ir_load,
             engine_uninstall,
             autoeq_index,

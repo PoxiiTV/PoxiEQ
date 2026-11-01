@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { Copy, Download, FileDown, Sparkles } from 'lucide-react'
+import { Copy, Download, FileDown, FileUp, LoaderCircle, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { changesFor } from '../lib/changelog'
 import { SECTION_PARTS, type Part } from '../lib/dsp'
 import { cleanName, decodeShare, MAX_FILE, MAX_NAME, type Shared } from '../lib/share'
+import { readEqFile } from '../lib/formats'
+import { autoPreamp } from '../lib/eq'
 import { importShared, savePreset, saveSectionPreset, setState, toast, updateConfig, useStore } from '../lib/store'
 import { installUpdate, isPortable, RELEASES, useUpdate } from '../lib/update'
 import { currentLang, errorText, useT } from '../i18n'
@@ -122,10 +124,33 @@ export function ImportModal(): React.JSX.Element | null {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [over, setOver] = useState(false)
-  const parsed = useMemo(() => decodeShare(code), [code])
+  const [fromFile, setFromFile] = useState<Shared | null>(null)
+  const [reading, setReading] = useState(false)
+  const shared = useMemo(() => decodeShare(code), [code])
+  const parsed = fromFile ?? shared
   const summary = useSummary()
+  /** Un archivo de EQ de otro programa (APO, Peace, REW, AutoEq, EasyEffects, GraphicEQ): va al ecualizador */
+  const openFile = async (): Promise<void> => {
+    const path = await api.pickFile('eq')
+    if (!path) return
+    setReading(true)
+    try {
+      const f = readEqFile(await api.textRead(path))
+      if (!f) return toast(t('share.fileBad'), 'err')
+      const bands = f.kind === 'graphic' ? await api.graphicFit(f.points) : f.bands
+      const preamp = f.kind === 'graphic' ? autoPreamp(bands) : f.preamp
+      const name = cleanName(path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? '') || 'EQ'
+      setCode('')
+      setFromFile({ section: 'eq', name, curve: { preamp, autoPreamp: false, bands, preset: null } })
+    } catch (e) {
+      toast(errorText(e), 'err')
+    } finally {
+      setReading(false)
+    }
+  }
   useEffect(() => {
     if (open) setCode(initial)
+    setFromFile(null)
   }, [open, initial])
   useEffect(() => setName(parsed?.name ?? ''), [parsed])
   if (!open) return null
@@ -147,7 +172,10 @@ export function ImportModal(): React.JSX.Element | null {
         placeholder="PXEQ2.…"
         spellCheck={false}
         aria-label={t('share.code')}
-        onChange={(e) => setCode(e.target.value)}
+        onChange={(e) => {
+          setFromFile(null)
+          setCode(e.target.value)
+        }}
         onDragOver={(e) => {
           e.preventDefault()
           setOver(true)
@@ -160,6 +188,10 @@ export function ImportModal(): React.JSX.Element | null {
           if (f && f.size <= MAX_FILE) void f.text().then(setCode)
         }}
       />
+      <button className="btn btn-sm btn-ghost" disabled={reading} onClick={() => void openFile()}>
+        {reading ? <LoaderCircle size={14} className="spin" /> : <FileUp size={14} />}
+        {t('share.fromFile')}
+      </button>
       {code.trim() && !parsed && <p className="hint danger-text">{t('share.bad')}</p>}
       {parsed && (
         <>
