@@ -25,7 +25,7 @@ export type ShareSection = Shared['section']
 // Orden fijo (forma parte del formato): no depende del orden de los menús
 const KIND_CODES: Kind[] = ['peak', 'lowShelf', 'highShelf', 'lowPass', 'highPass']
 const LISTENS: Listen[] = ['stereo', 'mono', 'side', 'left', 'right']
-const SIMS: Sim[] = ['phone', 'laptop', 'car', 'earbuds', 'tv', 'speaker']
+const SIMS: Sim[] = ['phone', 'laptop', 'car', 'earbuds', 'tv', 'speaker', 'tablet', 'soundbar', 'monitors', 'club']
 const SECTIONS: ShareSection[] = ['eq', 'sound', 'phones', 'studio', 'mic']
 
 /** Curva: preamp en dB, preamp automático (0/1) y bandas [tipo, Hz, dB, Q, encendida] */
@@ -104,11 +104,14 @@ function readDsp(d: unknown, parts: readonly Part[]): Dsp | null {
 }
 
 function readStudio(d: unknown): Studio | null {
-  if (!obj(d) || !keysAre(d, ['listen', 'flipL', 'flipR', 'swap', 'sim'])) return null
-  const { listen, flipL, flipR, swap, sim } = d
+  const base = ['listen', 'flipL', 'flipR', 'swap', 'sim']
+  // Los códigos de antes de la inclinación no la traen
+  if (!obj(d) || !(keysAre(d, base) || keysAre(d, [...base, 'tilt']))) return null
+  const { listen, flipL, flipR, swap, sim, tilt = 0 } = d
   if (!LISTENS.includes(listen as Listen) || typeof flipL !== 'boolean' || typeof flipR !== 'boolean' || typeof swap !== 'boolean') return null
   if (sim !== null && !SIMS.includes(sim as Sim)) return null
-  return { listen: listen as Listen, flipL, flipR, swap, sim: sim as Sim | null }
+  if (typeof tilt !== 'number' || !Number.isFinite(tilt) || tilt < -6 || tilt > 6) return null
+  return { listen: listen as Listen, flipL, flipR, swap, sim: sim as Sim | null, tilt }
 }
 
 /** Lee un código (con espacios o saltos de línea en medio, como al copiarlo de un chat). `null` si no vale. */

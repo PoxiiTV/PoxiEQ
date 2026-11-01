@@ -34,7 +34,7 @@ test('ida y vuelta en cada sección, sin perder nada y solo con lo suyo', () => 
     { section: 'eq', name: 'Noche de pelis 🎬 ñ', curve },
     { section: 'sound', name: 'Noche', dsp: night },
     { section: 'phones', name: 'Cruce', dsp: night },
-    { section: 'studio', name: 'Mono', studio: { listen: 'mono', flipL: true, flipR: false, swap: false, sim: 'phone' } },
+    { section: 'studio', name: 'Mono', studio: { listen: 'mono', flipL: true, flipR: false, swap: false, sim: 'phone', tilt: 0 } },
     { section: 'mic', name: 'Voz', curve, dsp: { ...DSP_DEFAULT, gate: { on: true, threshold: -45, range: 20, attack: 1, hold: 200, release: 150 }, leveler: night.leveler } }
   ]
   for (const c of cases) {

@@ -214,7 +214,18 @@ export default {
       earbuds: { name: 'Earbuds', text: 'AirPods-style: leaking bass and a 3 kHz resonance.' },
       tv: { name: 'TV', text: 'Small speakers: cut at ~120 Hz, boosted voice and almost mono.' },
       speaker: { name: 'Bluetooth speaker', text: 'Small and mono: a bass bump at 110 Hz and nothing below.' }
+    ,
+      tablet: { name: 'Tablet', text: 'Narrow stereo, nothing below ~250 Hz and a bit of sparkle.' },
+      soundbar: { name: 'Soundbar', text: 'Port bass, scooped mids and lifted voice.' },
+      monitors: { name: 'Small monitors', text: 'Nearly flat but no sub-bass: does the mix hold up without 40 Hz?' },
+      club: { name: 'Club / PA', text: 'Mono, very forward sub-bass, horn at 2.5 kHz and treble lost in the air.' }
     },
+    tilt: 'Tilt',
+    tiltDark: 'Darker',
+    tiltBright: 'Brighter',
+    tiltReset: 'Remove',
+    tiltHint: 'Tilts the whole spectrum around 1 kHz, as if you were listening on a darker or brighter system. If the mix holds up at both ends, it will translate well.',
+    tilted: 'tilt {n} dB',
     banner: 'Studio listening on:',
     off: 'Turn off'
   },

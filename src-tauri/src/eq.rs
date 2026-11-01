@@ -202,6 +202,10 @@ pub enum Sim {
     Earbuds,
     Tv,
     Speaker,
+    Tablet,
+    Soundbar,
+    Monitors,
+    Club,
 }
 
 /// Herramientas de estudio: momentáneas, no se guardan y se apagan al cerrar la ventana
@@ -215,6 +219,8 @@ pub struct Studio {
     /// L y R intercambiados
     pub swap: bool,
     pub sim: Option<Sim>,
+    /// Inclinación del espectro (dB de 20 Hz a 20 kHz, pivote en 1 kHz): ± para comprobar cómo traduce la mezcla
+    pub tilt: f64,
 }
 
 const fn band(kind: Kind, freq: f64, gain: f64, q: f64) -> Band {
@@ -241,7 +247,7 @@ struct SimCurve {
 
 /// Respuestas típicas de cada tipo de aparato (aproximadas a partir de medidas publicadas), no de un modelo
 /// concreto. El preamp es el pico de cada curva cambiado de signo (lo comprueba un test).
-const SIMS: [(Sim, SimCurve); 6] = [
+const SIMS: [(Sim, SimCurve); 10] = [
     // Altavoz de móvil: mono, nada por debajo de ~380 Hz, joroba del altavoz cerca de 1 kHz, presencia
     // marcada a 3 kHz y caída por encima de 9 kHz
     (Sim::Phone, SimCurve { width: 0.0, preamp: -5.1, bands: &[hp(380.0, 0.541), hp(380.0, 1.307), pk(900.0, 2.0, 1.2), pk(3000.0, 5.0, 1.0), lp(9000.0, 0.7)] }),
@@ -260,6 +266,18 @@ const SIMS: [(Sim, SimCurve); 6] = [
     // Altavoz bluetooth pequeño: mono, joroba de graves del radiador pasivo a 110 Hz y nada por debajo de
     // 75 Hz, medios algo hundidos y presencia
     (Sim::Speaker, SimCurve { width: 0.0, preamp: -4.7, bands: &[hp(75.0, 0.541), hp(75.0, 1.307), pk(110.0, 5.0, 1.5), pk(400.0, -2.0, 1.0), pk(3000.0, 2.0, 1.2), lp(15000.0, 0.7)] }),
+    // Tableta: dos altavoces pequeños a pocos centímetros (estéreo estrecho), nada por debajo de ~250 Hz,
+    // medios algo adelantados y brillo a 4 kHz
+    (Sim::Tablet, SimCurve { width: 0.5, preamp: -3.2, bands: &[hp(250.0, 0.541), hp(250.0, 1.307), pk(1200.0, 2.0, 1.0), pk(4000.0, 3.0, 1.5), lp(15000.0, 0.7)] }),
+    // Barra de sonido: graves de puerto a 120 Hz y nada bajo 70 Hz, medios hundidos, voz realzada y agudos
+    // algo apagados; estéreo menos ancho que unos altavoces separados
+    (Sim::Soundbar, SimCurve { width: 0.7, preamp: -2.9, bands: &[hp(70.0, 0.541), hp(70.0, 1.307), pk(120.0, 3.0, 1.2), pk(500.0, -2.0, 1.0), pk(3000.0, 2.0, 1.0), band(Kind::HighShelf, 8000.0, -2.0, 0.7)] }),
+    // Monitores de estudio pequeños (5"): casi planos, sin graves por debajo de 50 Hz, algo de puerto a 90 Hz y
+    // un poco de cruce a 2 kHz. Para saber si la mezcla aguanta sin subgraves
+    (Sim::Monitors, SimCurve { width: 1.0, preamp: -1.5, bands: &[hp(50.0, 0.541), hp(50.0, 1.307), pk(90.0, 1.5, 1.5), pk(2000.0, 1.0, 2.0)] }),
+    // Club / PA: mono, subgraves muy adelantados, medios recortados, bocina a 2,5 kHz y agudos que se pierden
+    // en el aire de la sala
+    (Sim::Club, SimCurve { width: 0.0, preamp: -5.8, bands: &[hp(35.0, 0.7), band(Kind::LowShelf, 80.0, 8.0, 0.7), pk(400.0, -3.0, 1.0), pk(2500.0, 3.0, 1.0), band(Kind::HighShelf, 10000.0, -5.0, 0.7)] }),
 ];
 
 impl Sim {
@@ -308,6 +326,12 @@ impl Studio {
             out.push_str(&copy_line([[a, b], [b, a]]));
             out.push_str(&format!("Preamp: {:.1} dB\r\n", c.preamp));
             out.push_str(&filters(c.bands));
+        }
+        let tilt = if self.tilt.is_finite() { self.tilt.clamp(-6.0, 6.0) } else { 0.0 };
+        if tilt.abs() >= 0.05 {
+            // Dos estantes suaves cruzados en 1 kHz (pivote sin cambio); el preamp evita pasar de 0 dB
+            out.push_str(&format!("Preamp: {:.1} dB\r\n", -tilt.abs() / 2.0));
+            out.push_str(&filters(&[band(Kind::LowShelf, 1000.0, -tilt / 2.0, 0.4), band(Kind::HighShelf, 1000.0, tilt / 2.0, 0.4)]));
         }
         if !out.is_empty() {
             // Solo para las salidas: sin `Stage`, lo de antes del primer `Device:` lo procesaría también el
@@ -950,7 +974,7 @@ mod tests {
 
     #[test]
     fn monitorizacion_exacta() {
-        let st = |listen, flip_l, flip_r, swap| Studio { listen, flip_l, flip_r, swap, sim: None };
+        let st = |listen, flip_l, flip_r, swap| Studio { listen, flip_l, flip_r, swap, sim: None, tilt: 0.0 };
         let apply = |s: Studio, l: f64, r: f64| {
             let m = s.matrix();
             (m[0][0] * l + m[0][1] * r, m[1][0] * l + m[1][1] * r)

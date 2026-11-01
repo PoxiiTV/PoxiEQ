@@ -1,10 +1,11 @@
-import { ArrowLeftRight, Car, Earbuds, Laptop, Smartphone, Speaker, Tv } from 'lucide-react'
+import { ArrowLeftRight, Car, Disc3, Earbuds, Laptop, MonitorSpeaker, RectangleHorizontal, Smartphone, Speaker, Tablet, Tv } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Listen, Sim } from '../lib/api'
 import { setStudio, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { SectionHead } from './Dynamics'
 import { SectionPresets } from './Presets'
+import { Range } from './controls'
 
 const LISTEN: Listen[] = ['stereo', 'mono', 'side', 'left', 'right']
 const SIMS: { id: Sim; icon: LucideIcon }[] = [
@@ -13,7 +14,11 @@ const SIMS: { id: Sim; icon: LucideIcon }[] = [
   { id: 'car', icon: Car },
   { id: 'earbuds', icon: Earbuds },
   { id: 'tv', icon: Tv },
-  { id: 'speaker', icon: Speaker }
+  { id: 'speaker', icon: Speaker },
+  { id: 'tablet', icon: Tablet },
+  { id: 'soundbar', icon: RectangleHorizontal },
+  { id: 'monitors', icon: MonitorSpeaker },
+  { id: 'club', icon: Disc3 }
 ]
 
 /** Página «Estudio»: monitorización y simulación de otros sistemas (momentáneas: el aviso de arriba lo recuerda) */
@@ -65,6 +70,23 @@ export function StudioPage(): React.JSX.Element {
           ))}
         </div>
         <small className="studio-hint">{t('studio.simHint')}</small>
+      </section>
+
+      <section>
+        <SectionHead label={t('studio.tilt')}>
+          {studio.tilt !== 0 && (
+            <button className="btn btn-sm btn-ghost" onClick={() => setStudio({ tilt: 0 })}>
+              {t('studio.tiltReset')}
+            </button>
+          )}
+        </SectionHead>
+        <div className="tilt-row">
+          <span>{t('studio.tiltDark')}</span>
+          <Range value={studio.tilt} min={-6} max={6} step={0.5} label={t('studio.tilt')} onChange={(tilt) => setStudio({ tilt })} />
+          <span>{t('studio.tiltBright')}</span>
+          <b className="num">{studio.tilt > 0 ? '+' : ''}{studio.tilt.toFixed(1)} dB</b>
+        </div>
+        <small className="studio-hint">{t('studio.tiltHint')}</small>
       </section>
     </div>
   )

@@ -133,7 +133,8 @@ function StudioBanner(): React.JSX.Element {
     studio.flipL && 'Ø L',
     studio.flipR && 'Ø R',
     studio.swap && t('studio.swap'),
-    studio.sim && t('studio.simulating', { s: t(`studio.sims.${studio.sim}.name`) })
+    studio.sim && t('studio.simulating', { s: t(`studio.sims.${studio.sim}.name`) }),
+    studio.tilt !== 0 && t('studio.tilted', { n: `${studio.tilt > 0 ? '+' : ''}${studio.tilt}` })
   ].filter(Boolean)
   return (
     <div className="banner studio-banner" role="status">

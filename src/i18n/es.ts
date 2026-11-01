@@ -213,8 +213,18 @@ export default {
       car: { name: 'Coche', text: 'Graves del habitáculo, hueco en 250 Hz, agudos apagados e imagen descentrada.' },
       earbuds: { name: 'Auriculares de botón', text: 'Tipo AirPods: graves que se escapan y resonancia a 3 kHz.' },
       tv: { name: 'Tele', text: 'Altavoces pequeños: corte en ~120 Hz, voz realzada y casi mono.' },
-      speaker: { name: 'Altavoz bluetooth', text: 'Pequeño y mono: joroba de graves a 110 Hz y nada por debajo.' }
+      speaker: { name: 'Altavoz bluetooth', text: 'Pequeño y mono: joroba de graves a 110 Hz y nada por debajo.' },
+      tablet: { name: 'Tableta', text: 'Estéreo estrecho, nada por debajo de ~250 Hz y algo de brillo.' },
+      soundbar: { name: 'Barra de sonido', text: 'Graves de puerto, medios hundidos y voz realzada.' },
+      monitors: { name: 'Monitores pequeños', text: 'Casi planos pero sin subgraves: ¿aguanta la mezcla sin 40 Hz?' },
+      club: { name: 'Club / PA', text: 'Mono, subgraves muy adelantados, bocina a 2,5 kHz y agudos que se pierden.' }
     },
+    tilt: 'Inclinación',
+    tiltDark: 'Más oscuro',
+    tiltBright: 'Más brillante',
+    tiltReset: 'Quitar',
+    tiltHint: 'Inclina todo el espectro con el pivote en 1 kHz, como si escucharas en un sistema más oscuro o más brillante. Si la mezcla aguanta en los dos extremos, traducirá bien.',
+    tilted: 'inclinación {n} dB',
     banner: 'Escucha de estudio activa:',
     off: 'Quitar'
   },

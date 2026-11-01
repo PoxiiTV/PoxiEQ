@@ -129,7 +129,7 @@ export interface Hotkeys {
 
 /** Monitorización: qué se escucha. `mono` es el mid, (L + R) / 2 */
 export type Listen = 'stereo' | 'mono' | 'side' | 'left' | 'right'
-export type Sim = 'phone' | 'laptop' | 'car' | 'earbuds' | 'tv' | 'speaker'
+export type Sim = 'phone' | 'laptop' | 'car' | 'earbuds' | 'tv' | 'speaker' | 'tablet' | 'soundbar' | 'monitors' | 'club'
 
 /** Herramientas de estudio: momentáneas, no se guardan (Rust las quita al esconder la ventana o salir) */
 export interface Studio {
@@ -138,6 +138,8 @@ export interface Studio {
   flipR: boolean
   swap: boolean
   sim: Sim | null
+  /** Inclinación del espectro en dB (pivote en 1 kHz), −6…6 */
+  tilt: number
 }
 
 /** Cuando `exe` está en primer plano suena `preset` (validado en Rust: `apps::sanitize_rules`) */

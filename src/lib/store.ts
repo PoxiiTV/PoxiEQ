@@ -51,7 +51,7 @@ interface State {
   toasts: Toast[]
 }
 
-export const STUDIO_OFF: Studio = { listen: 'stereo', flipL: false, flipR: false, swap: false, sim: null }
+export const STUDIO_OFF: Studio = { listen: 'stereo', flipL: false, flipR: false, swap: false, sim: null, tilt: 0 }
 
 export const useStore = create<State>(() => ({
   app: null,
@@ -127,7 +127,7 @@ export function updateConfig(patch: Partial<Config>, record = true): void {
 
 // ——— Herramientas de estudio ———
 
-export const studioActive = (s: Studio): boolean => s.listen !== 'stereo' || s.flipL || s.flipR || s.swap || s.sim !== null
+export const studioActive = (s: Studio): boolean => s.listen !== 'stereo' || s.flipL || s.flipR || s.swap || s.sim !== null || s.tilt !== 0
 
 /** Se pinta al momento y suena en segundo plano; si Rust lo rechaza, vuelve a lo de antes */
 export function setStudio(patch: Partial<Studio>): void {

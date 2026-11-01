@@ -1627,6 +1627,24 @@
   min-width: 0;
 }
 
+/* ——— Inclinación (Estudio) ——— */
+.tilt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-2);
+  font-weight: 700;
+}
+.tilt-row input[type='range'] {
+  flex: 1;
+  min-width: 80px;
+}
+.tilt-row .num {
+  min-width: 64px;
+  text-align: right;
+  color: var(--text);
+}
+
 /* ——— Objetivo de AutoEq ——— */
 .target-row {
   display: flex;
