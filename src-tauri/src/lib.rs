@@ -184,6 +184,8 @@ pub struct AppState {
     room: Mutex<Vec<Vec<f64>>>,
     /// Última salida predeterminada de Windows vista (para notar cuándo cambia)
     default_output: Mutex<Option<String>>,
+    /// Dispositivos activados que el vigilante ha visto rotos (para avisar una sola vez por rotura)
+    broken: Mutex<Vec<String>>,
 }
 
 impl AppState {
@@ -213,6 +215,10 @@ impl AppState {
 
     fn default_output(&self) -> MutexGuard<'_, Option<String>> {
         self.default_output.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn broken(&self) -> MutexGuard<'_, Vec<String>> {
+        self.broken.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -576,6 +582,10 @@ pub struct TrayLabels {
     presets: String,
     eq_on: String,
     eq_off: String,
+    /// «PoxiEQ dejó de funcionar en {d}» (aviso en pantalla y bandeja)
+    broken: String,
+    /// «Abre PoxiEQ y pulsa Reparar»
+    repair: String,
 }
 
 #[tauri::command]
@@ -787,7 +797,7 @@ fn toggle_bypass(app: &AppHandle, notify: bool) {
     commit(app, cfg);
     if notify {
         let l = st.labels();
-        osd::show(app, if off { &l.eq_off } else { &l.eq_on }, &keys, if off { "off" } else { "on" });
+        osd::show(app, if off { &l.eq_off } else { &l.eq_on }, &keys, if off { "off" } else { "on" }, osd::SHORT);
     }
 }
 
@@ -795,7 +805,7 @@ fn toggle_bypass(app: &AppHandle, notify: bool) {
 fn preset_hotkey(app: &AppHandle, slot: usize) {
     let key = app.state::<AppState>().cfg().hotkeys.presets.get(slot).cloned().unwrap_or_default();
     if let Some(name) = key.preset.and_then(|id| apply_preset(app, &id)) {
-        osd::show(app, &name, &key.keys.as_deref().map(hotkeys::label).unwrap_or_default(), "preset");
+        osd::show(app, &name, &key.keys.as_deref().map(hotkeys::label).unwrap_or_default(), "preset", osd::SHORT);
     }
 }
 
@@ -922,7 +932,84 @@ fn devices_changed(app: &AppHandle) {
     if let Some(id) = &target {
         commit(app, Config { device: Some(id.clone()), ..cfg });
     }
+    check_engine(app);
     let _ = app.emit("devices", target);
+}
+
+// ------------------------------------------------------ vigilante del motor
+
+/// Hilo del vigilante: se despierta solo cada 30 min y, al volver de suspensión, por `watch_resume`
+static WATCHDOG: OnceLock<std::thread::Thread> = OnceLock::new();
+
+/// Comprueba que lo activado sigue pasando por el motor: al arrancar, cada 30 min, al volver de suspensión y
+/// en cada cambio de dispositivos. Lo que no necesita admin se arregla solo (`config.txt`/`poxieq.txt`); lo
+/// demás lo enseña la interfaz con su «Reparar» y, con la ventana escondida, un aviso en pantalla una vez por
+/// rotura. Solo lee el registro y archivos: nunca abre un flujo de audio. Devuelve si cambió lo roto.
+fn check_engine(app: &AppHandle) -> bool {
+    let st = app.state::<AppState>();
+    if !engine::config_intact() {
+        let cfg = st.cfg().clone();
+        let live = *st.live();
+        let _ = apply(&cfg, &live);
+    }
+    let broken: Vec<engine::Device> = engine::status().devices.into_iter().filter(|d| d.broken.is_some() && !d.unplugged).collect();
+    let (fresh, changed) = {
+        let mut seen = st.broken();
+        let ids: Vec<String> = broken.iter().map(|d| d.id.clone()).collect();
+        let fresh: Vec<&str> = broken.iter().filter(|d| !seen.contains(&d.id)).map(|d| d.name.as_str()).collect();
+        let changed = *seen != ids;
+        *seen = ids;
+        (fresh, changed)
+    };
+    if !changed {
+        return false;
+    }
+    let l = st.labels();
+    let names = broken.iter().map(|d| d.name.as_str()).collect::<Vec<_>>().join(", ");
+    if let Some(tray) = app.tray_by_id("main") {
+        let tip = if broken.is_empty() { "PoxiEQ".to_string() } else { l.broken.replace("{d}", &names) };
+        let _ = tray.set_tooltip(Some(tip));
+    }
+    let hidden = app.get_webview_window("main").and_then(|w| w.is_visible().ok()) != Some(true);
+    if hidden && !fresh.is_empty() {
+        osd::show(app, &l.broken.replace("{d}", &fresh.join(", ")), &l.repair, "warn", osd::LONG);
+    }
+    true
+}
+
+fn watch_engine(app: AppHandle) {
+    let thread = std::thread::spawn(move || loop {
+        // Margen para que Windows (al arrancar o al volver de suspensión) deje los dispositivos como quedan y
+        // para que la interfaz mande los textos traducidos
+        std::thread::sleep(Duration::from_secs(10));
+        if check_engine(&app) {
+            let _ = app.emit("devices", None::<String>);
+        }
+        std::thread::park_timeout(Duration::from_secs(30 * 60));
+    });
+    let _ = WATCHDOG.set(thread.thread().clone());
+    watch_resume();
+}
+
+/// Despierta al vigilante al volver de suspensión o hibernación (sin ventana: aviso por función de Windows)
+fn watch_resume() {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Power::{PowerRegisterSuspendResumeNotification, DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS};
+    use windows::Win32::UI::WindowsAndMessaging::{DEVICE_NOTIFY_CALLBACK, PBT_APMRESUMEAUTOMATIC};
+    unsafe extern "system" fn resumed(_: *const std::ffi::c_void, kind: u32, _: *const std::ffi::c_void) -> u32 {
+        if kind == PBT_APMRESUMEAUTOMATIC {
+            if let Some(t) = WATCHDOG.get() {
+                t.unpark();
+            }
+        }
+        0
+    }
+    // Windows guarda el puntero mientras dure el registro (toda la vida de la app)
+    let params = Box::leak(Box::new(DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS { Callback: Some(resumed), Context: std::ptr::null_mut() }));
+    let mut handle = std::ptr::null_mut();
+    unsafe {
+        let _ = PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, HANDLE(params as *mut _ as _), &mut handle);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -957,6 +1044,8 @@ pub fn run() {
                     presets: "Presets".into(),
                     eq_on: "EQ encendido".into(),
                     eq_off: "EQ apagado".into(),
+                    broken: "PoxiEQ dejó de funcionar en {d}".into(),
+                    repair: "Abre PoxiEQ y pulsa Reparar".into(),
                 }),
                 live: Mutex::new(live),
                 presets: Mutex::new(vec![]),
@@ -964,6 +1053,7 @@ pub fn run() {
                 hotkeys_failed: Mutex::new(vec![]),
                 room: Mutex::new(vec![]),
                 default_output: Mutex::new(default_output),
+                broken: Mutex::new(vec![]),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -996,6 +1086,7 @@ pub fn run() {
             let _ = app.state::<AppState>().watcher.set(watch_foreground(app.handle().clone()));
             let handle = app.handle().clone();
             engine::watch_devices(move || devices_changed(&handle));
+            watch_engine(app.handle().clone());
             // Al arrancar se reescribe la curva: por si se tocó config.txt a mano o se reinstaló el motor
             let _ = apply(&cfg, &live);
             Ok(())

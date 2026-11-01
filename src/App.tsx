@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { api } from './lib/api'
 import { autoPreamp } from './lib/eq'
-import { allPresets, currentDevice, currentOutput, useStore } from './lib/store'
+import { allPresets, currentDevice, currentOutput, useStore, works } from './lib/store'
 import { useT } from './i18n'
 import { TitleBar, Toasts } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
@@ -23,7 +23,7 @@ export function App(): React.JSX.Element {
   // Lo que miden los medidores: el micrófono en su página y, en el resto, la salida (si ya pasa por PoxiEQ)
   const metered = useStore((s) => {
     const d = currentDevice(s)
-    return s.engine?.installed && d?.enabled ? d.id : undefined
+    return s.engine?.installed && works(d) ? d?.id : undefined
   })
   const lang = useStore((s) => s.config?.lang)
   const presets = useStore((s) => s.config?.presets)
@@ -42,7 +42,7 @@ export function App(): React.JSX.Element {
 
   // El menú de la bandeja y el aviso en pantalla, en el idioma de la app
   useEffect(() => {
-    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff') })
+    void api.trayLabels({ open: t('tray.open'), bypass: t('tray.bypass'), quit: t('tray.quit'), presets: t('tray.presets'), eqOn: t('tray.eqOn'), eqOff: t('tray.eqOff'), broken: t('tray.broken'), repair: t('tray.repair') })
   }, [lang, t])
 
   // Rust aplica presets sin la interfaz (atajos, bandeja, preset por app): se le mandan ya resueltos
@@ -79,7 +79,7 @@ export function App(): React.JSX.Element {
 /** La sección elegida en el menú. Las de las salidas piden antes activar el motor en la salida que se edita. */
 function Page(): React.JSX.Element {
   const page = useStore((s) => s.page)
-  const ready = useStore((s) => !!s.engine?.installed && !!currentOutput(s)?.enabled)
+  const ready = useStore((s) => !!s.engine?.installed && works(currentOutput(s)))
   if (page === 'settings') return <SettingsPage />
   if (page === 'mic') return <MicPage />
   if (!ready) return <Setup />

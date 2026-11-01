@@ -38,13 +38,16 @@ export default {
     quit: 'Salir',
     presets: 'Presets',
     eqOn: 'EQ encendido',
-    eqOff: 'EQ apagado'
+    eqOff: 'EQ apagado',
+    broken: 'PoxiEQ dejó de funcionar en {d}',
+    repair: 'Abre PoxiEQ y pulsa Reparar'
   },
   device: {
     default: 'Predeterminado',
     on: 'Activo',
     off: 'Sin activar',
-    none: 'No hay ninguna salida de audio conectada'
+    none: 'No hay ninguna salida de audio conectada',
+    broken: 'Necesita reparar'
   },
   setup: {
     titleInstall: 'Instala el motor de PoxiEQ',
@@ -62,7 +65,15 @@ export default {
     install: 'Instalando y activando…',
     ok: 'PoxiEQ está activo en {d}',
     partial: 'Activado, pero Windows no lo ha confirmado. Si no notas el EQ, reinicia el PC una vez.',
-    cancelled: 'Hace falta aceptar el permiso de administrador para activarlo.'
+    cancelled: 'Hace falta aceptar el permiso de administrador para activarlo.',
+    titleBroken: 'PoxiEQ dejó de funcionar en {d}',
+    broken: {
+      lost: 'Una actualización de Windows o del driver de audio lo ha desenganchado. Al repararlo vuelve a sonar con tus ajustes de siempre.',
+      enhancements:
+        'Las «mejoras de audio» de Windows están desactivadas en este dispositivo y, sin ellas, Windows no deja pasar el sonido por PoxiEQ. Al repararlo se vuelven a activar.'
+    },
+    repair: 'Reparar',
+    repairing: 'Reparando…'
   },
   eq: {
     preamp: 'Preamp',

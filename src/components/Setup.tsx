@@ -1,11 +1,12 @@
-import { LoaderCircle, RotateCcw, ShieldCheck, Zap } from 'lucide-react'
+import { LoaderCircle, RotateCcw, ShieldCheck, Wrench, Zap } from 'lucide-react'
 import { runSetup } from '../lib/actions'
 import { currentDevice, editingMic, useStore } from '../lib/store'
 import { useT } from '../i18n'
 import { Logo } from './ui'
 
 /** Tarjeta cuando el motor falta o lo que se edita (la salida o, en su página, el micrófono) aún no pasa por
- *  PoxiEQ. Activar es un aviso de UAC por dispositivo: solo con el botón, nunca solo. */
+ *  PoxiEQ, o pasaba y algo lo rompió (entonces «Reparar», que es activarlo otra vez). Activar es un aviso de UAC
+ *  por dispositivo: solo con el botón, nunca solo. */
 export function Setup(): React.JSX.Element {
   const t = useT()
   const installed = useStore((s) => !!s.engine?.installed)
@@ -23,13 +24,17 @@ export function Setup(): React.JSX.Element {
       </div>
     )
   }
+  const broken = device.broken
+  const title = broken ? t('setup.titleBroken', { d: device.name }) : installed ? t('setup.title', { d: device.name }) : t('setup.titleInstall')
+  const text = broken ? t(`setup.broken.${broken}`) : !installed ? t('setup.textInstall') : device.input ? t('setup.textMic') : t('setup.text')
+  const btn = broken ? t('setup.repair') : installed ? t('setup.btn') : t('setup.btnInstall')
   return (
     <div className="setup">
       <div className="setup-card">
         <Logo size={72} />
-        <h1>{installed ? t('setup.title', { d: device.name }) : t('setup.titleInstall')}</h1>
+        <h1>{title}</h1>
         <p className="device-name">{device.device}</p>
-        <p>{!installed ? t('setup.textInstall') : device.input ? t('setup.textMic') : t('setup.text')}</p>
+        <p>{text}</p>
         <ul className="setup-points">
           <li>
             <RotateCcw size={16} /> {t('setup.noReboot')}
@@ -39,8 +44,8 @@ export function Setup(): React.JSX.Element {
           </li>
         </ul>
         <button className="btn btn-primary btn-lg" disabled={!!step} onClick={() => void runSetup([device.id], [])}>
-          {step ? <LoaderCircle size={18} className="spin" /> : <Zap size={18} />}
-          {step === 'download' ? t('setup.download') : step ? t('setup.install') : installed ? t('setup.btn') : t('setup.btnInstall')}
+          {step ? <LoaderCircle size={18} className="spin" /> : broken ? <Wrench size={18} /> : <Zap size={18} />}
+          {step === 'download' ? t('setup.download') : step ? t(broken ? 'setup.repairing' : 'setup.install') : btn}
         </button>
       </div>
     </div>

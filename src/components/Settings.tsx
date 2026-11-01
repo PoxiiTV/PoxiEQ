@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { AppWindow, AudioLines, Info, Keyboard, LoaderCircle, Palette, Plus, Trash2, WandSparkles, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { api, type Accent, type AppRule, type Config, type OpenApp } from '../lib/api'
+import { api, type Accent, type AppRule, type Config, type Device, type OpenApp } from '../lib/api'
 import { runSetup } from '../lib/actions'
 import { allPresets, currentCurve, refreshEngine, toast, updateConfig, useStore } from '../lib/store'
 import { applyTheme } from '../lib/theme'
@@ -281,8 +281,10 @@ function Engine(): React.JSX.Element {
   const inputs = devices.filter((d) => d.input)
   const [want, setWant] = useState<Record<string, boolean>>({})
   useEffect(() => setWant(Object.fromEntries(devices.map((d) => [d.id, d.enabled]))), [engine]) // eslint-disable-line react-hooks/exhaustive-deps
-  const enable = devices.filter((d) => want[d.id] && !d.enabled).map((d) => d.id)
+  // Uno roto que sigue marcado se vuelve a activar (es lo que lo repara)
+  const enable = devices.filter((d) => want[d.id] && (!d.enabled || d.broken)).map((d) => d.id)
   const disable = devices.filter((d) => !want[d.id] && d.enabled).map((d) => d.id)
+  const hint = (d: Device): string => [d.device, d.default && t('device.default'), d.broken && t('device.broken')].filter(Boolean).join(' · ')
   return (
     <>
       <h3>{t('settings.cats.engine')}</h3>
@@ -294,7 +296,7 @@ function Engine(): React.JSX.Element {
         {t('settings.devicesHint')}
       </div>
       {outputs.map((d) => (
-        <Row key={d.id} title={d.name} hint={`${d.device}${d.default ? ` · ${t('device.default')}` : ''}`}>
+        <Row key={d.id} title={d.name} hint={hint(d)}>
           <Switch on={!!want[d.id]} label={d.name} onChange={(on) => setWant({ ...want, [d.id]: on })} />
         </Row>
       ))}
@@ -305,7 +307,7 @@ function Engine(): React.JSX.Element {
             {t('settings.inputsHint')}
           </div>
           {inputs.map((d) => (
-            <Row key={d.id} title={d.name} hint={`${d.device}${d.default ? ` · ${t('device.default')}` : ''}`}>
+            <Row key={d.id} title={d.name} hint={hint(d)}>
               <Switch on={!!want[d.id]} label={d.name} onChange={(on) => setWant({ ...want, [d.id]: on })} />
             </Row>
           ))}

@@ -6,7 +6,9 @@ import './styles/osd.css'
 interface Payload {
   title: string
   sub: string
-  kind: 'preset' | 'on' | 'off'
+  kind: 'preset' | 'on' | 'off' | 'warn'
+  /** Lo que se queda a la vista antes de salir (la ventana se esconde un poco después desde Rust) */
+  ms: number
   theme: 'dark' | 'light' | 'system'
   accent: string
 }
@@ -16,9 +18,6 @@ declare global {
     osd: (p: Payload) => void
   }
 }
-
-/** Lo que se queda a la vista antes de salir (la ventana se esconde un poco después desde Rust) */
-const VISIBLE_MS = 1200
 
 const root = document.documentElement
 const box = document.getElementById('osd')!
@@ -38,5 +37,5 @@ window.osd = (p) => {
   void box.offsetWidth
   box.classList.add('show')
   clearTimeout(timer)
-  timer = window.setTimeout(() => box.classList.remove('show'), VISIBLE_MS)
+  timer = window.setTimeout(() => box.classList.remove('show'), p.ms)
 }

@@ -184,6 +184,9 @@ export const currentMic = (s: Pick<State, 'config' | 'engine'> = getState()): De
 /** Se está editando el micrófono: en su página */
 export const editingMic = (s: Pick<State, 'page'> = getState()): boolean => s.page === 'mic'
 
+/** Pasa de verdad por el motor: activado y sin nada que lo haya roto */
+export const works = (d: Device | null | undefined): boolean => !!d?.enabled && !d.broken
+
 /** Lo que se edita: el micrófono en su página y, en el resto, la salida */
 export const currentDevice = (s: Sel = getState()): Device | null => (editingMic(s) ? currentMic(s) : currentOutput(s))
 

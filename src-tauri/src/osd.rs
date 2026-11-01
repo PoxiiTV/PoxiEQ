@@ -14,8 +14,10 @@ const W: f64 = 380.0;
 const H: f64 = 120.0;
 /// Separación desde el borde inferior del área de trabajo (encima de la barra de tareas)
 const BOTTOM: f64 = 64.0;
-/// Lo que dura a la vista más la salida; luego se esconde la ventana
-const VISIBLE: Duration = Duration::from_millis(1700);
+/// Lo que se queda a la vista (la página anima la salida en 500 ms; luego se esconde la ventana)
+pub const SHORT: u64 = 1200;
+/// Avisos que hay que leer (el motor dejó de funcionar)
+pub const LONG: u64 = 6000;
 
 /// Cada aviso sube el contador: solo esconde la ventana el último
 static SHOWN: AtomicU64 = AtomicU64::new(0);
@@ -24,8 +26,9 @@ static SHOWN: AtomicU64 = AtomicU64::new(0);
 struct Payload<'a> {
     title: &'a str,
     sub: &'a str,
-    /// `preset`, `on` u `off` (icono)
+    /// `preset`, `on`, `off` o `warn` (icono)
     kind: &'a str,
+    ms: u64,
     theme: &'a str,
     accent: &'a str,
 }
@@ -37,7 +40,7 @@ pub fn init(app: &AppHandle) {
     }
 }
 
-pub fn show(app: &AppHandle, title: &str, sub: &str, kind: &str) {
+pub fn show(app: &AppHandle, title: &str, sub: &str, kind: &str, ms: u64) {
     let Some(win) = app.get_webview_window("osd") else { return };
     let st = app.state::<crate::AppState>();
     let (theme, accent) = {
@@ -45,7 +48,7 @@ pub fn show(app: &AppHandle, title: &str, sub: &str, kind: &str) {
         (c.theme.clone(), c.accent.clone())
     };
     // JSON = literal de JS válido y escapado: el nombre del preset no puede romper nada
-    let payload = serde_json::to_string(&Payload { title, sub, kind, theme: &theme, accent: &accent }).unwrap_or_default();
+    let payload = serde_json::to_string(&Payload { title, sub, kind, ms, theme: &theme, accent: &accent }).unwrap_or_default();
     let _ = win.eval(format!("window.osd && window.osd({payload})"));
 
     // En la pantalla del ratón (la del juego o la app que se esté usando), abajo en el centro
@@ -66,7 +69,7 @@ pub fn show(app: &AppHandle, title: &str, sub: &str, kind: &str) {
     }
     let id = SHOWN.fetch_add(1, Ordering::SeqCst) + 1;
     std::thread::spawn(move || {
-        std::thread::sleep(VISIBLE);
+        std::thread::sleep(Duration::from_millis(ms + 500));
         if SHOWN.load(Ordering::SeqCst) == id {
             if let Ok(hwnd) = win.hwnd() {
                 unsafe {

@@ -148,6 +148,8 @@ export interface TrayLabels {
   presets: string
   eqOn: string
   eqOff: string
+  broken: string
+  repair: string
 }
 
 export interface Device {
@@ -159,6 +161,9 @@ export interface Device {
   unplugged: boolean
   /** Entrada (micrófono) */
   input: boolean
+  /** PoxiEQ lo activó, pero ya no pasa por el motor: se lo quitó Windows o el driver (`lost`, o falta el motor)
+   *  o tiene las «mejoras de audio» desactivadas (`enhancements`). Se arregla activándolo otra vez. */
+  broken: 'lost' | 'enhancements' | null
 }
 
 export interface EngineStatus {

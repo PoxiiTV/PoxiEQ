@@ -511,6 +511,10 @@
   background: var(--success);
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
 }
+.dot.bad {
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
 .power {
   display: inline-flex;
   align-items: center;

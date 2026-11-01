@@ -1,7 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, Power, Speaker, Square, X } from 'lucide-react'
 import { keyLabel } from '../lib/hotkeys'
-import { currentOutput, dismiss, setState, updateConfig, useStore } from '../lib/store'
+import { currentOutput, dismiss, setState, updateConfig, useStore, works } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { Logo } from './ui'
@@ -32,7 +32,7 @@ export function TitleBar(): React.JSX.Element {
       </div>
       {device && (
         <div className="no-drag device-pick">
-          <span className={`dot ${device.enabled ? 'ok' : ''}`} />
+          <span className={`dot ${works(device) ? 'ok' : device.broken ? 'bad' : ''}`} />
           <span className="kind" data-tip={t('titlebar.outputTip')}>
             <Speaker size={15} />
           </span>

@@ -1,5 +1,5 @@
 import { Mic as MicIcon, Power } from 'lucide-react'
-import { currentMic, setState, updateConfig, useStore } from '../lib/store'
+import { currentMic, setState, updateConfig, useStore, works } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
 import { AddBand, CurveEditor, HistoryButtons } from './Editor'
@@ -13,7 +13,7 @@ export function MicPage(): React.JSX.Element {
   const t = useT()
   const devices = useStore((s) => s.engine?.devices)
   const mic = useStore((s) => currentMic(s))
-  const ready = useStore((s) => !!s.engine?.installed && !!currentMic(s)?.enabled)
+  const ready = useStore((s) => !!s.engine?.installed && works(currentMic(s)))
   const off = useStore((s) => !!s.config?.mic.bypass)
   const mics = (devices ?? []).filter((d) => d.input && !d.unplugged)
   const toggle = (): void => {
@@ -27,7 +27,7 @@ export function MicPage(): React.JSX.Element {
       <div className="toolbar">
         {mic && (
           <div className="device-pick mic">
-            <span className={`dot ${mic.enabled ? 'ok' : ''}`} />
+            <span className={`dot ${works(mic) ? 'ok' : mic.broken ? 'bad' : ''}`} />
             <span className="kind">
               <MicIcon size={15} />
             </span>

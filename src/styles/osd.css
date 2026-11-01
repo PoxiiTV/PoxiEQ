@@ -53,14 +53,20 @@ body {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.osd[data-kind='off'] .osd-icon {
+.osd[data-kind='off'] .osd-icon,
+.osd[data-kind='warn'] .osd-icon {
   background: rgba(245, 158, 11, 0.14);
   color: var(--warning);
 }
 .osd .i-power,
+.osd .i-warn,
 .osd[data-kind='on'] .i-preset,
-.osd[data-kind='off'] .i-preset {
+.osd[data-kind='off'] .i-preset,
+.osd[data-kind='warn'] .i-preset {
   display: none;
+}
+.osd[data-kind='warn'] .i-warn {
+  display: block;
 }
 .osd[data-kind='on'] .i-power,
 .osd[data-kind='off'] .i-power {

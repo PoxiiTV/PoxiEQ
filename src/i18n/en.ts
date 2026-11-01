@@ -38,13 +38,16 @@ export default {
     quit: 'Quit',
     presets: 'Presets',
     eqOn: 'EQ on',
-    eqOff: 'EQ off'
+    eqOff: 'EQ off',
+    broken: 'PoxiEQ stopped working on {d}',
+    repair: 'Open PoxiEQ and click Repair'
   },
   device: {
     default: 'Default',
     on: 'Active',
     off: 'Not enabled',
-    none: 'No audio output connected'
+    none: 'No audio output connected',
+    broken: 'Needs repair'
   },
   setup: {
     titleInstall: 'Install the PoxiEQ engine',
@@ -62,7 +65,15 @@ export default {
     install: 'Installing and enabling…',
     ok: 'PoxiEQ is active on {d}',
     partial: "Enabled, but Windows didn't confirm it. If you don't hear the EQ, restart your PC once.",
-    cancelled: 'Administrator permission is needed to enable it.'
+    cancelled: 'Administrator permission is needed to enable it.',
+    titleBroken: 'PoxiEQ stopped working on {d}',
+    broken: {
+      lost: 'A Windows or audio driver update unhooked it. Repairing it brings your usual settings back.',
+      enhancements:
+        "Windows \"audio enhancements\" are turned off for this device, and without them Windows won't let the sound go through PoxiEQ. Repairing turns them back on."
+    },
+    repair: 'Repair',
+    repairing: 'Repairing…'
   },
   eq: {
     preamp: 'Preamp',

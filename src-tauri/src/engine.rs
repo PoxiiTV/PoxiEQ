@@ -92,6 +92,20 @@ pub struct Device {
     pub unplugged: bool,
     /// Entrada (micrófono): en el motor solo tiene etapa de captura
     pub input: bool,
+    /// PoxiEQ lo activó, pero ya no pasa por el motor
+    pub broken: Option<Broken>,
+}
+
+/// Por qué un dispositivo que PoxiEQ activó ya no pasa por el motor. Se arregla con el mismo paso elevado
+/// que activa (`setup`).
+#[derive(Serialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Broken {
+    /// Nuestros APO ya no están en `FxProperties` (lo reescribió una actualización de Windows o del driver) o
+    /// falta la DLL del motor
+    Lost,
+    /// «Mejoras de audio» desactivadas en el dispositivo: Windows no carga ningún APO
+    Enhancements,
 }
 
 #[derive(Serialize, Debug)]
@@ -110,13 +124,14 @@ pub fn status() -> Status {
     Status {
         installed,
         config_dir: app.and_then(|k| k.get_value("ConfigPath").ok()),
-        devices: [devices(false), devices(true)].concat(),
+        devices: [devices(false, installed), devices(true, installed)].concat(),
         dsp: DspState::Missing,
     }
 }
 
-/// Salidas (`input` = false) o entradas conectadas, la predeterminada primero
-fn devices(input: bool) -> Vec<Device> {
+/// Salidas (`input` = false) o entradas conectadas, la predeterminada primero. `installed`: está la DLL del
+/// motor (sin ella nada de lo activado suena).
+fn devices(input: bool, installed: bool) -> Vec<Device> {
     let Ok(root) = hklm().open_subkey(if input { CAPTURE } else { RENDER }) else { return vec![] };
     let default = default_device(input);
     let mut list: Vec<Device> = root
@@ -132,9 +147,11 @@ fn devices(input: bool) -> Vec<Device> {
                 return None;
             }
             let props = key.open_subkey("Properties").ok()?;
+            let enabled = is_enabled(&id);
             Some(Device {
                 default: default.as_deref().is_some_and(|d| d.eq_ignore_ascii_case(&id)),
-                enabled: is_enabled(&id),
+                broken: broken(&id, enabled, installed),
+                enabled,
                 name: props.get_value(CONNECTION_NAME).unwrap_or_default(),
                 device: props.get_value(DEVICE_NAME).unwrap_or_default(),
                 unplugged,
@@ -178,6 +195,35 @@ fn is_enabled(id: &str) -> bool {
         fx.get_value::<String, _>(name)
             .is_ok_and(|v| v.eq_ignore_ascii_case(PRE_MIX) || v.eq_ignore_ascii_case(POST_MIX))
     })
+}
+
+/// Lo activó PoxiEQ (o el `DeviceSelector` del motor): guarda sus APO originales en `Child APOs`, y eso no lo
+/// toca ni Windows ni el driver
+fn activated(id: &str) -> bool {
+    hklm().open_subkey(format!(r"{CHILD}\{id}")).is_ok()
+}
+
+/// «Mejoras de audio» desactivadas (en la configuración de sonido de Windows o por el driver)
+fn enhancements_off(id: &str) -> bool {
+    hklm()
+        .open_subkey(format!(r"{}\FxProperties", dev_path(id)))
+        .and_then(|fx| fx.get_value::<u32, _>(DISABLE_ENHANCEMENTS))
+        .is_ok_and(|v| v != 0)
+}
+
+fn broken(id: &str, enabled: bool, installed: bool) -> Option<Broken> {
+    activated(id).then(|| classify(enabled && installed, || enhancements_off(id))).flatten()
+}
+
+/// Un dispositivo activado: `hooked` = sigue enganchado al motor (y este está instalado)
+fn classify(hooked: bool, enhancements_off: impl FnOnce() -> bool) -> Option<Broken> {
+    if !hooked {
+        Some(Broken::Lost)
+    } else if enhancements_off() {
+        Some(Broken::Enhancements)
+    } else {
+        None
+    }
 }
 
 /// `{guid}` de un dispositivo, sin nada más (es lo que acaba en rutas del registro y en el archivo del motor)
@@ -280,10 +326,14 @@ enum Mode {
 /// En una entrada (micrófono) solo hay etapa de captura: el APO de pre-mix va en LFX o SFX, no se toca
 /// GFX/MFX/EFX y no hay APO original de post-mix (como `DeviceAPOInfo::install` con `input`).
 pub fn enable(id: &str) -> Result<()> {
+    let dev_path = dev_path(id);
     if is_enabled(id) {
+        // Ya activado: solo puede faltar que vuelvan las «mejoras de audio» (reparar)
+        if let Ok(fx) = hklm().open_subkey_with_flags(format!(r"{dev_path}\FxProperties"), KEY_READ | KEY_SET_VALUE) {
+            let _ = fx.delete_value(DISABLE_ENHANCEMENTS);
+        }
         return Ok(());
     }
-    let dev_path = dev_path(id);
     let input = dev_path.starts_with(CAPTURE);
     let fx_path = format!(r"{dev_path}\FxProperties");
     let (child, _) = hklm().create_subkey(format!(r"{CHILD}\{id}")).map_err(err("Child APOs"))?;
@@ -735,6 +785,14 @@ unsafe fn listen(name: &HSTRING, tx: mpsc::Sender<String>) {
 
 const INCLUDE: &str = "Include: poxieq.txt\r\n";
 
+/// `config.txt` sigue apuntando a nuestro archivo y este existe (otro programa o una reinstalación del motor
+/// pueden haberlos cambiado)
+pub fn config_intact() -> bool {
+    status().config_dir.map(PathBuf::from).is_none_or(|dir| {
+        std::fs::read_to_string(dir.join("config.txt")).ok().as_deref() == Some(INCLUDE) && dir.join("poxieq.txt").exists()
+    })
+}
+
 /// Escribe nuestro archivo de filtros. Equalizer APO lo relee al vuelo: sin admin ni reinicios.
 pub fn write_config(text: &str) -> Result<()> {
     let dir = status().config_dir.ok_or("el motor no está instalado")?;
@@ -863,6 +921,14 @@ mod tests {
         process_replacing: usize,
         process_double_replacing: Process,
         future: [u8; 56],
+    }
+
+    #[test]
+    fn rotura_de_un_dispositivo_activado() {
+        assert_eq!(classify(false, || true), Some(Broken::Lost));
+        assert_eq!(classify(false, || false), Some(Broken::Lost));
+        assert_eq!(classify(true, || true), Some(Broken::Enhancements));
+        assert_eq!(classify(true, || false), None);
     }
 
     /// La DLL que va dentro del exe, cargada de verdad y llamada en el mismo orden que el motor
