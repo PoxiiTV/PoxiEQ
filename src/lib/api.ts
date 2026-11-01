@@ -197,6 +197,8 @@ export interface Config {
   pluginFolders: string[]
   voice: Voice
   roomCal: RoomCal | null
+  /** Activar solos los dispositivos nuevos */
+  autoEnable: boolean
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic
@@ -334,6 +336,7 @@ export const api = {
   engineDiagnose: (device: string) => invoke<Diagnosis>('engine_diagnose', { device }),
   engineCheck: (device: string) => invoke<Check>('engine_check', { device }),
   soundSettings: () => invoke<void>('sound_settings'),
+  autoEnableSet: (on: boolean) => invoke<void>('auto_enable_set', { on }),
   pickFile: (kind: 'wav' | 'cal' | 'eq') => invoke<string | null>('pick_file', { kind }),
   irLoad: (path: string) => invoke<Ir>('ir_load', { path }),
   textRead: (path: string) => invoke<string>('text_read', { path }),

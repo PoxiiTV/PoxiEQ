@@ -78,6 +78,8 @@ pub struct Config {
     pub voice: sessions::Voice,
     /// Calibración del micro de medida de la sala
     pub room_cal: Option<eq::RoomCal>,
+    /// Activar solos los dispositivos nuevos (tarea programada `engine::TASK`)
+    pub auto_enable: bool,
 }
 
 impl Default for Config {
@@ -109,6 +111,7 @@ impl Default for Config {
             plugin_folders: vec![],
             voice: sessions::Voice::default(),
             room_cal: None,
+            auto_enable: false,
         }
     }
 }
@@ -219,6 +222,8 @@ pub struct AppState {
     broken: Mutex<Vec<String>>,
     /// Ventanas de edición de plugins abiertas (`dispositivo/hueco` → su proceso)
     editors: Mutex<HashMap<String, std::process::Child>>,
+    /// Salidas ya vistas desde que arrancó la app (las demás son nuevas)
+    known: Mutex<Vec<String>>,
 }
 
 impl AppState {
@@ -252,6 +257,10 @@ impl AppState {
 
     fn broken(&self) -> MutexGuard<'_, Vec<String>> {
         self.broken.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn known(&self) -> MutexGuard<'_, Vec<String>> {
+        self.known.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn editors(&self) -> MutexGuard<'_, HashMap<String, std::process::Child>> {
@@ -1443,7 +1452,58 @@ fn devices_changed(app: &AppHandle) {
         commit(app, Config { device: Some(id.clone()), ..cfg });
     }
     check_engine(app);
+    auto_enable_new(app);
     let _ = app.emit("devices", target);
+}
+
+/// Salidas nuevas (enchufadas desde que arrancó la app) que aún no pasan por el motor: si está la opción, se
+/// apuntan en el archivo y se lanza la tarea, que las activa sin pedir permiso
+fn auto_enable_new(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let devices = engine::status().devices;
+    let fresh: Vec<engine::Device> = {
+        let mut known = st.known();
+        let fresh = devices.iter().filter(|d| !known.contains(&d.id)).cloned().collect();
+        known.extend(devices.iter().map(|d| d.id.clone()));
+        known.sort();
+        known.dedup();
+        fresh
+    };
+    if !st.cfg().auto_enable {
+        return;
+    }
+    let todo: Vec<&engine::Device> = fresh.iter().filter(|d| !d.input && !d.unplugged && !d.enabled && !d.hands_free).collect();
+    let Ok(file) = app.path().app_local_data_dir().map(|d| d.join("auto-enable.txt")) else { return };
+    if todo.is_empty() {
+        return;
+    }
+    let ids = engine::with_bt_halves(&todo.iter().map(|d| d.id.clone()).collect::<Vec<_>>());
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if std::fs::write(&file, ids.join("\r\n")).is_ok() && engine::task_run() {
+        let names: Vec<&str> = todo.iter().map(|d| d.name.as_str()).collect();
+        let _ = app.emit("auto-enable", names.join(", "));
+    }
+}
+
+/// Enciende o apaga «activar solos los dispositivos nuevos»: crea o quita la tarea (un permiso de administrador)
+#[tauri::command]
+async fn auto_enable_set(app: AppHandle, on: bool) -> Res<()> {
+    let file = app.path().app_local_data_dir().map_err(|e| problem("io.failed", e.to_string()))?.join("auto-enable.txt");
+    let args = if on { vec!["task-create".to_string(), file.to_string_lossy().into_owned()] } else { vec!["task-delete".to_string()] };
+    let out = tauri::async_runtime::spawn_blocking(move || engine::run_elevated(&args))
+        .await
+        .map_err(|_| problem("engine.setup", None))?
+        .map_err(|e| problem("engine.elevation", e))?;
+    let report: engine::SetupReport = serde_json::from_str(&out).map_err(|_| problem("engine.setup", None))?;
+    if let Some(e) = report.error {
+        return Err(problem("engine.setup", e));
+    }
+    let st = app.state::<AppState>();
+    let cfg = Config { auto_enable: on, ..st.cfg().clone() };
+    commit(&app, cfg);
+    Ok(())
 }
 
 // ------------------------------------------------------ vigilante del motor
@@ -1568,6 +1628,7 @@ pub fn run() {
                 default_output: Mutex::new(default_output),
                 broken: Mutex::new(vec![]),
                 editors: Mutex::new(HashMap::new()),
+                known: Mutex::new(engine::status().devices.into_iter().map(|d| d.id).collect()),
             });
             // Las ventanas se crean con el estado ya listo: si la interfaz cargara antes, sus primeras
             // llamadas fallarían y la ventana se quedaría en negro
@@ -1628,6 +1689,7 @@ pub fn run() {
             plugin_edit,
             engine_check,
             sound_settings,
+            auto_enable_set,
             pick_file,
             text_read,
             text_export,

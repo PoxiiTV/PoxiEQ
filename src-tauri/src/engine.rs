@@ -687,6 +687,7 @@ pub fn uninstall() -> Result<()> {
     for id in &ids {
         disable(id)?;
     }
+    task_delete();
     restart_audio()?;
     // Su desinstalador no sabe nada de nuestro plugin
     if let Some(p) = dsp_path() {
@@ -948,6 +949,90 @@ pub fn write_config(text: &str) -> Result<()> {
     std::fs::write(file, text).map_err(err("poxieq.txt"))
 }
 
+// ------------------------------------------------- activar solos los dispositivos nuevos
+
+/// Tarea programada que activa los dispositivos nuevos sin pedir permiso cada vez
+pub const TASK: &str = r"\PoxiEQ\Activar";
+/// Tope de lo que se lee del archivo de ids y de dispositivos por vez
+const MAX_IDS_FILE: u64 = 4096;
+const MAX_AUTO: usize = 8;
+
+/// Copia de este exe que lanza la tarea: en la carpeta del motor, dentro de Archivos de programa, donde solo un
+/// administrador puede escribir. La tarea corre elevada sin preguntar: si apuntara al exe de PoxiEQ (en la
+/// carpeta del usuario), cualquier programa del usuario podría cambiarlo y saltarse el permiso.
+fn activator() -> Option<PathBuf> {
+    let dir = install_dir()?;
+    let pf = std::env::var("ProgramFiles").ok()?;
+    dir.to_string_lossy().to_lowercase().starts_with(&pf.to_lowercase()).then(|| dir.join("PoxiEQ-activar.exe"))
+}
+
+/// Archivo de ids válido: ruta absoluta que acaba en `auto-enable.txt` y sin comillas (va dentro de la orden)
+fn valid_ids_file(p: &str) -> bool {
+    p.len() < 400 && p.as_bytes().get(1..3) == Some(b":\\") && p.to_lowercase().ends_with(r"\auto-enable.txt") && !p.contains(['"', '\r', '\n'])
+}
+
+/// Crea la tarea (requiere admin). `ids_file`: donde la app apunta los dispositivos a activar.
+pub fn task_create(ids_file: &str) -> Result<()> {
+    if !valid_ids_file(ids_file) {
+        return Err("archivo no válido".into());
+    }
+    let dst = activator().ok_or("el motor no está en Archivos de programa")?;
+    let exe = std::env::current_exe().map_err(err("exe"))?;
+    std::fs::copy(&exe, &dst).map_err(err("activador"))?;
+    let action = format!("\"{}\" --auto-enable \"{ids_file}\"", dst.display());
+    // Sin disparador propio (fecha pasada): solo se lanza a mano, con `schtasks /Run`
+    let out = hidden("schtasks", &["/Create", "/F", "/TN", TASK, "/TR", &action, "/SC", "ONCE", "/ST", "00:00", "/SD", "01/01/2000", "/RL", "HIGHEST"]);
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err("no se pudo crear la tarea".into())
+    }
+}
+
+/// Quita la tarea y su copia del exe (requiere admin)
+pub fn task_delete() {
+    hidden("schtasks", &["/Delete", "/F", "/TN", TASK]);
+    if let Some(p) = activator() {
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+/// Lanza la tarea (sin admin: la tarea ya lo tiene)
+pub fn task_run() -> bool {
+    hidden("schtasks", &["/Run", "/TN", TASK]).status.success()
+}
+
+/// Lo que hace la tarea: lee el archivo (que puede escribir el usuario) y solo acepta GUID de salidas o entradas
+/// conectadas que aún no pasan por el motor. Nada más: ni rutas, ni órdenes, ni escribe ningún archivo.
+pub fn auto_enable(ids_file: &str) {
+    if !valid_ids_file(ids_file) || std::fs::metadata(ids_file).map_or(true, |m| m.len() > MAX_IDS_FILE) {
+        return;
+    }
+    let Ok(text) = std::fs::read_to_string(ids_file) else { return };
+    let ids = pick_auto(&text, |id| {
+        let key = hklm().open_subkey(dev_path(id)).ok();
+        let active = key.and_then(|k| k.get_value::<u32, _>("DeviceState").ok()).is_some_and(|s| s & DEVICE_STATE_ACTIVE.0 != 0);
+        active && !is_enabled(id)
+    });
+    if !ids.is_empty() {
+        let _ = setup(None, &ids, &[], false);
+    }
+}
+
+/// Ids válidos del archivo, sin repetir y como mucho `MAX_AUTO`
+fn pick_auto(text: &str, ok: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut ids: Vec<String> = vec![];
+    for l in text.lines().map(str::trim) {
+        if is_device_id(l) && !ids.iter().any(|i| i.eq_ignore_ascii_case(l)) && ok(l) {
+            ids.push(l.to_string());
+        }
+        if ids.len() == MAX_AUTO {
+            break;
+        }
+    }
+    ids
+}
+
 // ----------------------------------------------------------------- elevación
 
 /// Relanza este exe como administrador (un solo aviso de UAC), espera y devuelve lo que
@@ -1062,6 +1147,17 @@ mod tests {
         let hf = [("{h1}".to_string(), c(1)), ("{h2}".to_string(), c(9))];
         let st = [("{s2}".to_string(), c(2)), ("{s1}".to_string(), c(1))];
         assert_eq!(pair_up(&hf, &st), vec![("{h1}".to_string(), "{s1}".to_string())]);
+    }
+
+    #[test]
+    fn la_tarea_solo_acepta_guid() {
+        let a = "{6af377fe-6370-495b-afe3-95fac2e918f7}";
+        let text = format!("{a}\r\n{a}\n  {{0d1b4c9a-1111-4a2b-9c3d-123456789abc}}  \ncmd /c calc\n..\\x\n{{zz}}\n");
+        assert_eq!(pick_auto(&text, |_| true), [a, "{0d1b4c9a-1111-4a2b-9c3d-123456789abc}"]);
+        assert!(pick_auto(&text, |_| false).is_empty());
+        assert!(valid_ids_file(r"C:\Users\x\AppData\Local\com.poxi.poxieq\auto-enable.txt"));
+        assert!(!valid_ids_file(r#"C:\x\auto-enable.txt" & calc & ""#));
+        assert!(!valid_ids_file(r"auto-enable.txt") && !valid_ids_file(r"C:\x\otro.txt"));
     }
 
     #[test]

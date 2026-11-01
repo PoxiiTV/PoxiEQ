@@ -84,6 +84,8 @@ async function start(): Promise<void> {
       if (d) toast(t('follow.now', { d: `${d.name} · ${d.device}` }), 'info', { secs: 4 })
     })
   )
+  // Dispositivo nuevo activado solo (opción de Ajustes → Motor): la tarea reinicia el audio y llega `devices`
+  void listen<string>('auto-enable', (e) => toast(t('settings.autoEnabling', { d: e.payload }), 'info', { secs: 6 }))
   // Ventanas de edición de plugins (proceso aparte): cuáles están abiertas y por qué no se abre una
   void listen<[string, string, boolean]>('plugin-editor', (e) => {
     const [device, id, open] = e.payload

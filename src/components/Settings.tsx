@@ -239,6 +239,7 @@ function Engine(): React.JSX.Element {
       <Row title={t('settings.engineStatus')} hint={engine?.installed ? t('settings.engineOn') : t('settings.engineOff')}>
         <span className={`chip ${engine?.installed ? 'ok' : ''}`}>{engine?.installed ? t('device.on') : t('device.off')}</span>
       </Row>
+      <AutoEnableRow />
       <Row title={t('diag.title')} hint={t('diag.rowHint')}>
         <button className="btn btn-sm" onClick={() => setState({ modal: 'diagnose' })}>
           {t('diag.btn')}
@@ -274,6 +275,30 @@ function Engine(): React.JSX.Element {
       </div>
       {engine?.installed && <Uninstall />}
     </>
+  )
+}
+
+/** Activar solos los dispositivos nuevos: crea o quita la tarea programada (un permiso de administrador) */
+function AutoEnableRow(): React.JSX.Element {
+  const t = useT()
+  const on = useStore((s) => !!s.config?.autoEnable)
+  const installed = useStore((s) => !!s.engine?.installed)
+  const [busy, setBusy] = useState(false)
+  const set = async (v: boolean): Promise<void> => {
+    setBusy(true)
+    try {
+      await api.autoEnableSet(v)
+      toast(t(v ? 'settings.autoEnableOn' : 'settings.autoEnableOff'))
+    } catch (e) {
+      toast(errorText(e), 'err', { secs: 8 })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Row title={t('settings.autoEnable')} hint={t('settings.autoEnableHint')}>
+      {busy ? <LoaderCircle size={16} className="spin" /> : <Switch on={on} label={t('settings.autoEnable')} onChange={(v) => installed && void set(v)} />}
+    </Row>
   )
 }
 

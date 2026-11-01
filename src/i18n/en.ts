@@ -356,6 +356,11 @@ export default {
     rigWarn: 'They were measured on a different rig: mixing them skews the result. Better pick ones from the same source.'
   },
   settings: {
+    autoEnable: 'Enable new devices automatically',
+    autoEnableHint: "When you plug in headphones or a speaker that doesn't have PoxiEQ yet, it is enabled without asking (the sound cuts out for a couple of seconds). Turning it on asks for administrator permission once.",
+    autoEnableOn: 'New devices will be enabled automatically',
+    autoEnableOff: 'New devices are no longer enabled automatically',
+    autoEnabling: 'Enabling PoxiEQ on {d}…',
     title: 'Settings',
     cats: { general: 'General', keys: 'Shortcuts', engine: 'Engine', about: 'About' },
     appearance: 'Appearance',

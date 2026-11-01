@@ -355,6 +355,11 @@ export default {
     rigWarn: 'Están medidos en otro banco de medida: mezclarlos falsea el resultado. Mejor elige unos de la misma fuente.'
   },
   settings: {
+    autoEnable: 'Activar solos los dispositivos nuevos',
+    autoEnableHint: 'Al conectar unos cascos o un altavoz que aún no tiene PoxiEQ, se activa sin pedir permiso (se corta el sonido un par de segundos). Encenderlo pide permiso de administrador una vez.',
+    autoEnableOn: 'Los dispositivos nuevos se activarán solos',
+    autoEnableOff: 'Los dispositivos nuevos ya no se activan solos',
+    autoEnabling: 'Activando PoxiEQ en {d}…',
     title: 'Ajustes',
     cats: { general: 'General', keys: 'Atajos', engine: 'Motor', about: 'Acerca de' },
     appearance: 'Apariencia',
