@@ -2335,3 +2335,137 @@
   font-size: 18px;
   font-weight: 800;
 }
+
+/* ——— Modo rápido ——— */
+.quick-toggle {
+  margin-right: 8px;
+}
+.quick-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out),
+    background 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+.quick-chip:active {
+  transform: scale(0.95);
+}
+.quick-chip.on {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+.quick-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.quick-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.quick-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out),
+    background 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .quick-btn:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+  .quick-chip:hover:not(.on) {
+    color: var(--text-2);
+  }
+}
+.quick-btn:active {
+  transform: scale(0.97);
+}
+.quick-btn.on {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  background: var(--accent-soft);
+  box-shadow: 0 10px 26px -16px var(--accent-glow);
+}
+.quick-btn.off {
+  opacity: 0.4;
+}
+.quick-btn b {
+  max-width: 100%;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-btn small {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.quick-eye {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--muted);
+}
+.quick-btn.on .quick-eye {
+  color: var(--accent-2);
+}
+.quick-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}

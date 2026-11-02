@@ -15,7 +15,24 @@ export default {
     bypassOn: 'EQ off: click to turn it on',
     bypassOff: 'Turn the EQ off (bypass)',
     device: 'Output you are editing',
-    outputTip: 'Output: what you hear'
+    outputTip: 'Output: what you hear',
+    quick: 'Quick',
+    quickOn: 'Quick mode: click to go back to all of PoxiEQ',
+    quickOff: 'Quick mode: just big preset buttons'
+  },
+  quick: {
+    show: 'Sections shown',
+    hide: 'Hide after picking',
+    edit: 'Choose which',
+    editHint: 'Click a preset to hide or show it in quick mode.',
+    none: 'Choose above which sections you want to see.',
+    allHidden: 'All hidden: click "Choose which" to show some.',
+    phonesOff: 'Normal',
+    empty: {
+      eq: 'No presets.',
+      sound: 'No presets.',
+      phones: 'Save presets on the Headphones page to see them here.'
+    }
   },
   nav: {
     label: 'Main menu',

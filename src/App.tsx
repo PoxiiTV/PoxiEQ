@@ -20,6 +20,7 @@ import { ImportModal, SavePresetModal, ShareModal, UpdateModal, WhatsNew } from 
 import { HearingModal } from './components/Hearing'
 import { DiagnoseModal } from './components/Diagnose'
 import { ContextMenu } from './components/ContextMenu'
+import { QuickPage } from './components/Quick'
 
 export function App(): React.JSX.Element {
   const t = useT()
@@ -30,6 +31,8 @@ export function App(): React.JSX.Element {
   })
   const lang = useStore((s) => s.config?.lang)
   const presets = useStore((s) => s.config?.presets)
+  const quick = useStore((s) => !!s.config?.quick.on)
+  const ready = useStore((s) => !!s.engine?.installed && works(currentOutput(s)))
 
   // Captura de lo que suena (medidores y analizador): solo con la ventana a la vista, en la bandeja no gasta CPU
   useEffect(() => {
@@ -58,13 +61,20 @@ export function App(): React.JSX.Element {
       <div className="ambient" />
       <div className="app">
         <TitleBar />
-        <main className="main">
-          <Sidebar />
-          <section className="stage">
-            <Page />
-          </section>
-          {metered && <Meter />}
-        </main>
+        {quick ? (
+          // Modo rápido: sin menú ni medidores, solo los presets (o la activación si esta salida no la tiene)
+          <main className="main">
+            <section className="stage">{ready ? <QuickPage /> : <Setup />}</section>
+          </main>
+        ) : (
+          <main className="main">
+            <Sidebar />
+            <section className="stage">
+              <Page />
+            </section>
+            {metered && <Meter />}
+          </main>
+        )}
       </div>
       <SavePresetModal />
       <ShareModal />

@@ -199,9 +199,23 @@ export interface Config {
   roomCal: RoomCal | null
   /** Activar solos los dispositivos nuevos */
   autoEnable: boolean
+  quick: Quick
   appRules: AppRule[]
   hotkeys: Hotkeys
   mic: Mic
+}
+
+export type QuickSection = 'eq' | 'sound' | 'phones'
+
+/** Modo rápido: la ventana es solo botones grandes de presets */
+export interface Quick {
+  on: boolean
+  /** Secciones que se ven, en su orden */
+  sections: QuickSection[]
+  /** Presets escondidos (`<sección>/<id>`) */
+  hidden: string[]
+  /** Esconder la ventana (a la bandeja) al elegir uno */
+  hide: boolean
 }
 
 /** Lo que Rust necesita para aplicar un preset sin la interfaz (atajos, bandeja, reglas por app) */
@@ -365,6 +379,7 @@ export const api = {
   meterReset: () => invoke<void>('meter_reset'),
   outputLatency: (device: string, dsp: Dsp) => invoke<OutputLatency | null>('output_latency', { device, dsp }),
   appQuit: () => invoke<void>('app_quit'),
+  windowHide: () => invoke<void>('window_hide'),
   hotkeyCheck: (keys: string) => invoke<string>('hotkey_check', { keys }),
   hotkeysPause: (paused: boolean) => invoke<void>('hotkeys_pause', { paused }),
   hotkeysFailed: () => invoke<string[]>('hotkeys_failed'),

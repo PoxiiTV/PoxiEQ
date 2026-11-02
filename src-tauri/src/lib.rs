@@ -80,6 +80,43 @@ pub struct Config {
     pub room_cal: Option<eq::RoomCal>,
     /// Activar solos los dispositivos nuevos (tarea programada `engine::TASK`)
     pub auto_enable: bool,
+    /// Modo rápido: la ventana es solo botones grandes de presets
+    pub quick: Quick,
+}
+
+/// Modo rápido (lo pinta la interfaz; aquí solo se guarda y se valida)
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Quick {
+    pub on: bool,
+    /// Secciones que se ven, en su orden: `eq`, `sound`, `phones`
+    pub sections: Vec<String>,
+    /// Presets escondidos (`<sección>/<id>`)
+    pub hidden: Vec<String>,
+    /// Esconder la ventana (a la bandeja) al elegir un preset
+    pub hide: bool,
+}
+
+impl Default for Quick {
+    fn default() -> Self {
+        Self { on: false, sections: vec!["eq".into(), "sound".into()], hidden: vec![], hide: true }
+    }
+}
+
+impl Quick {
+    const SECTIONS: [&str; 3] = ["eq", "sound", "phones"];
+
+    fn sanitize(&mut self) {
+        let mut seen = vec![];
+        self.sections.retain(|s| Self::SECTIONS.contains(&s.as_str()) && !seen.contains(s) && {
+            seen.push(s.clone());
+            true
+        });
+        self.hidden.retain(|h| h.len() <= 80 && !h.chars().any(char::is_control));
+        self.hidden.sort();
+        self.hidden.dedup();
+        self.hidden.truncate(500);
+    }
 }
 
 impl Default for Config {
@@ -112,6 +149,7 @@ impl Default for Config {
             voice: sessions::Voice::default(),
             room_cal: None,
             auto_enable: false,
+            quick: Quick::default(),
         }
     }
 }
@@ -158,6 +196,7 @@ impl Config {
         if self.room_cal.as_mut().is_some_and(|c| !c.valid()) {
             self.room_cal = None;
         }
+        self.quick.sanitize();
     }
 
     /// Archivos de respuesta al impulso que usa algún dispositivo
@@ -978,6 +1017,15 @@ fn mini_set(app: AppHandle, on: bool) {
     MINI.store(on, Ordering::SeqCst);
     osd::set_mini(&app, on);
     refresh_tray(&app);
+}
+
+/// Esconde la ventana en la bandeja (como cerrarla con «cerrar a la bandeja»), aunque esa opción esté apagada
+#[tauri::command]
+fn window_hide(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+    reset_live(&app);
 }
 
 #[tauri::command]
@@ -1849,6 +1897,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            window_hide,
             app_info,
             config_get,
             config_set,
@@ -1916,6 +1965,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quick_sanitize() {
+        let mut cfg: Config = serde_json::from_str(r#"{"quick":{"on":true,"sections":["sound","x","sound","eq"],"hidden":["eq/b:bass","eq/b:bass","a\nb"]}}"#).unwrap();
+        cfg.sanitize();
+        assert_eq!(cfg.quick, Quick { on: true, sections: vec!["sound".into(), "eq".into()], hidden: vec!["eq/b:bass".into()], hide: true });
+        // Config antigua sin `quick`: lo de serie
+        let old: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.quick, Quick::default());
+    }
 
     #[test]
     fn sanitize_new_fields() {

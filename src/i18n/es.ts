@@ -15,7 +15,24 @@ export default {
     bypassOn: 'EQ apagado: pulsa para encenderlo',
     bypassOff: 'Apagar el EQ (bypass)',
     device: 'Salida que editas',
-    outputTip: 'Salida: lo que oyes'
+    outputTip: 'Salida: lo que oyes',
+    quick: 'Rápido',
+    quickOn: 'Modo rápido: pulsa para volver a todo PoxiEQ',
+    quickOff: 'Modo rápido: solo botones grandes de presets'
+  },
+  quick: {
+    show: 'Secciones que se ven',
+    hide: 'Esconder al elegir',
+    edit: 'Elegir cuáles',
+    editHint: 'Pulsa un preset para esconderlo o enseñarlo en el modo rápido.',
+    none: 'Elige arriba qué secciones quieres ver.',
+    allHidden: 'Todos escondidos: pulsa «Elegir cuáles» para enseñar alguno.',
+    phonesOff: 'Normal',
+    empty: {
+      eq: 'Sin presets.',
+      sound: 'Sin presets.',
+      phones: 'Guarda presets en la página Cascos para que salgan aquí.'
+    }
   },
   nav: {
     label: 'Menú principal',
