@@ -89,33 +89,29 @@ pub struct Config {
 #[serde(rename_all = "camelCase", default)]
 pub struct Quick {
     pub on: bool,
-    /// Secciones que se ven, en su orden: `eq`, `sound`, `phones`
-    pub sections: Vec<String>,
-    /// Presets escondidos (`<sección>/<id>`)
-    pub hidden: Vec<String>,
+    /// Botones que se ven (`<sección>/<id>`, sección `eq`, `sound` o `phones`). `None`: los de serie (los
+    /// decide la interfaz); vacío: ninguno.
+    pub buttons: Option<Vec<String>>,
     /// Esconder la ventana (a la bandeja) al elegir un preset
     pub hide: bool,
 }
 
 impl Default for Quick {
     fn default() -> Self {
-        Self { on: false, sections: vec!["eq".into(), "sound".into()], hidden: vec![], hide: true }
+        Self { on: false, buttons: None, hide: true }
     }
 }
 
 impl Quick {
-    const SECTIONS: [&str; 3] = ["eq", "sound", "phones"];
-
     fn sanitize(&mut self) {
-        let mut seen = vec![];
-        self.sections.retain(|s| Self::SECTIONS.contains(&s.as_str()) && !seen.contains(s) && {
-            seen.push(s.clone());
-            true
-        });
-        self.hidden.retain(|h| h.len() <= 80 && !h.chars().any(char::is_control));
-        self.hidden.sort();
-        self.hidden.dedup();
-        self.hidden.truncate(500);
+        if let Some(b) = &mut self.buttons {
+            let mut seen = std::collections::HashSet::new();
+            b.retain(|k| {
+                let ok = k.len() <= 80 && !k.chars().any(char::is_control) && ["eq/", "sound/", "phones/"].iter().any(|p| k.starts_with(p));
+                ok && seen.insert(k.clone())
+            });
+            b.truncate(300);
+        }
     }
 }
 
@@ -1968,9 +1964,13 @@ mod tests {
 
     #[test]
     fn quick_sanitize() {
-        let mut cfg: Config = serde_json::from_str(r#"{"quick":{"on":true,"sections":["sound","x","sound","eq"],"hidden":["eq/b:bass","eq/b:bass","a\nb"]}}"#).unwrap();
+        let mut cfg: Config = serde_json::from_str(r#"{"quick":{"on":true,"buttons":["sound/s:loud","x/y","sound/s:loud","eq/b:bass","eq/a\nb"]}}"#).unwrap();
         cfg.sanitize();
-        assert_eq!(cfg.quick, Quick { on: true, sections: vec!["sound".into(), "eq".into()], hidden: vec!["eq/b:bass".into()], hide: true });
+        assert_eq!(cfg.quick, Quick { on: true, buttons: Some(vec!["sound/s:loud".into(), "eq/b:bass".into()]), hide: true });
+        // Ninguno es ninguno (no lo de serie)
+        let mut none: Config = serde_json::from_str(r#"{"quick":{"buttons":[]}}"#).unwrap();
+        none.sanitize();
+        assert_eq!(none.quick.buttons, Some(vec![]));
         // Config antigua sin `quick`: lo de serie
         let old: Config = serde_json::from_str("{}").unwrap();
         assert_eq!(old.quick, Quick::default());

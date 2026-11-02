@@ -207,13 +207,11 @@ export interface Config {
 
 export type QuickSection = 'eq' | 'sound' | 'phones'
 
-/** Modo rápido: la ventana es solo botones grandes de presets */
+/** Modo rápido: la ventana encoge a solo botones grandes de presets */
 export interface Quick {
   on: boolean
-  /** Secciones que se ven, en su orden */
-  sections: QuickSection[]
-  /** Presets escondidos (`<sección>/<id>`) */
-  hidden: string[]
+  /** Botones que se ven (`<sección>/<id>`). `null`: los de serie; vacío: ninguno */
+  buttons: string[] | null
   /** Esconder la ventana (a la bandeja) al elegir uno */
   hide: boolean
 }

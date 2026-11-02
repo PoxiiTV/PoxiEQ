@@ -21,18 +21,18 @@ export default {
     quickOff: 'Quick mode: just big preset buttons'
   },
   quick: {
-    show: 'Sections shown',
     hide: 'Hide after picking',
-    edit: 'Choose which',
-    editHint: 'Click a preset to hide or show it in quick mode.',
-    none: 'Choose above which sections you want to see.',
-    allHidden: 'All hidden: click "Choose which" to show some.',
-    phonesOff: 'Normal',
-    empty: {
-      eq: 'No presets.',
-      sound: 'No presets.',
-      phones: 'Save presets on the Headphones page to see them here.'
-    }
+    hideHint: 'When you click a preset in quick mode, the window goes to the tray.',
+    hideNow: 'Hide in the tray',
+    buttons: 'Buttons',
+    buttonsHint: 'The ones shown in quick mode (⚡ Quick button at the top). Click one to add or remove it; keep as many as you like, or none.',
+    all: 'All',
+    noneBtn: 'None',
+    none: 'No buttons. Choose which ones you want in Settings.',
+    choose: 'Choose buttons',
+    notReady: "PoxiEQ isn't enabled on this output yet.",
+    openFull: 'Open PoxiEQ',
+    phonesOff: 'Normal'
   },
   nav: {
     label: 'Main menu',
@@ -381,7 +381,7 @@ export default {
     autoEnableOff: 'New devices are no longer enabled automatically',
     autoEnabling: 'Enabling PoxiEQ on {d}…',
     title: 'Settings',
-    cats: { general: 'General', keys: 'Shortcuts', engine: 'Engine', about: 'About' },
+    cats: { general: 'General', keys: 'Shortcuts', quick: 'Quick mode', engine: 'Engine', about: 'About' },
     appearance: 'Appearance',
     theme: 'Theme',
     themes: { dark: 'Dark', light: 'Light', system: 'Like Windows' },

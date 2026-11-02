@@ -4,6 +4,7 @@ import { keyLabel } from '../lib/hotkeys'
 import { currentOutput, dismiss, setState, updateConfig, listed, useStore, works } from '../lib/store'
 import { useT } from '../i18n'
 import { Select } from './controls'
+import { enterQuick } from './Quick'
 import { Logo } from './ui'
 
 const win = getCurrentWindow()
@@ -15,7 +16,6 @@ export function TitleBar(): React.JSX.Element {
   const device = useStore((s) => currentOutput(s))
   const off = useStore((s) => !!s.config?.bypass)
   const hotkey = useStore((s) => s.config?.hotkeys.bypass)
-  const quick = useStore((s) => !!s.config?.quick.on)
   const list = (devices ?? []).filter((d) => !d.input && !d.unplugged && listed(d))
   const toggle = (): void => {
     const cfg = useStore.getState().config
@@ -53,16 +53,7 @@ export function TitleBar(): React.JSX.Element {
         </div>
       )}
       <div className="spacer" data-tauri-drag-region />
-      <button
-        className={`power quick-toggle no-drag ${quick ? '' : 'bypassed'}`}
-        onClick={() => {
-          const cfg = useStore.getState().config
-          if (cfg) updateConfig({ quick: { ...cfg.quick, on: !cfg.quick.on } }, false)
-        }}
-        data-tip={t(quick ? 'titlebar.quickOn' : 'titlebar.quickOff')}
-        aria-label={t(quick ? 'titlebar.quickOn' : 'titlebar.quickOff')}
-        aria-pressed={quick}
-      >
+      <button className="power quick-toggle bypassed no-drag" onClick={() => void enterQuick()} data-tip={t('titlebar.quickOff')} aria-label={t('titlebar.quickOff')}>
         <Zap size={15} />
         <span>{t('titlebar.quick')}</span>
       </button>

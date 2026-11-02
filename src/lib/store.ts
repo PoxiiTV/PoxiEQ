@@ -48,8 +48,12 @@ interface State {
   history: { undo: boolean; redo: boolean }
   /** Atajos que Windows no ha dejado registrar (los tiene otro programa) */
   hotkeysFailed: string[]
+  /** Pestaña de Ajustes a la vista */
+  settingsTab: SettingsTab
   toasts: Toast[]
 }
+
+export type SettingsTab = 'general' | 'keys' | 'quick' | 'engine' | 'about'
 
 export const STUDIO_OFF: Studio = { listen: 'stereo', flipL: false, flipR: false, swap: false, sim: null, tilt: 0 }
 
@@ -70,6 +74,7 @@ export const useStore = create<State>(() => ({
   importCode: '',
   history: { undo: false, redo: false },
   hotkeysFailed: [],
+  settingsTab: 'general',
   toasts: []
 }))
 

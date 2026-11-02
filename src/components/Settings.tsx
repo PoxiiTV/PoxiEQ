@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { AudioLines, Info, Keyboard, LoaderCircle, Palette } from 'lucide-react'
+import { AudioLines, Info, Keyboard, LoaderCircle, Palette, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { api, type Accent, type Config, type Device } from '../lib/api'
 import { runSetup } from '../lib/actions'
-import { allPresets, listed, refreshEngine, setState, toast, updateConfig, useStore } from '../lib/store'
+import { allPresets, listed, refreshEngine, setState, toast, updateConfig, useStore, type SettingsTab } from '../lib/store'
 import { applyTheme } from '../lib/theme'
 import { checkForUpdates } from '../lib/update'
 import { errorText, t, useT } from '../i18n'
 import { KeyRecorder, Range, Select, type Option } from './controls'
 import { Logo, Switch } from './ui'
+import { QuickSettings, setQuick } from './Quick'
 
-type Cat = 'general' | 'keys' | 'engine' | 'about'
-const CATS: [Cat, LucideIcon][] = [
+const CATS: [SettingsTab, LucideIcon][] = [
   ['general', Palette],
   ['keys', Keyboard],
+  ['quick', Zap],
   ['engine', AudioLines],
   ['about', Info]
 ]
@@ -44,7 +45,8 @@ function Row({ title, hint, children }: { title: string; hint?: string; children
 /** Página «Ajustes»: sus apartados en una barra de pestañas arriba */
 export function SettingsPage(): React.JSX.Element {
   const t = useT()
-  const [cat, setCat] = useState<Cat>('general')
+  const cat = useStore((s) => s.settingsTab)
+  const setCat = (settingsTab: SettingsTab): void => setState({ settingsTab })
   return (
     <div className="page settings-page">
       <div className="segmented settings-tabs" role="tablist" aria-label={t('settings.title')}>
@@ -58,10 +60,25 @@ export function SettingsPage(): React.JSX.Element {
       <div className="settings-body" role="tabpanel">
         {cat === 'general' && <General />}
         {cat === 'keys' && <Keys />}
+        {cat === 'quick' && <QuickTab />}
         {cat === 'engine' && <Engine />}
         {cat === 'about' && <About />}
       </div>
     </div>
+  )
+}
+
+function QuickTab(): React.JSX.Element {
+  const t = useT()
+  const hide = useStore((s) => s.config!.quick.hide)
+  return (
+    <>
+      <Row title={t('quick.hide')} hint={t('quick.hideHint')}>
+        <Switch on={hide} onChange={(v) => setQuick({ hide: v })} label={t('quick.hide')} />
+      </Row>
+      <Row title={t('quick.buttons')} hint={t('quick.buttonsHint')} />
+      <QuickSettings />
+    </>
   )
 }
 

@@ -21,18 +21,18 @@ export default {
     quickOff: 'Modo rápido: solo botones grandes de presets'
   },
   quick: {
-    show: 'Secciones que se ven',
     hide: 'Esconder al elegir',
-    edit: 'Elegir cuáles',
-    editHint: 'Pulsa un preset para esconderlo o enseñarlo en el modo rápido.',
-    none: 'Elige arriba qué secciones quieres ver.',
-    allHidden: 'Todos escondidos: pulsa «Elegir cuáles» para enseñar alguno.',
-    phonesOff: 'Normal',
-    empty: {
-      eq: 'Sin presets.',
-      sound: 'Sin presets.',
-      phones: 'Guarda presets en la página Cascos para que salgan aquí.'
-    }
+    hideHint: 'Al pulsar un preset en el modo rápido, la ventana se va a la bandeja.',
+    hideNow: 'Esconder en la bandeja',
+    buttons: 'Botones',
+    buttonsHint: 'Los que salen en el modo rápido (botón ⚡ Rápido de arriba). Pulsa uno para añadirlo o quitarlo; puedes dejar los que quieras, o ninguno.',
+    all: 'Todos',
+    noneBtn: 'Ninguno',
+    none: 'No hay botones. Elige cuáles quieres en Ajustes.',
+    choose: 'Elegir botones',
+    notReady: 'Esta salida aún no tiene PoxiEQ activado.',
+    openFull: 'Abrir PoxiEQ',
+    phonesOff: 'Normal'
   },
   nav: {
     label: 'Menú principal',
@@ -380,7 +380,7 @@ export default {
     autoEnableOff: 'Los dispositivos nuevos ya no se activan solos',
     autoEnabling: 'Activando PoxiEQ en {d}…',
     title: 'Ajustes',
-    cats: { general: 'General', keys: 'Atajos', engine: 'Motor', about: 'Acerca de' },
+    cats: { general: 'General', keys: 'Atajos', quick: 'Modo rápido', engine: 'Motor', about: 'Acerca de' },
     appearance: 'Apariencia',
     theme: 'Tema',
     themes: { dark: 'Oscuro', light: 'Claro', system: 'Como Windows' },
