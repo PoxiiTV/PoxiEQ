@@ -1,6 +1,6 @@
 [package]
 name = "poxieq"
-version = "0.2.0"
+version = "0.2.1"
 description = "PoxiEQ - ecualizador para la salida de audio de Windows"
 edition = "2021"
 rust-version = "1.85"

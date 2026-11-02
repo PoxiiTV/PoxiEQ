@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1
+
+### 🇪🇸 Español
+
+- ⚡ **Modo rápido**: pulsa **⚡ Rápido** junto a «EQ» y PoxiEQ se queda en una ventanita con pestañas y botones grandes de tus presets de Ecualizador, Sonido y Cascos. Un clic pone el preset en la salida de ahora y la ventana se va sola a la bandeja.
+- ⚙️ **Tus botones**: en **Ajustes → Modo rápido** añades y quitas los que quieras (o ninguno) y eliges si la ventana se esconde al pulsar.
+
+### 🇬🇧 English
+
+- ⚡ **Quick mode**: click **⚡ Quick** next to "EQ" and PoxiEQ shrinks to a small window with tabs and big buttons for your Equalizer, Sound and Headphones presets. One click puts the preset on the current output and the window goes to the tray by itself.
+- ⚙️ **Your buttons**: in **Settings → Quick mode** add and remove the ones you want (or none) and choose whether the window hides when you click.
+
 ## 0.2.0
 
 ### 🇪🇸 Español

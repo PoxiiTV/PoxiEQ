@@ -4,7 +4,7 @@
 
 <br />
 
-![Versión](https://img.shields.io/badge/versión-0.2.0-e879f9?style=flat-square&labelColor=1a0f1d)
+![Versión](https://img.shields.io/badge/versión-0.2.1-e879f9?style=flat-square&labelColor=1a0f1d)
 ![Plataforma](https://img.shields.io/badge/Windows%2010%20%7C%2011-64%20bits-5fd7ff?style=flat-square&labelColor=1a0f1d)
 ![Latencia](https://img.shields.io/badge/latencia-cero-ffd25f?style=flat-square&labelColor=1a0f1d)
 ![Sin reiniciar](https://img.shields.io/badge/sin-reiniciar-34d399?style=flat-square&labelColor=1a0f1d)
@@ -62,7 +62,7 @@ de Windows; PoxiEQ lo instala, lo activa y lo esconde por ti con **un clic**.
 
 ## 📥 Descarga
 
-### **[⬇️ Descargar PoxiEQ 0.2.0 para Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.0/PoxiEQ-Setup-0.2.0.exe)**
+### **[⬇️ Descargar PoxiEQ 0.2.1 para Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.1/PoxiEQ-Setup-0.2.1.exe)**
 
 Instalador de 3 MB: crea los accesos, arranca con Windows si quieres y **se actualiza solo**.
 
@@ -147,6 +147,7 @@ Requiere **Windows 10 u 11 de 64 bits**.
 | ⌨️ **Atajos a tu gusto** | Bypass y nueve presets, cada uno con la combinación que grabes (por defecto `Ctrl+Alt+Num 0…9`). Rechaza las que chocan con **AltGr** (que te dejarían sin `€ \| @ # ~`) y avisa si otro programa ya tiene esa combinación. Con un aviso en pantalla que **no roba el foco** al juego |
 | 🗂️ **Presets en todas las secciones** | Sonido, Cascos, Estudio y Micrófono tienen sus propios presets, y cada salida recuerda el último de cada una |
 | 🔗 **Compartir** | Cualquier preset como **código** para pegar en un chat o como archivo **`.poxieq`**: arrástralo a la ventana y va a su sección |
+| ⚡ **Modo rápido** | Una ventanita con botones grandes de tus presets de Ecualizador, Sonido y Cascos (los eliges en Ajustes). Un clic y se va a la bandeja |
 | 🧺 **Bandeja** | Bypass, cambio de preset y una **mini-barra** con el medidor siempre encima, sin abrir la ventana. Al cerrar, PoxiEQ se queda en la bandeja; aunque lo cierres del todo, el EQ sigue sonando |
 | 🎨 **A tu gusto** | Tema oscuro y claro, 7 colores, español e inglés |
 
@@ -263,7 +264,7 @@ Windows; PoxiEQ installs, enables and hides it for you in **one click**.
 
 ## 📥 Download
 
-### **[⬇️ Download PoxiEQ 0.2.0 for Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.0/PoxiEQ-Setup-0.2.0.exe)**
+### **[⬇️ Download PoxiEQ 0.2.1 for Windows](https://github.com/PoxiiTV/PoxiEQ/releases/download/v0.2.1/PoxiEQ-Setup-0.2.1.exe)**
 
 A 3 MB installer: creates shortcuts, optionally starts with Windows and **updates itself**.
 
@@ -345,6 +346,7 @@ Requires **64-bit Windows 10 or 11**.
 | ⌨️ **Your own shortcuts** | Bypass and nine presets, each with the combination you record (by default `Ctrl+Alt+Num 0…9`). It rejects those that clash with **AltGr** (which would cost you `€ \| @ # ~`) and warns if another program already owns the combination. With an on-screen notice that **doesn't steal focus** from your game |
 | 🗂️ **Presets in every section** | Sound, Headphones, Studio and Microphone have their own presets, and each output remembers the last one of each |
 | 🔗 **Sharing** | Any preset as a **code** to paste in a chat or as a **`.poxieq`** file: drop it on the window and it goes to its section |
+| ⚡ **Quick mode** | A small window with big buttons for your Equalizer, Sound and Headphones presets (you pick them in Settings). One click and it goes to the tray |
 | 🧺 **Tray** | Bypass, preset switching and an always-on-top **mini bar** with the meter, without opening the window. Closing keeps PoxiEQ in the tray; even if you quit it, the EQ keeps playing |
 | 🎨 **Your style** | Dark and light themes, 7 colors, Spanish and English |
 
