@@ -48,15 +48,23 @@ de Windows; PoxiEQ lo instala, lo activa y lo esconde por ti con **un clic**.
   </tr>
   <tr>
     <td align="center"><sub>🎧 Busca tus cascos entre más de 8.000 modelos, crossfeed y altavoces virtuales</sub></td>
-    <td align="center"><sub>🎛️ Mono, side, solo L / R, polaridad y cómo suena tu mezcla en un móvil o un coche</sub></td>
+    <td align="center"><sub>🎛️ Mono, side, polaridad y cómo suena tu mezcla en un móvil, un coche o un club</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src=".assets/plugins.png" alt="Plugins: tu cadena de VST2 y VST3" /></td>
+    <td width="50%"><img src=".assets/apps.png" alt="Apps: salida por app, atenuación y mezclador" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>🔌 Tus plugins VST2 y VST3 en la cadena, con su ventana de verdad y su latencia</sub></td>
+    <td align="center"><sub>🎯 Cada app con su preset y su salida, y el resto baja cuando hablan en Discord</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src=".assets/sala.png" alt="Corrección de sala con el resultado medido" /></td>
-    <td width="50%"><img src=".assets/atajos.png" alt="Atajos de teclado a tu gusto" /></td>
+    <td width="50%"><img src=".assets/rapido.png" alt="Modo rápido: ventanita con botones de presets" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>📐 Corrección de sala: mide tus altavoces y corta las resonancias de graves</sub></td>
-    <td align="center"><sub>⌨️ Bypass y nueve presets con el atajo que tú grabes</sub></td>
+    <td align="center"><sub>📐 Corrección de sala, calibración del micro y convolución</sub></td>
+    <td align="center"><sub>⚡ Modo rápido: tus presets en botones grandes y, al pulsar, a la bandeja</sub></td>
   </tr>
 </table>
 
