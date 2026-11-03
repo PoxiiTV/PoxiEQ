@@ -1013,6 +1013,13 @@
 }
 .meter-read .line.lat {
   margin-top: 6px;
+  flex-wrap: wrap;
+  column-gap: 6px;
+}
+/* Con latencias largas (plugins) el valor baja entero a su línea, a la derecha, en vez de partirse */
+.meter-read .line.lat b {
+  margin-left: auto;
+  white-space: nowrap;
 }
 .meter-read .btn {
   margin-top: 4px;
